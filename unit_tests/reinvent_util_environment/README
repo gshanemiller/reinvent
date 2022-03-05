@@ -1,0 +1,16 @@
+# Environment unit test
+
+# TODO
+
+* bools not tested
+* ints with prefix not tested
+* gcc + coverage + gtest does not seem to work
+
+# Test Case Generators
+
+* reinvent_util_environment_intlist_test_cases.py
+* reinvent_util_environment_int_test_cases.py
+* reinvent_util_environment_str_test_cases.py
+
+Produces most of the test cases. Run with no arguments in directory containing cpp/h files. Readers may assume the
+current cpp/h file set hold the last generator output.

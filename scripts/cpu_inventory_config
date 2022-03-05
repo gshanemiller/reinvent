@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+# Based off DPDK usertools/cpu-layout
+
+import sys
+
+if len(sys.argv)!=2:
+  print("usage: cpu_inventory_config <env-variable-prefix-name>")
+  sys.exit(2)
+
+PREFIX=sys.argv[1]
+
+#
+# Maps virtual cpus (also called hardware threads) as a key
+# to a 2-tuple of form [<core#>, <socket#>]. The socket represents
+# which physical CPU holds the core, while the core number names
+# the core within the physical CPU that holds the VCPU.
+#
+VCPU={}
+
+base_path = "/sys/devices/system/cpu"
+fd = open("{}/kernel_max".format(base_path))
+max_cpus = int(fd.read())
+fd.close()
+for vcpu in range(max_cpus + 1):
+    try:
+        fd = open("{}/cpu{}/topology/core_id".format(base_path, vcpu))
+    except IOError:
+        continue
+    core = int(fd.read())
+    fd.close()
+    fd = open("{}/cpu{}/topology/physical_package_id".format(base_path, vcpu))
+    socket = int(fd.read())
+    fd.close()
+
+    if vcpu in VCPU:
+        print("fatal: vcpu {0} in core {1} in socket {2} already found".format(vcpu, core, socket))
+        sys.exit(1)
+    else:
+        VCPU[vcpu] = {'core':core, 'socket': socket}
+
+vcpus = sorted(VCPU.keys())
+
+for key in vcpus:
+    print('export {0}_VCPU_{1}_SOFT_ENABLED="TRUE"'.format(PREFIX, key))
+    print('export {0}_VCPU_{1}_IN_CORE="{2}"'.format(PREFIX, key, VCPU[key]['core']))
+    print('export {0}_VCPU_{1}_IN_SOCKET="{2}"'.format(PREFIX, key, VCPU[key]['socket']))
+    print('export {0}_VCPU_{1}_ON_NUMA_NODE="{2}"'.format(PREFIX, key, VCPU[key]['socket']))
+
+sys.exit(0)

@@ -1,0 +1,145 @@
+#!/usr/bin/python3
+# Loosely based on DPDK usertools/dpdk-bind
+
+import os
+import sys
+import getopt
+import subprocess
+
+PREFIX=""
+EXCLUDE=[]
+DEVICES={}
+
+def usageAndExit():
+    print("usage: nic_inventory_config [...options...]")
+    print
+    print("       -p <prefix>    prefix export names with <prefix>")
+    print("       -x <pci-id>    exclude <pci-id> from output")
+    print("       -h             display usage")
+    sys.exit(2)
+
+def commandLine():
+    global PREFIX
+    global EXCLUDE
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "x:p:h")
+        for opt, arg in opts:
+            if opt in ['-x']:
+                if arg not in EXCLUDE:
+                    EXCLUDE.append(arg)
+            elif opt in ['-p']:
+                PREFIX=arg
+            else:
+                usageAndExit()
+    except:
+        usageAndExit()
+
+def deviceQueueCount(id):
+    rxq = []
+    txq = []
+    fn="/sys/bus/pci/devices/{}/net".format(id)
+    for f in os.walk(fn):
+        idx = 0
+        found = -1
+        parts = f[0].split('/')
+        while idx<len(parts):
+            if parts[idx]=="queues":
+                found = idx
+                break
+            idx=idx+1
+        if found>0 and (found+1)<len(parts):
+            found=found+1
+            if 'rx-' in parts[found] and parts[found] not in rxq:
+                rxq.append(parts[found])
+            elif 'tx-' in parts[found] and parts[found] not in txq:
+                txq.append(parts[found])
+    return len(rxq), len(txq)
+
+def extractTagValue(str):
+    idx = str.find(':')
+    if idx==-1:
+        print("fatal: unexpected format '{0}'".format(line))
+        sys.exit(1)
+    tag = str[0:idx].strip()
+    value = str[idx+1:].strip()
+    return tag, value
+
+def main():
+    global DEVICES
+
+    # Find all the PCI devices
+    res = subprocess.run(["lspci", "-Dvmmnnk"], text=True, capture_output=True)
+    if res.returncode!=0:
+        print("fatal: lspci dump failed")
+        sys.exit(1)
+
+    # Parse lspci output
+    id=None
+    inEntry=False
+    for line in res.stdout.splitlines():
+        line = line.strip()
+        idx = line.find('Slot:')
+        if idx==0:
+            inEntry=True
+            _, id = extractTagValue(line)
+            if id in DEVICES:
+                print("fatal: device id '{0}' duplicated".format(id))
+                sys.exit(1)
+            DEVICES[id]={}
+            continue
+        elif len(line)==0:
+            inEntry=False
+            id=None
+            continue
+        if id is None or inEntry==False:
+            print("fatal: internal error")
+            sys.exit(1)
+        tag, value = extractTagValue(line)
+        if len(tag)>0:
+            DEVICES[id][tag]=value
+        else:
+            print("fatal: zero length tag '{0}' -> '{1}'".format(tag,value))
+            sys.exit(1)
+
+    # filter everything out that's not class 'Ethernet' or has no class
+    rmKeys=[]
+    for key in DEVICES.keys():
+        if 'Class' in DEVICES[key]:
+            if 'Ethernet controller' not in DEVICES[key]['Class']:
+                rmKeys.append(key)
+        else:
+            rmKeys.append(key)
+    for key in rmKeys:
+        del DEVICES[key]
+
+    # For each Ethernet device try to find RX, TX queue count
+    for id in DEVICES.keys():
+        rxcnt, txcnt = deviceQueueCount(id)
+        DEVICES[id]['rx_queue_size']=str(rxcnt)
+        DEVICES[id]['tx_queue_size']=str(txcnt)
+
+    # Remove any devices passed on command line. Caller expectes these will no be DPDK bound
+    for id in EXCLUDE:
+        if id in DEVICES:
+            del DEVICES[id]
+
+    # Now export state
+    portId=0
+    for id in DEVICES.keys():
+        if len(PREFIX)>0:
+            portName = "{0}_DPDK_NIC_DEVICE".format(PREFIX.upper())
+        else:
+            portName = "DPDK_NIC_DEVICE"
+
+        print('export {0}="{1}"'.format(portName, portId))
+        print('export {0}_SOFT_ENABLED="{1}"'.format(portName, 'true'))
+        print('export {0}_PCI_DEVICE_ID="{1}"'.format(portName, id))
+        print('export {0}_RX_QUEUE_SIZE="{1}"'.format(portName, DEVICES[id]['rx_queue_size']))
+        print('export {0}_TX_QUEUE_SIZE="{1}"'.format(portName, DEVICES[id]['tx_queue_size']))
+        print('export {0}_NUMA_NODE="{1}"'.format(portName, DEVICES[id]['NUMANode']))
+        portId=portId+1
+
+if __name__ == "__main__":
+    commandLine()
+    main()
+    sys.exit(0)

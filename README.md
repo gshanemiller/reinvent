@@ -1,2 +1,2 @@
 # reinvent
-Library: DPDK userspace read/writing UDP packets with congestion control
+Library: DPDK userspace library read/write UDP messages with congestion control
