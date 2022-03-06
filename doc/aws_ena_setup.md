@@ -231,3 +231,280 @@ On the client machine:
 
 * Run command: `cd $H/reinvent/scripts`
 * Run command: `sudo ./reinvent_dpdk_udp_integration_test client`
+
+## Examining UDP Test Program Output
+
+The server side will report packets received. Each cient TXQ sends 16-packets. Press CTRL-C to exit server
+
+```
+000014.755516156 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 6
+000014.755543350 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 3
+000014.755571390 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 7
+000014.755578870 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 5
+000014.755585669 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 6
+000014.755594826 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 14
+000014.755604853 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 0
+000014.755613145 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 4
+000014.755622379 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 2
+000014.755631109 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 15
+000014.755638713 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 5
+000014.755646909 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 10
+000014.755655113 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 11
+000014.755663297 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 10
+000014.755672373 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 3
+000014.755679405 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 4
+000014.755687644 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 12
+000014.755694503 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 2
+000014.755702365 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 11
+000014.755710674 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 13
+000014.755717437 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 1
+000014.755725414 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 1
+000014.755735625 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 7
+000014.755743328 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 0
+000014.755751568 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 12
+000014.755759816 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 8
+000014.755768154 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 9
+000014.755776339 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 13
+000014.755784218 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 8
+000014.755792562 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 14
+000014.755800738 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 9
+000014.755808598 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 1, txqId: 1, sequenceNumber: 15
+000025.310258390 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 0
+000081.630594235 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 0
+000137.950927477 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 0
+000194.271259188 INFO  reinvent_dpdk_udp_integration_test.cpp:293 id 0 rxqIndex 0 packet: sender: lcoreId: 0, txqId: 0, sequenceNumber: 0
+```
+
+The client side shows packets sent:
+
+```
+000002.630153421 INFO  reinvent_dpdk_udp_integration_test.cpp:434 launching DPDK worker threads
+000002.630237475 DEBUG reinvent_dpdk_udp_integration_test.cpp:264 sent 8 packets
+000002.630260970 DEBUG reinvent_dpdk_udp_integration_test.cpp:264 sent 8 packets
+000002.630305837 DEBUG reinvent_dpdk_udp_integration_test.cpp:264 sent 8 packets
+000002.630316870 DEBUG reinvent_dpdk_udp_integration_test.cpp:264 sent 8 packets
+000002.630372664 INFO  reinvent_dpdk_udp_integration_test.cpp:438 waiting for DPDK worker threads to stop
+```
+
+Each task dumps the AWSConfig object which configures the DPDK work in Reinvent. It's in JSON format so it can pretty-printed.
+The client config is given here (elided) with some comments in the right margin. This config is 100% based on the 
+environment variables in the driver script `reinvent_dpdk_udp_integration_test`. The environment variables are described
+in [detail here](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_initaws.h):
+
+```
+$ cat config | python3 -m json.tool
+{
+    "dpdkArgs": [
+        "--proc-type",                                              <--- arguments passed to DPDK
+        "primary",
+        "--in-memory",
+        "--log-level",
+        "7",
+        "--huge-dir",
+        "/mnt/huge",
+        "-n",
+        "12",
+        "--lcores",                                                 <--- 2 TXQs means 2 lcores each on own CPU
+        "(0)@0,(1)@1"                                                    this argument is computed by reinvent
+    ],
+    "deviceId": 0,
+    "pciId": "0000:7f:00.0",
+    "numaNode": 0,                                                  <--- DPDK NIC used is on NUMA node 0
+    "rxqCount": 0,
+    "txqCount": 2,                                                  <--- Making 2 TXQs available
+    "rxqThreadCount": 0,
+    "txqThreadCount": 2,                                            <--- Requesting 2 TXQ lcores one per queue
+    "rxqPolicy": "OFF",                                             <--- RX disabled on client
+    "txqPolicy": "DISTINCT",                                        <--- TX enabled on client: each lcore must be on
+    "rxqCandidateVcpuList": [                                            distinct HW core
+        0,
+        1,
+        2,                                                          <--- HW cores on NUMA node 0 available for RX lcores
+        3,                                                               but since RX off on client config not used
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53
+    ],
+    "txqCandidateVcpuList": [                                       <--- NUMA HW cores available for TXQ use
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53
+    ],
+    "mtu": 1500,
+    "memzoneMask": 5,
+    "memzoneReserveKb": 153600,
+    "memzoneName": "REINVENT_AWS",
+    "mempoolPolicy": "PER_QUEUE",                                   <--- requests each TXQ get its own mempool
+    "rxq": [],
+    "txq": [                                                        <--- info about both TXQs
+        {
+            "id": 0,
+            "vcpuId": 0,
+            "lcoreId": 0,
+            "memzone": "0x100000318",
+            "mempool": "0x2200200bc0",
+            "mempoolPolicy": "PER_QUEUE",
+            "ringSize": 1024,
+            "defaultFlow": 2048,
+            "defaultRoute": {
+                "sourceMac": "16:b4:a8:69:7a:87",
+                "destinationMac": "16:99:5a:30:17:35",
+                "sourceIPV4": "172.31.76.132",
+                "destinationIPV4": "172.31.67.198",
+                "sourcePort": 10000,
+                "destinationPort": 20000
+            }
+        },
+        {
+            "id": 1,
+            "vcpuId": 1,
+            "lcoreId": 1,
+            "memzone": "0x100000318",
+            "mempool": "0x2200200800",
+            "mempoolPolicy": "PER_QUEUE",
+            "ringSize": 1024,
+            "defaultFlow": 2048,
+            "defaultRoute": {
+                "sourceMac": "16:b4:a8:69:7a:87",
+                "destinationMac": "16:99:5a:30:17:35",
+                "sourceIPV4": "172.31.76.132",
+                "destinationIPV4": "172.31.67.198",
+                "sourcePort": 10001,
+                "destinationPort": 20001
+            }
+        }
+    ],
+    "lcore": [                                                      <--- Identifies each lcore, the HW core it's assigned
+        {                                                                and what role it has
+            "id": 0,
+            "vcpu": 0,
+            "role": [
+                "TXQ"
+            ]
+        },
+        {
+            "id": 1,
+            "vcpu": 1,
+            "role": [
+                "TXQ"
+            ]
+        }
+    ],
+    "vcpu": [                                                       <--- Info about the CPU inventory on c5n box
+        {
+            "id": 0,
+            "core": 0,
+            "socket": 0,
+            "numaNode": 0,
+            "softEnabled": 1
+        },
+        {
+            "id": 1,
+            "core": 1,
+            "socket": 0,
+            "numaNode": 0,
+            "softEnabled": 1
+        },
+    "vcpu": [
+        {
+            "id": 0,
+            "core": 0,
+            "socket": 0,
+            "numaNode": 0,
+            "softEnabled": 1
+        },
+        {
+            "id": 1,
+            "core": 1,
+            "socket": 0,
+            "numaNode": 0,
+            "softEnabled": 1
+        },
+.
+  .
+    .
+        {
+            "id": 70,
+            "core": 26,
+            "socket": 1,
+            "numaNode": 1,
+            "softEnabled": 1
+        },
+        {
+            "id": 71,
+            "core": 27,
+            "socket": 1,
+            "numaNode": 1,
+            "softEnabled": 1
+        }
+    ],
+    "linkSpeed": 0,
+    "rxMqMask": 0,
+    "txMqMask": 0,
+    "rxOffloadMask": 0,
+    "txOffloadMask": 0,
+    "defaultTxFlow": 2048
+}
+```
