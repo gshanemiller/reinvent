@@ -79,7 +79,7 @@ The public AWS AMI `ami-095d03d09d3d3d401` is a minimal, complete image containi
 # Pre-build Instructions (15mins)
 Note: machine reboot takes about 10mins/ea.
 
-These instructions are based on the [DPDK ENA Setup](https://doc.dpdk.org/guides/nics/ena.html) guide. While `c5n` machines are IOMMU capable it is not turned on by default. DPDK requires IOMMU. You only need to this once. For each deployment machine:
+These instructions are based on the [DPDK ENA Setup](https://doc.dpdk.org/guides/nics/ena.html) guide. While `c5n` machines are IOMMU capable it is not turned on by default. DPDK requires IOMMU. You only need to do this once. For each deployment machine:
 
 1. Insure machine meets requirements
 2. SSH login to machine allocated in (1)
@@ -120,7 +120,7 @@ DPDK build is about ~20mins.
 
 1. Insure machine meets requirements and that IOMMU is enabled on each machine
 2. SSH login to machine allocated in (1)
-3. From the reinvent GIT repo https://github.com/rodgarrison/reinvent copy-and-paste the install script in `scripts/install` into your home directory in (2)
+3. [From the reinvent GIT repo](https://github.com/rodgarrison/reinvent/blob/main/scripts/install) copy-and-paste this script into your home directory in (2)
 4. Run command: `chmod 555 ./install`
 5. Run command: `./install`
 6. When install is done run command: `. ~/.bashrc`
@@ -222,7 +222,7 @@ These are in fact pseudo ports. See `aws_ena_packet_design.md` this directory fo
 
 ## Run the UDP Test Program
 
-On the server machine:
+First, on the server machine:
 
 * Run command: `cd $H/reinvent/scripts`
 * Run command: `sudo ./reinvent_dpdk_udp_integration_test server`
