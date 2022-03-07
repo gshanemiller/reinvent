@@ -35,7 +35,7 @@
 # Setup Goals
 This guide accomplishes two things:
 * Install and build all software for DPDK development
-* Then, in the post-build work, you will configure two AWS `c5n` machines and send UDP packets between them. The 
+* Then, in the post-build work, you will configure two AWS `c5n.metal` machines and send UDP packets between them. The 
 test task provided by Reinvent configures two TX queues on a client machine and 32 RX queues on a server machine.
 The client sends UDP packets to the server, and the server prints the payload it got.
 
@@ -74,12 +74,12 @@ AWS instances come pre-configured with one NIC with a public IP4V address preset
 * Your instance will now have two NICS: the original NIC with the public IPv4 address for ssh login, while the second NIC is not public accessible.
 
 # No build Approach
-The public AWS AMI `ami-095d03d09d3d3d401` is a minimal, complete image containing the code, build dependencies, build tool chain, and pre-built tasks. Provision your AWS instances with this AMI-ID then proceed directly to [Post Build Instructions](#post-build-instructions-10mins). The AMI image reflects `H=/home/ec2-user/Dev` and `D=/home/ec2-user/local`, and are preset as environment variables when you login as `ec2-user` or `root`.
+The public AWS AMI `ami-0adf30fabf7a2fc46` is a minimal, complete image containing the code, build dependencies, build tool chain, and pre-built tasks. IOMMU has been enabled. Provision your AWS instances with this AMI-ID then proceed directly to [Post Build Instructions](#post-build-instructions-10mins). The AMI image reflects `H=/home/ec2-user/Dev` and `D=/home/ec2-user/local`, and are preset as environment variables when you login.
 
 # Pre-build Instructions (15mins)
 Note: machine reboot takes about 10mins/ea.
 
-These instructions are based on the [DPDK ENA Setup](https://doc.dpdk.org/guides/nics/ena.html) guide. While `c5n` machines are IOMMU capable it is not turned on by default. DPDK requires IOMMU. You only need to do this once. For each deployment machine:
+These instructions are based on the [DPDK ENA Setup](https://doc.dpdk.org/guides/nics/ena.html) guide. While `c5n.metal` machines are IOMMU capable it is not turned on by default. DPDK requires IOMMU. You only need to do this once. For each deployment machine:
 
 1. Insure machine meets requirements
 2. SSH login to machine allocated in (1)
@@ -198,7 +198,7 @@ Network devices using kernel driver
 ```
 
 ## Configure Reinvent Script for UDP Packet Transmission
-Now at this point you should have two AWS `c5n` machines each with two NICs. The second NIC is DPDK enabled. In
+Now at this point you should have two AWS `c5n.metal` machines each with two NICs. The second NIC is DPDK enabled. In
 previous steps you collected the MAC and IPV4 address for each machine's `eth1` NIC. Desiginate one of these machines
 `CLIENT` and the other machine `SERVER`. In this test `CLIENT` will send UDP packets to `SERVER`. 
 
