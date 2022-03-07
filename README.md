@@ -6,7 +6,7 @@ Early-alpha: code under heavy development. [Major limitations given here.](https
 
 # Design Goals
 This library intends to be a rewrite of [eRPC](https://github.com/erpc-io/eRPC) which was the motivation for this work.
-[Refer to the eRPC techical paper for more information.](https://www.usenix.org/system/files/nsdi19-kalia.pdf). eRPC 
+[Refer to the eRPC techical paper for more information](https://www.usenix.org/system/files/nsdi19-kalia.pdf). eRPC 
 (in its DPDK implementation) is a UDP only RPC library running over DPDK in userspace with congestion control to handle
 UDP packet loss and flow control. The result is a highly efficient yet general purpose NIC I/O library.
 
