@@ -206,7 +206,7 @@ public:
     Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::FATAL_TAG);           \
     fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                          \
     fprintf(stderr, __VA_ARGS__);                                                                                 \
-    fflush(stderr)
+    fflush(stderr);
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_ERROR
 #define REINVENT_UTIL_LOG_ERROR_VARGS(...)                                                                        \
@@ -214,6 +214,7 @@ public:
       Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::ERROR_TAG);         \
       fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                        \
       fprintf(stderr, __VA_ARGS__);                                                                               \
+      fflush(stderr);                                                                                             \
     }
 #else
 #define REINVENT_UTIL_LOG_ERROR_VARGS(...) ((void)0)
@@ -225,6 +226,7 @@ public:
       Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::WARN_TAG);          \
       fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                        \
       fprintf(stderr, __VA_ARGS__);                                                                               \
+      fflush(stderr);                                                                                             \
     }
 #else
 #define REINVENT_UTIL_LOG_WARN_VARGS(...) ((void)0)
@@ -236,6 +238,7 @@ public:
       Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::INFO_TAG);          \
       fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                        \
       fprintf(stderr, __VA_ARGS__);                                                                               \
+      fflush(stderr);                                                                                             \
     }
 #else
 #define REINVENT_UTIL_LOG_INFO_VARGS(...) ((void)0)
@@ -247,6 +250,7 @@ public:
       Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::DEBUG_TAG);         \
       fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                        \
       fprintf(stderr, __VA_ARGS__);                                                                               \
+      fflush(stderr);                                                                                             \
     }
 #else
 #define REINVENT_UTIL_LOG_DEBUG_VARGS(...) ((void)0)
@@ -258,6 +262,7 @@ public:
       Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::TRACE_TAG);         \
       fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                        \
       fprintf(stderr, __VA_ARGS__);                                                                               \
+      fflush(stderr);                                                                                             \
     }
 #else
 #define REINVENT_UTIL_LOG_TRACE_VARGS(...) ((void)0)
@@ -266,8 +271,7 @@ public:
 //
 // Stream style logging macros. Fatal is always enabled. Note that caller always provides a terminating ';' which 
 // follows the macro invocation. Also note a new line terminator is provided only if caller's stream includes it. The
-// macros do not add line delimiters. Fatal/error is written to cerr and is flushed. The rest of the methods log to
-// cout and are not flushed.
+// macros do not add line delimiters. All logs are written to cerr and is flushed.
 //
 #define REINVENT_UTIL_LOG_FATAL(REINVENT_UTIL_LOG_STREAM_ARGS)                                                    \
   Reinvent::Util::LogRuntime::streamTimestampAndSeverity(std::cerr, Reinvent::Util::LogRuntime::FATAL_TAG)        \
@@ -301,7 +305,8 @@ public:
     << ":"                                                                                                        \
     << __LINE__                                                                                                   \
     << " "                                                                                                        \
-    << REINVENT_UTIL_LOG_STREAM_ARGS;                                                                             \
+    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                              \
+    << std::flush;                                                                                                \
   }
 #else
 #define REINVENT_UTIL_LOG_WARN(...) ((void)0)
@@ -315,7 +320,8 @@ public:
     << ":"                                                                                                        \
     << __LINE__                                                                                                   \
     << " "                                                                                                        \
-    << REINVENT_UTIL_LOG_STREAM_ARGS;                                                                             \
+    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                              \
+    << std::flush;                                                                                                \
   }
 #else
 #define REINVENT_UTIL_LOG_INFO(...) ((void)0)
@@ -329,7 +335,8 @@ public:
     << ":"                                                                                                        \
     << __LINE__                                                                                                   \
     << " "                                                                                                        \
-    << REINVENT_UTIL_LOG_STREAM_ARGS;                                                                             \
+    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                              \
+    << std::flush;                                                                                                \
   }
 #else
 #define REINVENT_UTIL_LOG_DEBUG(...) ((void)0)
@@ -343,7 +350,8 @@ public:
     << ":"                                                                                                        \
     << __LINE__                                                                                                   \
     << " "                                                                                                        \
-    << REINVENT_UTIL_LOG_STREAM_ARGS;                                                                             \
+    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                              \
+    << std::flush;                                                                                                \
   }
 #else
 #define REINVENT_UTIL_LOG_TRACE(...) ((void)0)

@@ -8,8 +8,12 @@
 //                 caller specified 'Dpdk::AWSConfig'. Post initialization callers should run rte_eal_mp_remote_launch
 //                 to start and run the RX/TX lcores usually with a helper 'Dpdk::AWSEnaWorker' object.
 //
-// Limitation:     Multi-NIC-per-NUMA-node not supported: one NIC/numa-node works. AWA ENA NICs have so many
-//                 queues it's not possible to use them without MULTI mode anyway
+// Limitation:     Multi-NICs not supported. DPDK generally will not allow different PIDs to use the same DPDK device.
+//                 So the typical situation is when a host box has multiple NICs and each task runs one NIC. This code
+//                 will properly configure all those NICs except, because it can't know which lcores were created
+//                 by those other tasks, cannot guarantee the assigned lcores are actually DISTINCT if a DISTINCT
+//                 policy was used. To fix this lcore-to-HW-core assignments have shared between each participating
+//                 task.
 //
 // See Also:       Dpdk::AWSConfig
 //                 Dpdk::AWSEnaWorker

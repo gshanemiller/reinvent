@@ -144,7 +144,7 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, i
   //
   // TX offload flags to carry down to packet
   //
-  const uint64_t txOffloadFlags = static_cast<uint64_t>(config->awsEnaConfig().txOffloadMask());
+  // const uint64_t txOffloadFlags = static_cast<uint64_t>(config->awsEnaConfig().txOffloadMask());
 
   //
   // Total all-in packet size sent
@@ -230,38 +230,24 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, i
       payload->sequenceNumber = sequence++;
 
       //
-      // Hand add checksum
-      //
-      uint32_t ip_cksum(0);
-      uint16_t* ip = reinterpret_cast<uint16_t*>(ip4Hdr);
-      for(uint16_t i=0; i<10; ++i) {
-          ip_cksum += *(ip+i);
-      }
-	    // Reduce 32 bit checksum to 16 bits and complement it.
-      ip_cksum = ((ip_cksum & 0xFFFF0000) >> 16) + (ip_cksum & 0x0000FFFF);
-      if (ip_cksum > 65535) {
-        ip_cksum -= 65535;
-      }
-      ip_cksum = (~ip_cksum) & 0x0000FFFF;
-      if (ip_cksum == 0) {
-        ip_cksum = 0xFFFF;
-      }
-      ip4Hdr->hdr_checksum = static_cast<uint16_t>(ip_cksum);
-      
-      //
       // Finalize mbuf in DPDK
       //
       mbuf[i]->nb_segs = 1;
 		  mbuf[i]->pkt_len = packetSize;
 		  mbuf[i]->data_len = packetSize;
-		  mbuf[i]->ol_flags = txOffloadFlags;
+		  mbuf[i]->ol_flags = 0;
     }
 
     //
     // TX packets e.g. write them onto the wire
     //
 	  uint16_t txCount = rte_eth_tx_burst(deviceId, txqIndex, mbuf.data(), burstCapacity);
-    REINVENT_UTIL_LOG_DEBUG("sent " << txCount << " packets" << std::endl);
+    REINVENT_UTIL_LOG_INFO("burst sent " << txCount << " packets" << std::endl);
+
+    //
+    // Free mbufs
+    //
+    rte_pktmbuf_free_bulk(mbuf.data(), mbuf.size());
   }
 
   return 0;
@@ -291,6 +277,11 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config, i
         sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr));
       REINVENT_UTIL_LOG_INFO_VARGS("id %d rxqIndex %d packet: sender: lcoreId: %d, txqId: %d, sequenceNumber: %d\n",
         id, rxqIndex, payload->lcoreId, payload->txqId, payload->sequenceNumber);
+
+      //
+      // Free mbuf
+      //
+      rte_mbuf_raw_free(mbuf[i]); 
     }
   }
 
