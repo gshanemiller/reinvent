@@ -1265,6 +1265,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   //
   rte_eth_txconf txCfg = ethDeviceInfo->default_txconf;
   txCfg.offloads = deviceConfig->txmode.offloads;
+  REINVENT_UTIL_LOG_DEBUG("TXQ conf: " << txCfg << std::endl);
   for (int i=0; i<config->txqThreadCount(); ++i) {
     if ((rc = rte_eth_tx_queue_setup(config->deviceId(), i, config->txq()[i].ringSize(), config->numaNode(), &txCfg))!=0) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK AWS ENA TXQ", rte_strerror(rc), rc);

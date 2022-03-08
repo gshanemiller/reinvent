@@ -27,5 +27,14 @@ std::ostream& operator<<(std::ostream& stream, const rte_eth_dev_info& object);
 std::ostream& operator<<(std::ostream& stream, const rte_ether_addr& object);
   // Print into specified 'stream' human readable dump of 'object' returning 'stream'
 
+std::ostream& operator<<(std::ostream& stream, const rte_ether_addr& object);
+  // Print into specified 'stream' human readable dump of 'object' returning 'stream'
+
+std::ostream& operator<<(std::ostream& stream, const rte_eth_txconf& object);
+  // Print into specified 'stream' human readable dump of 'object' returning 'stream'
+
+std::ostream& operator<<(std::ostream& stream, const rte_eth_rxconf& object);
+  // Print into specified 'stream' human readable dump of 'object' returning 'stream'
+
 } // Dpdk
 } // Reinvent

@@ -12,6 +12,7 @@
 #include <rte_ether.h>
 #include <rte_ip.h>
 #include <rte_udp.h>
+#include <rte_mbuf_ptype.h>
 #pragma GCC diagnostic pop 
 
 #include <unistd.h>
@@ -142,11 +143,6 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, i
   const uint16_t dstPort = rte_cpu_to_be_16(static_cast<uint16_t>(config->awsEnaConfig().txq()[txqIndex].defaultRoute().dstPort()));
 
   //
-  // TX offload flags to carry down to packet
-  //
-  const uint64_t txOffloadFlags = static_cast<uint64_t>(config->awsEnaConfig().txOffloadMask());
-
-  //
   // Total all-in packet size sent
   //
   const int packetSize = sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr)+sizeof(TxMessage);
@@ -230,38 +226,28 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, i
       payload->sequenceNumber = sequence++;
 
       //
-      // Hand add checksum
-      //
-      uint32_t ip_cksum(0);
-      uint16_t* ip = reinterpret_cast<uint16_t*>(ip4Hdr);
-      for(uint16_t i=0; i<10; ++i) {
-          ip_cksum += *(ip+i);
-      }
-	    // Reduce 32 bit checksum to 16 bits and complement it.
-      ip_cksum = ((ip_cksum & 0xFFFF0000) >> 16) + (ip_cksum & 0x0000FFFF);
-      if (ip_cksum > 65535) {
-        ip_cksum -= 65535;
-      }
-      ip_cksum = (~ip_cksum) & 0x0000FFFF;
-      if (ip_cksum == 0) {
-        ip_cksum = 0xFFFF;
-      }
-      ip4Hdr->hdr_checksum = static_cast<uint16_t>(ip_cksum);
-      
-      //
       // Finalize mbuf in DPDK
       //
       mbuf[i]->nb_segs = 1;
-		  mbuf[i]->pkt_len = packetSize;
-		  mbuf[i]->data_len = packetSize;
-		  mbuf[i]->ol_flags = txOffloadFlags;
+      mbuf[i]->pkt_len = packetSize;
+      mbuf[i]->data_len = packetSize;
+      mbuf[i]->ol_flags = (RTE_MBUF_F_TX_IPV4|RTE_MBUF_F_TX_IP_CKSUM);
+      mbuf[i]->l2_len = sizeof(rte_ether_hdr);
+      mbuf[i]->l3_len = sizeof(rte_ipv4_hdr);
+      mbuf[i]->l4_len = sizeof(rte_udp_hdr);
+      mbuf[i]->packet_type = (RTE_PTYPE_L2_ETHER|RTE_PTYPE_L3_IPV4|RTE_PTYPE_L4_UDP);
     }
 
     //
     // TX packets e.g. write them onto the wire
     //
-	  uint16_t txCount = rte_eth_tx_burst(deviceId, txqIndex, mbuf.data(), burstCapacity);
-    REINVENT_UTIL_LOG_DEBUG("sent " << txCount << " packets" << std::endl);
+    uint16_t txCount = rte_eth_tx_burst(deviceId, txqIndex, mbuf.data(), burstCapacity);
+    REINVENT_UTIL_LOG_INFO("burst sent " << txCount << " packets" << std::endl);
+
+    //
+    // Free mbufs
+    //
+    rte_pktmbuf_free_bulk(mbuf.data(), mbuf.size());
   }
 
   return 0;
@@ -291,6 +277,11 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config, i
         sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr));
       REINVENT_UTIL_LOG_INFO_VARGS("id %d rxqIndex %d packet: sender: lcoreId: %d, txqId: %d, sequenceNumber: %d\n",
         id, rxqIndex, payload->lcoreId, payload->txqId, payload->sequenceNumber);
+
+      //
+      // Free mbuf
+      //
+      rte_mbuf_raw_free(mbuf[i]); 
     }
   }
 

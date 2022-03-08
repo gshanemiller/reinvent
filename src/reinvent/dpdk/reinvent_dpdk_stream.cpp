@@ -120,5 +120,55 @@ std::ostream& operator<<(std::ostream& stream, const rte_ether_addr& object) {
   return stream;
 }
 
+std::ostream& operator<<(std::ostream& stream, const rte_eth_txconf& object) {
+  char tmpbuf[256];
+  stream << "{";
+
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"tx_thresh\": { \"pthresh\": %u, \"hthresh\": %u, \"wthresh\": %u }, ",
+    object.tx_thresh.pthresh, object.tx_thresh.hthresh, object.tx_thresh.wthresh);
+  stream << tmpbuf;
+
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"tx_rs_thresh\": %u, ", object.tx_rs_thresh);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"tx_free_thresh\": %u, ", object.tx_free_thresh);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"tx_deferred_start\": %u, ", object.tx_deferred_start);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"tx_offloads\": %08lx, ", object.offloads);
+  stream << tmpbuf;
+
+  stream << "}";
+  return stream;
+}
+
+std::ostream& operator<<(std::ostream& stream, const rte_eth_rxconf& object) {
+  char tmpbuf[256];
+  stream << "{";
+
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"rx_thresh\": { \"pthresh\": %u, \"hthresh\": %u, \"wthresh\": %u }, ",
+    object.rx_thresh.pthresh, object.rx_thresh.hthresh, object.rx_thresh.wthresh);
+  stream << tmpbuf;
+
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"rx_free_thresh\": %u, ", object.rx_free_thresh);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"rx_drop_en\": %u, ", object.rx_drop_en);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"rx_deferred_start\": %u, ", object.rx_deferred_start);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"rx_nseg\": %u, ", object.rx_nseg);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"share_group\": %u, ", object.share_group);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"share_qid\": %u, ", object.share_qid);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"offloads\": %08lx, ", object.offloads);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"rx_seg\": \"(elided)\"");
+  stream << tmpbuf;
+
+  stream << "}";
+  return stream;
+}
+
 } // namespace Dpdk
 } // namespace Reinvent
