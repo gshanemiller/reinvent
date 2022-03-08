@@ -8,7 +8,7 @@
 //   REINVENT_UTIL_ERRNO_RETURN - return an error value with optional assertion, logging
 // Macro Definitions:
 //   REINVENT_UTIL_ERRNO_LOGGING       - Must define on at build time in in addition to other logging defines to
-//                                       produce errors at severity 'ERRNO'. This severity is not controlled in
+//                                       emit logs at severity 'ERRNO'. This severity is not controlled in
 //                                       Util::Log only by this definition
 //   NDEBUG                            - If defined at build, as with any assert, the assert is stripped from build
 //                                       Otherwise an assertion is produced at time when the asserted condition is
@@ -21,13 +21,13 @@
 // Exception Policy: No exceptions
 //
 // Description: To faciliate the uniform error reporting this software component provides macros to name, assert,
-// and return error codes. It eschews free form pigeon-dropping-logging code moving to a uniform standard where code
-// method either return 0 on success or a non-zero code with matched printf-style description. This library does for
-// reinvent what errno does the C-library.
+// and return error codes. This library does for reinvent what errno does the C-library.
 //
 // Wherever you'd write 'if (!condition) { return errorCode; }' write:
 //
+//  if (!condition) {
 //    REINVENT_UTIL_ERRNO_RETURN(<errorEnum>, (condition), arg1, arg2, ...);
+//  }
 //
 // where 'arg1, arg2, ...' are required printf-style values conforming to the printf-style format matched to the
 // error enumerated value, and 'errorEnum' is one of the Errno enumerated values. The behavior of the macro is:
@@ -46,8 +46,6 @@
 // provide meaningful non-zero error codes and their description. Although there's slightly more book-keeping, the
 // goals are intended the benefit library users not library developers:
 //
-// Default behavior is to not assert and emit no ERRNO logs
-//
 // (*) Encourage library developers to make contracts
 // (*) Return codes from a predefined set each with a predefined printf-format resulting in uniform log lines
 // (*) Eschew ad-hoc log error, verbose, debug noise where programmers drop in variously formatted fact-finding info
@@ -62,8 +60,7 @@
 //
 // Example:
 //
-// This example provides a method 'toInt' method wrapping 'strtol' returning Errno::ATO on error and zero otherwise:
-// provided for you in this file; developers need not define it: 
+// This example provides a method 'toInt' method wrapping 'strtol' returning Errno::ATOI on error and zero otherwise:
 //
 //    #include <reinvent_util_errno.h>
 //
@@ -138,19 +135,21 @@ struct Errno {
   static const char * d_missingFormatSpecifier;
   static const std::vector<const char *> d_formatSpecifier;
   // ACCESSORS
-  static const char * specifier(const int reinvent_util_error_rcode);
+  static const char * format(const int reinvent_util_error_rcode);
 };
 
 #ifndef NDEBUG
 #ifdef REINVENT_UTIL_LOGGING_ON
 #ifdef REINVENT_UTIL_LOGGING_ERRNO
-#define REINVENT_UTIL_ERRNO_RETURN(REINVENT_UTIL_ERRNO_RETURN_SYMBOL, REINVENT_UTIL_ERRNO_RETURN_EXPR, ...)       \
-  assert((REINVENT_UTIL_ERRNO_RETURN_EXPR));                                                                      \
-  Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::ERRNO_TAG);             \
-  fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                            \
-  fprintf(stderr, Reinvent::Util::Errno::specifier(REINVENT_UTIL_ERRNO_RETURN_SYMBOL), __VA_ARGS__);              \
-  fprintf(stderr, " ("#REINVENT_UTIL_ERRNO_RETURN_SYMBOL"=%d)\n", REINVENT_UTIL_ERRNO_RETURN_SYMBOL);             \
-  fflush(stderr);                                                                                                 \
+#define REINVENT_UTIL_ERRNO_RETURN(REINVENT_UTIL_ERRNO_RETURN_SYMBOL, REINVENT_UTIL_ERRNO_RETURN_EXPR, ...)        \
+  assert((REINVENT_UTIL_ERRNO_RETURN_EXPR));                                                                       \
+  {                                                                                                                \
+    unsigned sec, ns;                                                                                              \
+    Reinvent::Util::LogRuntime::elapsedTime(&sec, &ns);                                                            \
+    fprintf(stderr, Reinvent::Util::Errno::format(REINVENT_UTIL_ERRNO_RETURN_SYMBOL), sec, ns,                     \
+      Reinvent::Util::LogRuntime::ERRNO_TAG, Reinvent::Util::LogRuntime::filename(__FILE__),                       \
+      __LINE__ REINVENT_UTIL_LOG_VA_ARGS(__VA_ARGS__));                                                            \
+  }                                                                                                                \
   return (REINVENT_UTIL_ERRNO_RETURN_SYMBOL)
 #endif
 #endif
@@ -159,12 +158,14 @@ struct Errno {
 #ifdef NDEBUG
 #ifdef REINVENT_UTIL_LOGGING_ON
 #ifdef REINVENT_UTIL_LOGGING_ERRNO
-#define REINVENT_UTIL_ERRNO_RETURN(REINVENT_UTIL_ERRNO_RETURN_SYMBOL, REINVENT_UTIL_ERRNO_RETURN_EXPR, ...)       \
-  Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::ERRNO_TAG);             \
-  fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                            \
-  fprintf(stderr, Reinvent::Util::Errno::specifier(REINVENT_UTIL_ERRNO_RETURN_SYMBOL), __VA_ARGS__);              \
-  fprintf(stderr, " ("#REINVENT_UTIL_ERRNO_RETURN_SYMBOL"=%d)\n", REINVENT_UTIL_ERRNO_RETURN_SYMBOL);             \
-  fflush(stderr);                                                                                                 \
+#define REINVENT_UTIL_ERRNO_RETURN(REINVENT_UTIL_ERRNO_RETURN_SYMBOL, REINVENT_UTIL_ERRNO_RETURN_EXPR, ...)        \
+  if (true) {                                                                                                      \
+    unsigned sec, ns;                                                                                              \
+    Reinvent::Util::LogRuntime::elapsedTime(&sec, &ns);                                                            \
+    fprintf(stderr, Reinvent::Util::Errno::format(REINVENT_UTIL_ERRNO_RETURN_SYMBOL), sec, ns,                     \
+      Reinvent::Util::LogRuntime::ERRNO_TAG, Reinvent::Util::LogRuntime::filename(__FILE__),                       \
+      __LINE__ REINVENT_UTIL_LOG_VA_ARGS(__VA_ARGS__));                                                            \
+  }                                                                                                                \
   return (REINVENT_UTIL_ERRNO_RETURN_SYMBOL)
 #endif
 #endif

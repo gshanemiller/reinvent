@@ -22,15 +22,15 @@ int main(int argc, char **argv) {
   // Declare printf data to log
   const int aInt(10);
   const char *aStr="printf I/O log";
-  const char *format="charPtr=%s pointer=%x (rc=%d)\n";
+  const void * ptr = static_cast<const void*>(&aInt);
 
   // Printf based macros 
-  REINVENT_UTIL_LOG_FATAL_VARGS(format, aStr, &aInt, aInt);
-  REINVENT_UTIL_LOG_ERROR_VARGS(format, aStr, &aInt, aInt);
-  REINVENT_UTIL_LOG_WARN_VARGS(format, aStr, &aInt, aInt);
-  REINVENT_UTIL_LOG_INFO_VARGS(format, aStr, &aInt, aInt);
-  REINVENT_UTIL_LOG_DEBUG_VARGS(format, aStr, &aInt, aInt);
-  REINVENT_UTIL_LOG_TRACE_VARGS(format, aStr, &aInt, aInt);
+  REINVENT_UTIL_LOG_FATAL_VARGS("charPtr='%s' pointer=%p (rc=%d)\n", aStr, ptr, aInt);
+  REINVENT_UTIL_LOG_ERROR_VARGS("charPtr='%s' pointer=%p (rc=%d)\n", aStr, ptr, aInt);
+  REINVENT_UTIL_LOG_WARN_VARGS("charPtr='%s' pointer=%p (rc=%d)\n", aStr, ptr, aInt);
+  REINVENT_UTIL_LOG_INFO_VARGS("charPtr='%s' pointer=%p (rc=%d)\n", aStr, ptr, aInt);
+  REINVENT_UTIL_LOG_DEBUG_VARGS("charPtr='%s' pointer=%p (rc=%d)\n", aStr, ptr, aInt);
+  REINVENT_UTIL_LOG_TRACE_VARGS("charPtr='%s' pointer=%p (rc=%d)\n", aStr, ptr, aInt);
 
   // Declare stream data to log
   const float bFloat(1.78);

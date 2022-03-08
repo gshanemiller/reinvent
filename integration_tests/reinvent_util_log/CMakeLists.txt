@@ -11,6 +11,11 @@ set(SOURCES
   reinvent_util_log_integration_test.cpp
 ) 
 
+set(SOURCES1                                                                                                             
+  ../../src/reinvent/util/reinvent_util_log.cpp
+  reinvent_util_log_integration_mt_test.cpp
+) 
+
 #
 # Build a test with logging ON for all severities at build time
 #
@@ -40,3 +45,14 @@ target_include_directories(${TEST_TARGET_CLEAN_TIMESTAMP} PUBLIC ../../src/reinv
 target_compile_definitions(${TEST_TARGET_CLEAN_TIMESTAMP} PUBLIC REINVENT_UTIL_LOGGING_ON)
 target_compile_definitions(${TEST_TARGET_CLEAN_TIMESTAMP} PUBLIC REINVENT_UTIL_LOGGING_BUILD_SEVERITY=REINVENT_UTIL_LOGGING_SEVERITY_TRACE)
 target_compile_definitions(${TEST_TARGET_CLEAN_TIMESTAMP} PUBLIC REINVENT_UTIL_LOGGING_TEST_FORMAT)
+
+#
+# Build a MT test with logging ON for all severities at build time
+#
+set(TEST_TARGET reinvent_util_log_integration_mt_test.tsk)
+add_executable(${TEST_TARGET} ${SOURCES1})
+target_compile_options(${TEST_TARGET} PUBLIC -g)
+target_include_directories(${TEST_TARGET} PUBLIC ../../src/reinvent)
+target_compile_definitions(${TEST_TARGET} PUBLIC REINVENT_UTIL_LOGGING_ON)
+target_compile_definitions(${TEST_TARGET} PUBLIC REINVENT_UTIL_LOGGING_BUILD_SEVERITY=REINVENT_UTIL_LOGGING_SEVERITY_TRACE)
+target_link_libraries(${TEST_TARGET} PUBLIC pthread)

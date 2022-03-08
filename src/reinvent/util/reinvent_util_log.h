@@ -3,7 +3,7 @@
 // Purpose: Logger
 //
 // Classes:
-//   Util::LogRuntime: Controls log line format and filters log output with runtime severity limit`
+//   Util::LogRuntime: Controls log line format and filters log output with runtime severity limit
 // Macros:
 //  REINVENT_UTIL_LOG_FATAL       - log at FATAL severity via streaming
 //  REINVENT_UTIL_LOG_ERROR       - log at ERROR severity via streaming
@@ -17,20 +17,19 @@
 //  REINVENT_UTIL_LOG_INFO_VARGS  - log at INFO severity using printf style arguments
 //  REINVENT_UTIL_LOG_DEBUG_VARGS - log at DEBUG severity using printf style arguments
 //  REINVENT_UTIL_LOG_TRACE_VARGS - log at TRACE severity using printf style arguments
+//  REINVENT_UTIL_LOG_CONCAT      - log helper macro
+//  REINVENT_UTIL_LOG_VA_ARGS     - log helper macro
 // Macro Definitions:
 //  REINVENT_UTIL_LOGGING_ON             - Must define on at build time to enable logging
 //  REINVENT_UTIL_LOGGING_BUILD_SEVERITY - Defaults to REINVENT_UTIL_LOGGING_SEVERITY_WARN if not set in build.
 //                                         Configures out of build all SEVERITY (see defines below) logging at any
-//                                         higer severity. The remaining log calls are filtered at runtime. See
+//                                         higher severity. The remaining log calls are filtered at runtime. See
 //                                         'LogRuntime::severityLimit()'
-//  REINVENT_UTIL_LOGGING_TEST_FORMAT    - Define on at build time force-set the timestamp to constant 0
+//  REINVENT_UTIL_LOGGING_TEST_FORMAT    - Define on at build time to force-set the timestamp to constant 0
 //  REINVENT_UTIL_LOGGING_SHORT_FILENAME - Define on at built time to log sub-string after last '/' token in
 //                                       - __FILE__ which usually logs filename only not complete path
 //
-// Thread Safety: Not MT thread-safe. There is a race condition reading/writing the runtime severity limit. It is not
-// mutex protected, however, it's just a integer. There are no deep concurrency problems there. Second, there is no
-// guarantee the logged objects (which could be non-const) are not being changed in other threads.  But, again, they
-// are likely value-semantic objects unavailable unaccessible in other threads. In sum logging is practically MT-safe.
+// Thread Safety: MT thread-safe.
 //
 // Exception Policy: No exceptions
 //
@@ -49,66 +48,18 @@
 // most callers run 'Util::LogRuntime::resetEpoch()' sometime before logging commences to get elapsed time since
 // program initialization.
 //
-// All logs are written to 'stderr' and flushed.
-//
 // Macros are provided in streaming and printf (va_args) modes. Therefore any object with a free 'operator<<'
 // 'std::ostream& operator<<(std::ostream& stream, const TYPE& object)' is eligible for stream based logging.
 //
-// Example:
-//
-//  Assume: built -DREINVENT_UTIL_LOGGING_ON -DREINVENT_UTIL_LOGGING_BUILD_SEVERITY==TRACE
-//
-//  {
-//    Reinvent::Util::LogRuntime::resetEpoch();
-//    Reinvent::Util::LogRuntime::setSeverityLimit(REINVENT_UTIL_LOGGING_SEVERITY_TRACE);
-//
-//    // Declare printf data to log
-//    const int aInt(10);
-//    const char *aStr="printf I/O log ";
-//    const char *format="%s (rc=%d)\n";
-//
-//    // Printf based macros 
-//    REINVENT_UTIL_LOG_FATAL_VARGS(format, aStr, aInt);
-//    REINVENT_UTIL_LOG_ERROR_VARGS(format, aStr, aInt);
-//    REINVENT_UTIL_LOG_WARN_VARGS(format, aStr, aInt);
-//    REINVENT_UTIL_LOG_INFO_VARGS(format, aStr, aInt);
-//    REINVENT_UTIL_LOG_DEBUG_VARGS(format, aStr, aInt);
-//    REINVENT_UTIL_LOG_TRACE_VARGS(format, aStr, aInt);
-//
-//    // Declare stream data to log
-//    const float bFloat(1.78);
-//    const char *bStr="stream based I/O log ";
-//    std::string bInfo(" (errno: 10)");
-//
-//    // Stream based macros
-//    REINVENT_UTIL_LOG_FATAL(bStr << bFloat << bInfo << std::endl);
-//    REINVENT_UTIL_LOG_ERROR(bStr << bFloat << bInfo << std::endl);
-//    REINVENT_UTIL_LOG_WARN(bStr << bFloat << bInfo << std::endl);
-//    REINVENT_UTIL_LOG_INFO(bStr << bFloat << bInfo << std::endl);
-//    REINVENT_UTIL_LOG_DEBUG(bStr << bFloat << bInfo << std::endl);
-//    REINVENT_UTIL_LOG_TRACE(bStr << bFloat << bInfo << std::endl);
-//  }
-// 
-//  Will produce the output:
-//
-//  000000.000000086 FATAL test.cpp:28 printf I/O log  (rc=10)
-//  000000.000025145 ERROR test.cpp:29 printf I/O log  (rc=10)
-//  000000.000029039 WARN  test.cpp:30 printf I/O log  (rc=10)
-//  000000.000036259 INFO  test.cpp:31 printf I/O log  (rc=10)
-//  000000.000038583 DEBUG test.cpp:32 printf I/O log  (rc=10)
-//  000000.000040651 TRACE test.cpp:33 printf I/O log  (rc=10)
-//  000000.000044924 FATAL test.cpp:41 stream based I/O log 1.78 (errno: 10)
-//  000000.000082503 TRACE test.cpp:42 stream based I/O log 1.78 (errno: 10)
-//  000000.000117950 WARN  test.cpp:43 stream based I/O log 1.78 (errno: 10)
-//  000000.000122083 INFO  test.cpp:44 stream based I/O log 1.78 (errno: 10)
-//  000000.000124866 DEBUG test.cpp:45 stream based I/O log 1.78 (errno: 10)
-//  000000.000129028 TRACE test.cpp:46 stream based I/O log 1.78 (errno: 10)
+// Note: this is not performant code. Stream based macros use a mutex. The varargs macros do not use a mutex.
 
 #include <iostream>
 
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <mutex>
 
 namespace Reinvent {
 namespace Util {
@@ -122,6 +73,20 @@ namespace Util {
 #define REINVENT_UTIL_LOGGING_SEVERITY_INFO  3
 #define REINVENT_UTIL_LOGGING_SEVERITY_DEBUG 4
 #define REINVENT_UTIL_LOGGING_SEVERITY_TRACE 5
+
+const int DEFAULT_FORMAT_SIZE = 24;
+  // Width in characters including 0 terminator of 'FORMAT' result assuming 5-character severity tags
+
+//
+// Logger helper macro
+//
+#ifndef REINVENT_UTIL_LOG_CONCAT
+#define REINVENT_UTIL_LOG_CONCAT(x, y) x y
+#endif
+
+#ifndef REINVENT_UTIL_LOG_VA_ARGS
+#define REINVENT_UTIL_LOG_VA_ARGS(...) , ##__VA_ARGS__
+#endif
 
 //
 // If the build time logging severity not defined, default to WARN
@@ -149,13 +114,12 @@ public:
   static const char *INFO_TAG;
   static const char *DEBUG_TAG;
   static const char *TRACE_TAG;
-    // Constant width 5-character human readable severity level descriptions
   static const char *FORMAT;
     // Printf style format constant-width: '<secs>.<ns> <severity> '
-  const static int DEFAULT_FORMAT_SIZE;
-    // With in characters including 0 terminator of 'FORMAT' result assuming 5-character severity tags
   static const clockid_t CLOCK_TYPE;
     // The type of clock used when calling 'clock_gettime'
+  static std::mutex lock;
+    // Stream based logging requires sychronization
 
   // ACCESSORS
   static unsigned severityLimit();
@@ -167,29 +131,26 @@ public:
     // if '0<=level<=REINVENT_UTIL_LOGGING_BUILD_SEVERITY'. At runtime, all logging calls at any severity higher than
     // 'level' will not be done.
   
-  static void logTimestampAndSeverity(FILE *stream, const char *severity);
-    // Write to specified 'stream' data formatted as 'FORMAT' representing a timestamp, a space, specified 'severity'
+  static void elapsedTime(unsigned *sec, unsigned *ns);
+    // Assign to specified 'sec, ns' the number of seconds and nanseconds that have elapsed since 'd_epoch'
+
+  static void logTimestampAndSeverity(char *buf, const char *severity);
+    // Write to specified 'buf' data formatted as 'FORMAT' representing a timestamp, a space, specified 'severity'
     // followed by a space. The timestamp is calculated via 'clock_gettime' representing the time difference between
-    // 'd_epoch' and now written as '<secs>.<ns>'. Although callers can provided any zero-terminated string for
-    // 'severity' most callers will provided one of the tags above e.g. 'INFO_TAG'.
-   
-  static std::ostream& streamTimestampAndSeverity(std::ostream& stream, const char *severity);
-    // Write to specified 'stream' data formatted as 'FORMAT' representing a timestamp, a space, specified 'severity'
-    // followed by a space. The timestamp is calculated via 'clock_gettime' representing the time difference between
-    // 'd_epoch' and now written as '<secs>.<ns>'. Although callers can provided any zero-terminated string for
-    // 'severity' most callers will provided one of the tags above e.g. 'INFO_TAG'. Function unconditionlly returns
-    // provided 'stream'.
+    // 'd_epoch' and now written as '<secs>.<ns>' e.g. the time elapsed since the epoch. Although callers can provided
+    // any zero-terminated string for 'severity' most callers will provide one of the tags above e.g. 'INFO_TAG'. The
+    // behavior is defined if 'buf' is 'sizeof(buf)==DEFAULT_FORMAT_SIZE'.
    
   static const char *filename(const char *filename);
-    // If REINVENT_UTIL_LOGGING_SHORT_FILENAME is not defined, return specified 'filename'. Otherwie return a pointer
-    // by looking for the last '/' in 'filename' and returning the substring of filename one past '/'. Since library
-    // filenames include the namespace in which the file occurs, shorte filenames are not ambiguous, and shorter.
+    // If REINVENT_UTIL_LOGGING_SHORT_FILENAME is not defined, return specified 'filename' unchanged. Otherwie return
+    // a pointer looking for the last '/' in 'filename' and returning the substring of filename one past '/'. Since
+    // library filenames include the namespace in which the file occurs, short filenames are not ambiguous.
 
   static struct timespec epoch();
     // Return the 'epoch' attribute value
 
   static void resetEpoch();
-    // Assign to 'epoch' attribute to the value returned by 'clock_gettime' with clock type 'CLOCK_TYPE'.
+    // Assign to 'epoch' attribute the value returned by 'clock_gettime' with clock type 'CLOCK_TYPE'.
 };
 
 //
@@ -202,68 +163,78 @@ public:
 // follows the macro invocation. Also note a new line terminator is provided only if caller's format string includes
 // it. The macros do not add line delimiters.
 //
-#define REINVENT_UTIL_LOG_FATAL_VARGS(...)                                                                        \
-    Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::FATAL_TAG);           \
-    fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                          \
-    fprintf(stderr, __VA_ARGS__);                                                                                 \
-    fflush(stderr);
+#define REINVENT_UTIL_LOG_FATAL_VARGS(callerFormat, ...)                                                          \
+  if (true) {                                                                                                     \
+    unsigned sec, ns;                                                                                             \
+    Reinvent::Util::LogRuntime::elapsedTime(&sec, &ns);                                                           \
+    fprintf(stderr, REINVENT_UTIL_LOG_CONCAT("%06u.%09u %s %s:%d ", callerFormat), sec, ns,                       \
+      Reinvent::Util::LogRuntime::FATAL_TAG, Reinvent::Util::LogRuntime::filename(__FILE__),                      \
+      __LINE__ REINVENT_UTIL_LOG_VA_ARGS(__VA_ARGS__));                                                           \
+    fflush(stderr);                                                                                               \
+  }
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_ERROR
-#define REINVENT_UTIL_LOG_ERROR_VARGS(...)                                                                        \
-    if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_ERROR,1)) {  \
-      Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::ERROR_TAG);         \
-      fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                        \
-      fprintf(stderr, __VA_ARGS__);                                                                               \
-      fflush(stderr);                                                                                             \
-    }
+#define REINVENT_UTIL_LOG_ERROR_VARGS(callerFormat, ...)                                                          \
+  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_ERROR,1)) {    \
+    unsigned sec, ns;                                                                                             \
+    Reinvent::Util::LogRuntime::elapsedTime(&sec, &ns);                                                           \
+    fprintf(stderr, REINVENT_UTIL_LOG_CONCAT("%06u.%09u %s %s:%d ", callerFormat), sec, ns,                       \
+      Reinvent::Util::LogRuntime::ERROR_TAG, Reinvent::Util::LogRuntime::filename(__FILE__),                      \
+      __LINE__ REINVENT_UTIL_LOG_VA_ARGS(__VA_ARGS__));                                                           \
+    fflush(stderr);                                                                                               \
+  }
 #else
 #define REINVENT_UTIL_LOG_ERROR_VARGS(...) ((void)0)
 #endif
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_WARN
-#define REINVENT_UTIL_LOG_WARN_VARGS(...)                                                                         \
-    if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_WARN,1)) {   \
-      Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::WARN_TAG);          \
-      fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                        \
-      fprintf(stderr, __VA_ARGS__);                                                                               \
-      fflush(stderr);                                                                                             \
-    }
+#define REINVENT_UTIL_LOG_WARN_VARGS(callerFormat, ...)                                                           \
+  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_WARN,1)) {     \
+    unsigned sec, ns;                                                                                             \
+    Reinvent::Util::LogRuntime::elapsedTime(&sec, &ns);                                                           \
+    fprintf(stderr, REINVENT_UTIL_LOG_CONCAT("%06u.%09u %s %s:%d ", callerFormat), sec, ns,                       \
+      Reinvent::Util::LogRuntime::WARN_TAG, Reinvent::Util::LogRuntime::filename(__FILE__),                       \
+      __LINE__ REINVENT_UTIL_LOG_VA_ARGS(__VA_ARGS__));                                                           \
+  }
 #else
 #define REINVENT_UTIL_LOG_WARN_VARGS(...) ((void)0)
 #endif
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_INFO
-#define REINVENT_UTIL_LOG_INFO_VARGS(...)                                                                         \
-    if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_INFO,0)) {   \
-      Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::INFO_TAG);          \
-      fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                        \
-      fprintf(stderr, __VA_ARGS__);                                                                               \
-      fflush(stderr);                                                                                             \
-    }
+#define REINVENT_UTIL_LOG_INFO_VARGS(callerFormat, ...)                                                           \
+  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_INFO,1)) {     \
+    unsigned sec, ns;                                                                                             \
+    Reinvent::Util::LogRuntime::elapsedTime(&sec, &ns);                                                           \
+    fprintf(stderr, REINVENT_UTIL_LOG_CONCAT("%06u.%09u %s %s:%d ", callerFormat), sec, ns,                       \
+      Reinvent::Util::LogRuntime::INFO_TAG, Reinvent::Util::LogRuntime::filename(__FILE__),                       \
+      __LINE__ REINVENT_UTIL_LOG_VA_ARGS(__VA_ARGS__));                                                           \
+  }
 #else
 #define REINVENT_UTIL_LOG_INFO_VARGS(...) ((void)0)
 #endif
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_DEBUG
-#define REINVENT_UTIL_LOG_DEBUG_VARGS(...)                                                                        \
-    if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_DEBUG,0)) {  \
-      Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::DEBUG_TAG);         \
-      fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                        \
-      fprintf(stderr, __VA_ARGS__);                                                                               \
-      fflush(stderr);                                                                                             \
-    }
+#define REINVENT_UTIL_LOG_DEBUG_VARGS(callerFormat, ...)                                                          \
+  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_DEBUG,1)) {    \
+    unsigned sec, ns;                                                                                             \
+    Reinvent::Util::LogRuntime::elapsedTime(&sec, &ns);                                                           \
+    fprintf(stderr, REINVENT_UTIL_LOG_CONCAT("%06u.%09u %s %s:%d ", callerFormat), sec, ns,                       \
+      Reinvent::Util::LogRuntime::DEBUG_TAG, Reinvent::Util::LogRuntime::filename(__FILE__),                      \
+      __LINE__ REINVENT_UTIL_LOG_VA_ARGS(__VA_ARGS__));                                                           \
+  }
 #else
 #define REINVENT_UTIL_LOG_DEBUG_VARGS(...) ((void)0)
 #endif
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_TRACE
-#define REINVENT_UTIL_LOG_TRACE_VARGS(...)                                                                        \
-    if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_TRACE,0)) {  \
-      Reinvent::Util::LogRuntime::logTimestampAndSeverity(stderr, Reinvent::Util::LogRuntime::TRACE_TAG);         \
-      fprintf(stderr, "%s:%d ", Reinvent::Util::LogRuntime::filename(__FILE__), __LINE__);                        \
-      fprintf(stderr, __VA_ARGS__);                                                                               \
-      fflush(stderr);                                                                                             \
-    }
+#define REINVENT_UTIL_LOG_TRACE_VARGS(callerFormat, ...)                                                          \
+  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_TRACE,1)) {    \
+    unsigned sec, ns;                                                                                             \
+    Reinvent::Util::LogRuntime::elapsedTime(&sec, &ns);                                                           \
+    fprintf(stderr, REINVENT_UTIL_LOG_CONCAT("%06u.%09u %s %s:%d ", callerFormat), sec, ns,                       \
+      Reinvent::Util::LogRuntime::TRACE_TAG, Reinvent::Util::LogRuntime::filename(__FILE__),                      \
+      __LINE__ REINVENT_UTIL_LOG_VA_ARGS(__VA_ARGS__));                                                           \
+  }
 #else
 #define REINVENT_UTIL_LOG_TRACE_VARGS(...) ((void)0)
 #endif
@@ -271,87 +242,102 @@ public:
 //
 // Stream style logging macros. Fatal is always enabled. Note that caller always provides a terminating ';' which 
 // follows the macro invocation. Also note a new line terminator is provided only if caller's stream includes it. The
-// macros do not add line delimiters. All logs are written to cerr and is flushed.
+// macros do not add line delimiters.
 //
-#define REINVENT_UTIL_LOG_FATAL(REINVENT_UTIL_LOG_STREAM_ARGS)                                                    \
-  Reinvent::Util::LogRuntime::streamTimestampAndSeverity(std::cerr, Reinvent::Util::LogRuntime::FATAL_TAG)        \
-  << Reinvent::Util::LogRuntime::filename(__FILE__)                                                               \
-  << ":"                                                                                                          \
-  << __LINE__                                                                                                     \
-  << " "                                                                                                          \
-  << REINVENT_UTIL_LOG_STREAM_ARGS                                                                                \
-  << std::flush
+#define REINVENT_UTIL_LOG_FATAL(REINVENT_UTIL_LOG_STREAM_ARGS)                                                      \
+  if (true) {                                                                                                       \
+    char log[Reinvent::Util::DEFAULT_FORMAT_SIZE];                                                                  \
+    Reinvent::Util::LogRuntime::logTimestampAndSeverity(log, Reinvent::Util::LogRuntime::FATAL_TAG);                \
+    std::lock_guard<std::mutex> grd(Reinvent::Util::LogRuntime::lock);                                              \
+    std::cerr << log                                                                                                \
+    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                               \
+    << ":"                                                                                                          \
+    << __LINE__                                                                                                     \
+    << " "                                                                                                          \
+    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                                \
+    << std::flush;                                                                                                  \
+  }
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_ERROR
-#define REINVENT_UTIL_LOG_ERROR(REINVENT_UTIL_LOG_STREAM_ARGS)                                                    \
-  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_ERROR,1)) {    \
-    Reinvent::Util::LogRuntime::streamTimestampAndSeverity(std::cerr, Reinvent::Util::LogRuntime::TRACE_TAG)      \
-    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                             \
-    << ":"                                                                                                        \
-    << __LINE__                                                                                                   \
-    << " "                                                                                                        \
-    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                              \
-    << std::flush;                                                                                                \
+#define REINVENT_UTIL_LOG_ERROR(REINVENT_UTIL_LOG_STREAM_ARGS)                                                      \
+  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_ERROR,1)) {      \
+    char log[Reinvent::Util::DEFAULT_FORMAT_SIZE];                                                                  \
+    Reinvent::Util::LogRuntime::logTimestampAndSeverity(log, Reinvent::Util::LogRuntime::ERROR_TAG);                \
+    std::lock_guard<std::mutex> grd(Reinvent::Util::LogRuntime::lock);                                              \
+    std::cerr << log                                                                                                \
+    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                               \
+    << ":"                                                                                                          \
+    << __LINE__                                                                                                     \
+    << " "                                                                                                          \
+    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                                \
+    << std::flush;                                                                                                  \
   }
 #else
 #define REINVENT_UTIL_LOG_ERROR_(...) ((void)0)
 #endif
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_WARN
-#define REINVENT_UTIL_LOG_WARN(REINVENT_UTIL_LOG_STREAM_ARGS)                                                     \
-  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_WARN,1)) {     \
-    Reinvent::Util::LogRuntime::streamTimestampAndSeverity(std::cerr, Reinvent::Util::LogRuntime::WARN_TAG)       \
-    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                             \
-    << ":"                                                                                                        \
-    << __LINE__                                                                                                   \
-    << " "                                                                                                        \
-    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                              \
-    << std::flush;                                                                                                \
+#define REINVENT_UTIL_LOG_WARN(REINVENT_UTIL_LOG_STREAM_ARGS)                                                       \
+  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_WARN,1)) {       \
+    char log[Reinvent::Util::DEFAULT_FORMAT_SIZE];                                                                  \
+    Reinvent::Util::LogRuntime::logTimestampAndSeverity(log, Reinvent::Util::LogRuntime::WARN_TAG);                 \
+    std::lock_guard<std::mutex> grd(Reinvent::Util::LogRuntime::lock);                                              \
+    std::cerr << log                                                                                                \
+    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                               \
+    << ":"                                                                                                          \
+    << __LINE__                                                                                                     \
+    << " "                                                                                                          \
+    << REINVENT_UTIL_LOG_STREAM_ARGS;                                                                               \
   }
 #else
 #define REINVENT_UTIL_LOG_WARN(...) ((void)0)
 #endif
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_INFO
-#define REINVENT_UTIL_LOG_INFO(REINVENT_UTIL_LOG_STREAM_ARGS)                                                     \
-  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_INFO,0)) {     \
-    Reinvent::Util::LogRuntime::streamTimestampAndSeverity(std::cerr, Reinvent::Util::LogRuntime::INFO_TAG)       \
-    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                             \
-    << ":"                                                                                                        \
-    << __LINE__                                                                                                   \
-    << " "                                                                                                        \
-    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                              \
-    << std::flush;                                                                                                \
+#define REINVENT_UTIL_LOG_INFO(REINVENT_UTIL_LOG_STREAM_ARGS)                                                       \
+  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_INFO,1)) {       \
+    char log[Reinvent::Util::DEFAULT_FORMAT_SIZE];                                                                  \
+    Reinvent::Util::LogRuntime::logTimestampAndSeverity(log, Reinvent::Util::LogRuntime::INFO_TAG);                 \
+    std::lock_guard<std::mutex> grd(Reinvent::Util::LogRuntime::lock);                                              \
+    std::cerr << log                                                                                                \
+    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                               \
+    << ":"                                                                                                          \
+    << __LINE__                                                                                                     \
+    << " "                                                                                                          \
+    << REINVENT_UTIL_LOG_STREAM_ARGS;                                                                               \
   }
 #else
 #define REINVENT_UTIL_LOG_INFO(...) ((void)0)
 #endif
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_DEBUG
-#define REINVENT_UTIL_LOG_DEBUG(REINVENT_UTIL_LOG_STREAM_ARGS)                                                    \
-  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_DEBUG,0)) {    \
-    Reinvent::Util::LogRuntime::streamTimestampAndSeverity(std::cerr, Reinvent::Util::LogRuntime::DEBUG_TAG)      \
-    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                             \
-    << ":"                                                                                                        \
-    << __LINE__                                                                                                   \
-    << " "                                                                                                        \
-    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                              \
-    << std::flush;                                                                                                \
+#define REINVENT_UTIL_LOG_DEBUG(REINVENT_UTIL_LOG_STREAM_ARGS)                                                      \
+  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_DEBUG,1)) {      \
+    char log[Reinvent::Util::DEFAULT_FORMAT_SIZE];                                                                  \
+    Reinvent::Util::LogRuntime::logTimestampAndSeverity(log, Reinvent::Util::LogRuntime::DEBUG_TAG);                \
+    std::lock_guard<std::mutex> grd(Reinvent::Util::LogRuntime::lock);                                              \
+    std::cerr << log                                                                                                \
+    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                               \
+    << ":"                                                                                                          \
+    << __LINE__                                                                                                     \
+    << " "                                                                                                          \
+    << REINVENT_UTIL_LOG_STREAM_ARGS;                                                                               \
   }
 #else
 #define REINVENT_UTIL_LOG_DEBUG(...) ((void)0)
 #endif
 
 #if REINVENT_UTIL_LOGGING_BUILD_SEVERITY >= REINVENT_UTIL_LOGGING_SEVERITY_TRACE
-#define REINVENT_UTIL_LOG_TRACE(REINVENT_UTIL_LOG_STREAM_ARGS)                                                    \
-  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_TRACE,0)) {    \
-    Reinvent::Util::LogRuntime::streamTimestampAndSeverity(std::cerr, Reinvent::Util::LogRuntime::TRACE_TAG)      \
-    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                             \
-    << ":"                                                                                                        \
-    << __LINE__                                                                                                   \
-    << " "                                                                                                        \
-    << REINVENT_UTIL_LOG_STREAM_ARGS                                                                              \
-    << std::flush;                                                                                                \
+#define REINVENT_UTIL_LOG_TRACE(REINVENT_UTIL_LOG_STREAM_ARGS)                                                      \
+  if (__builtin_expect(Reinvent::Util::LogRuntime::severityLimit()>=REINVENT_UTIL_LOGGING_SEVERITY_TRACE,1)) {      \
+    char log[Reinvent::Util::DEFAULT_FORMAT_SIZE];                                                                  \
+    Reinvent::Util::LogRuntime::logTimestampAndSeverity(log, Reinvent::Util::LogRuntime::TRACE_TAG);                \
+    std::cerr << log                                                                                                \
+    << Reinvent::Util::LogRuntime::filename(__FILE__)                                                               \
+    << ":"                                                                                                          \
+    << __LINE__                                                                                                     \
+    << " "                                                                                                          \
+    << REINVENT_UTIL_LOG_STREAM_ARGS;                                                                               \
   }
 #else
 #define REINVENT_UTIL_LOG_TRACE(...) ((void)0)
