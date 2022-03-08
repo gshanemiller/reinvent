@@ -12,6 +12,7 @@
 #include <rte_ether.h>
 #include <rte_ip.h>
 #include <rte_udp.h>
+#include <rte_mbuf_ptype.h>
 #pragma GCC diagnostic pop 
 
 #include <unistd.h>
@@ -142,11 +143,6 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, i
   const uint16_t dstPort = rte_cpu_to_be_16(static_cast<uint16_t>(config->awsEnaConfig().txq()[txqIndex].defaultRoute().dstPort()));
 
   //
-  // TX offload flags to carry down to packet
-  //
-  // const uint64_t txOffloadFlags = static_cast<uint64_t>(config->awsEnaConfig().txOffloadMask());
-
-  //
   // Total all-in packet size sent
   //
   const int packetSize = sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr)+sizeof(TxMessage);
@@ -233,15 +229,19 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, i
       // Finalize mbuf in DPDK
       //
       mbuf[i]->nb_segs = 1;
-		  mbuf[i]->pkt_len = packetSize;
-		  mbuf[i]->data_len = packetSize;
-		  mbuf[i]->ol_flags = 0;
+      mbuf[i]->pkt_len = packetSize;
+      mbuf[i]->data_len = packetSize;
+      mbuf[i]->ol_flags = (RTE_MBUF_F_TX_IPV4|RTE_MBUF_F_TX_IP_CKSUM);
+      mbuf[i]->l2_len = sizeof(rte_ether_hdr);
+      mbuf[i]->l3_len = sizeof(rte_ipv4_hdr);
+      mbuf[i]->l4_len = sizeof(rte_udp_hdr);
+      mbuf[i]->packet_type = (RTE_PTYPE_L2_ETHER|RTE_PTYPE_L3_IPV4|RTE_PTYPE_L4_UDP);
     }
 
     //
     // TX packets e.g. write them onto the wire
     //
-	  uint16_t txCount = rte_eth_tx_burst(deviceId, txqIndex, mbuf.data(), burstCapacity);
+    uint16_t txCount = rte_eth_tx_burst(deviceId, txqIndex, mbuf.data(), burstCapacity);
     REINVENT_UTIL_LOG_INFO("burst sent " << txCount << " packets" << std::endl);
 
     //
