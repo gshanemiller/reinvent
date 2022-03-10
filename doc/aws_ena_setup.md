@@ -74,7 +74,7 @@ AWS instances come pre-configured with one NIC with a public IP4V address preset
 * Your instance will now have two NICS: the original NIC with the public IPv4 address for ssh login, while the second NIC is not public accessible.
 
 # No build Approach
-The public AWS AMI `ami-0adf30fabf7a2fc46` is a minimal, complete image containing the code, build dependencies, build tool chain, and pre-built tasks. IOMMU has been enabled. Provision your AWS instances with this AMI-ID then proceed directly to [Post Build Instructions](#post-build-instructions-10mins). The AMI image reflects `H=/home/ec2-user/Dev` and `D=/home/ec2-user/local`, and are preset as environment variables when you login.
+The public AWS AMI `ami-0c342d04107772468` (2022-03-09 on commitish e1cb7078c9fd899e1f07c781fc1d988ca48015a6) is a minimal, complete image containing the code, build dependencies, build tool chain, and pre-built tasks. IOMMU has been enabled. Provision your AWS instances with this AMI-ID then proceed directly to [Post Build Instructions](#post-build-instructions-10mins). The AMI image reflects `H=/home/ec2-user/Dev` and `D=/home/ec2-user/local`, and are preset as environment variables when you login.
 
 # Pre-build Instructions (15mins)
 Note: machine reboot takes about 10mins/ea.
