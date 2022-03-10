@@ -24,7 +24,7 @@ set(SOURCES
 # and only logs WARN or less in code
 #
 add_library(reinvent_opt ${SOURCES})
-target_compile_options(reinvent_opt PUBLIC -O2 -pedantic -Wpedantic)
+target_compile_options(reinvent_opt PUBLIC -O2)
 target_compile_definitions(reinvent_opt PUBLIC REINVENT_UTIL_LOGGING_ON)
 target_compile_definitions(reinvent_opt PUBLIC REINVENT_UTIL_LOGGING_BUILD_SEVERITY=REINVENT_UTIL_LOGGING_SEVERITY_WARN)
 target_compile_definitions(reinvent_opt PUBLIC NDEBUG)
@@ -34,7 +34,7 @@ target_include_directories(reinvent_opt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # Debug library -g, asserts, errno logging, and logs up to TRACE in code
 #
 add_library(reinvent_dbg ${SOURCES})
-target_compile_options(reinvent_dbg PUBLIC -g -pedantic -Wpedantic)
+target_compile_options(reinvent_dbg PUBLIC -g)
 target_compile_definitions(reinvent_dbg PUBLIC REINVENT_UTIL_LOGGING_ON)
 target_compile_definitions(reinvent_dbg PUBLIC REINVENT_UTIL_LOGGING_BUILD_SEVERITY=REINVENT_UTIL_LOGGING_SEVERITY_TRACE)
 target_compile_definitions(reinvent_dbg PUBLIC REINVENT_UTIL_LOGGING_ERRNO)
