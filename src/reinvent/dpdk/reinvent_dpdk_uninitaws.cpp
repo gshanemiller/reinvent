@@ -13,6 +13,21 @@ int Dpdk::UnInitAWS::device(const AWSEnaConfig& config) {
   int rc;
 
   //
+  // Stop TXQs
+  //
+  for (int i=0; i<config.txqCount(); ++i) {
+    rte_eth_tx_done_cleanup(config.deviceId(), i, 0);
+    rte_eth_dev_tx_queue_stop(config.deviceId(), i);
+  }
+
+  //
+  // Stop RXQs
+  //
+  for (int i=0; i<config.rxqCount(); ++i) {
+    rte_eth_dev_rx_queue_stop(config.deviceId(), i);
+  }
+
+  //
   // Stop device
   //
   if ((rc = rte_eth_dev_stop(config.deviceId()))!=0) {
@@ -79,6 +94,11 @@ int Dpdk::UnInitAWS::device(const AWSEnaConfig& config) {
         rte_strerror(rc), rc);
     }
   }
+
+  //
+  // Close device
+  //
+  rte_eth_dev_close(config.deviceId());
 
   return rc;
 }                                                                       

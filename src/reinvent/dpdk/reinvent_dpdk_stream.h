@@ -36,5 +36,8 @@ std::ostream& operator<<(std::ostream& stream, const rte_eth_txconf& object);
 std::ostream& operator<<(std::ostream& stream, const rte_eth_rxconf& object);
   // Print into specified 'stream' human readable dump of 'object' returning 'stream'
 
+std::ostream& operator<<(std::ostream& stream, const rte_eth_rss_conf& object);
+  // Print into specified 'stream' human readable dump of 'object' returning 'stream'
+
 } // Dpdk
 } // Reinvent

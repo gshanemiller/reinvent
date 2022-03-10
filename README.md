@@ -13,6 +13,7 @@ UDP packet loss and flow control. The result is a highly efficient yet general p
 # Current Reinvent features
 * Decently documented
 * Ships with a working IPV4 UDP TX/RX example
+* Shows ENA checksum offload for IPV4, UDP checksums
 * No-copy packet preparation
 * DPDK configuration including UDP IPV4 routing information is defined outside code as enviromment variables ala
 12-factor. For beginners it's far easier to understand configuration because readers are not dragged into DPDK code,

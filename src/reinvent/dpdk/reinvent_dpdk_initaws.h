@@ -361,7 +361,7 @@
 // |                                             |     | found in https://doc.dpdk.org/api/rte__ethdev_8h.html        |
 // |                                             |     | and set in https://doc.dpdk.org/api/structrte__eth__conf.html|
 // |                                             |     | Do not use the RTE_ETH_SPEED_NUM variations; use the defines |
-// |                                             |     | baed on RTE_BIT                                              |
+// |                                             |     | based on RTE_BIT bit mask not the numeric valyue             |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{device}_RX_MQ_MASK                | [*] | Exactly one of the RTE_ETH_RX_MQ enum values as defined in   |
 // |                                             |     | https://doc.dpdk.org/api/rte__ethdev_8h.html and set in      |
@@ -377,7 +377,7 @@
 // |                                             |     | special cases allow software to delegate to other specialty  |
 // |                                             |     | H/W like a GPU/FPGA/ASIC, for example, IPSec work            |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TX_DEFAULT_FLOW           | [*] |                                                              |
+// | {prefix}_{device}_TX_DEFAULT_FLOW           | [*] | rte_ether.h RTE_ETHER_TYPE_* defines e.g. 0x800 is IPV4      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{device}_TX_DEFAULT_ROUTE_SRC_MAC  | [*] | String list 1 mac address per TXQ                            |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
@@ -409,7 +409,6 @@ namespace Dpdk {
 
 class InitAWS {
   // PRIVATE MANIULATORS
-
   static int configRings(const std::string& prefix, Util::Environment *env, AWSEnaConfig *config,
     std::vector<int>& rxqRingSize, std::vector<int>& txqRingSize);
 

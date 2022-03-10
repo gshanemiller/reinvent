@@ -39,8 +39,16 @@ target_compile_definitions(${TEST_TARGET} PUBLIC REINVENT_UTIL_LOGGING_BUILD_SEV
 target_compile_definitions(${TEST_TARGET} PUBLIC REINVENT_UTIL_LOGGING_ERRNO)
 target_compile_definitions(${TEST_TARGET} PUBLIC REINVENT_UTIL_LOGGING_SHORT_FILENAME)
 target_compile_definitions(${TEST_TARGET} PUBLIC NDEBUG)
+target_link_libraries(${TEST_TARGET} PUBLIC ${DPDK_SELECTED_LIBRARIES})
 
 #
-# Link to DPDK
+# Build a test with logging off optimized
 #
-target_link_libraries(${TEST_TARGET} PUBLIC ${DPDK_SELECTED_LIBRARIES})
+set(OPT_TEST_TARGET reinvent_dpdk_udp_opt_integration_test.tsk)
+add_executable(${OPT_TEST_TARGET} ${SOURCES})
+target_compile_options(${OPT_TEST_TARGET} PUBLIC -O2)
+target_compile_options(${OPT_TEST_TARGET} PUBLIC -Wno-unused-variable)                                               
+target_compile_options(${OPT_TEST_TARGET} PUBLIC -Wno-unused-parameter)
+target_include_directories(${OPT_TEST_TARGET} PUBLIC ../../src/reinvent)                                                   
+target_compile_definitions(${OPT_TEST_TARGET} PUBLIC NDEBUG)
+target_link_libraries(${OPT_TEST_TARGET} PUBLIC ${DPDK_SELECTED_LIBRARIES})

@@ -552,19 +552,17 @@ allocate eight mbufs (cira line 310 in example code):
 
 ```
 
-We now run a loop `for(int i=0; i<burstCapacity; ++i)` which, for each packet, does six steps:
+We now run a loop `for(int i=0; i<burstCapacity; ++i)` which, for each packet, does five steps:
 
 1. Prepare the ethernet header
 2. Prepare the IPV4 header
 3. Prepare the UDP header
 4. Prepare the payload
-5. Prepare the IPV4 checksum; [but also see](https://github.com/rodgarrison/reinvent/issues/2). This work should be
-eliminated in the near feature
-6. Initialize four meta fields in the mbuf structure
+5. Initialize meta fields in the mbuf structure
 
 And once that's done the final step is transmission:
 
-7. Burst write the packets onto the wire
+6. Burst write the packets onto the wire
 
 Recall that the order of the packet headers and payload is:
 
@@ -605,7 +603,7 @@ ip4Hdr->packet_id = 0;
 ip4Hdr->fragment_offset = 0;
 ip4Hdr->time_to_live = IPDEFTTL;      // default 64
 ip4Hdr->next_proto_id = IPPROTO_UDP;  // UDP packet follows
-ip4Hdr->hdr_checksum = 0;             // must be zero; set in step 5
+ip4Hdr->hdr_checksum = 0;             // Checksum will be offloaded to NIC; see below
 ip4Hdr->src_addr = srcIp;
 ip4Hdr->dst_addr = dstIp;
 ```
@@ -621,7 +619,7 @@ assert(udpHdr);
 udpHdr->src_port = srcPort;
 udpHdr->dst_port = dstPort;
 udpHdr->dgram_len = udpSize;          // size of the UDP header and everything that follows
-udpHdr->dgram_cksum = 0;              // no checkum provided
+udpHdr->dgram_cksum = 0;              // Checksum will be offloaded to NIC; see below
 ```
 
 ## Step 4: Payload preparation
@@ -637,38 +635,22 @@ payload->txqId = txqIndex;
 payload->sequenceNumber = sequence++;
 ```
 
-## Step 5: IPV4 checksum calculation
-
-```
-uint32_t ip_cksum(0);
-uint16_t* ip = reinterpret_cast<uint16_t*>(ip4Hdr);
-for(uint16_t i=0; i<10; ++i) {
-    ip_cksum += *(ip+i);
-}
-// Reduce 32 bit checksum to 16 bits and complement it.
-ip_cksum = ((ip_cksum & 0xFFFF0000) >> 16) + (ip_cksum & 0x0000FFFF);
-if (ip_cksum > 65535) {
-  ip_cksum -= 65535;
-}
-ip_cksum = (~ip_cksum) & 0x0000FFFF;
-if (ip_cksum == 0) {
-  ip_cksum = 0xFFFF;
-}
-ip4Hdr->hdr_checksum = static_cast<uint16_t>(ip_cksum);
-```
-
-## Step 6: 
+## Step 5: 
 
 These assignments update the meta data for DPDK:
 
 ```
-mbuf[i]->nb_segs = 1;                   // One packet in one mbuf
-mbuf[i]->pkt_len = packetSize;          // Total all-in size
-mbuf[i]->data_len = packetSize;         // Total all-in size
-mbuf[i]->ol_flags = txOffloadFlags;     // Offload instructions
+mbuf[i]->nb_segs = 1;                                                             // Packet inside this single mbuf
+mbuf[i]->pkt_len = packetSize;                                                    // Total all in packet size
+mbuf[i]->data_len = packetSize;                                                   // Total all in packet size
+mbuf[i]->ol_flags = (RTE_MBUF_F_TX_IPV4|RTE_MBUF_F_TX_IP_CKSUM);                  // Tells NIC to do IPV4, UDP chksums
+mbuf[i]->l2_len = sizeof(rte_ether_hdr);                                          // Size of eth header
+mbuf[i]->l3_len = sizeof(rte_ipv4_hdr);                                           // Size of ipv4 header
+mbuf[i]->l4_len = sizeof(rte_udp_hdr);                                            // Size of udp header
+mbuf[i]->packet_type = (RTE_PTYPE_L2_ETHER|RTE_PTYPE_L3_IPV4|RTE_PTYPE_L4_UDP);   // Identifies packet sent
 ```
 
-## Step 7: Transmit the packets e.g. write on the wire
+## Step 6: Transmit the packets e.g. write on the wire
 
 ```
 uint16_t txCount = rte_eth_tx_burst(deviceId, txqIndex, mbuf.data(), burstCapacity);
