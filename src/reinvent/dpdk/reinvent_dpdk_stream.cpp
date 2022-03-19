@@ -25,6 +25,8 @@ std::ostream& operator<<(std::ostream& stream, const rte_eth_link& object) {
 std::ostream& operator<<(std::ostream& stream, const rte_eth_dev_info& object) {
   char tmpbuf[256];
   stream << "{";
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"device\": \"(elided)\", "); 
+  stream << tmpbuf;
   snprintf(tmpbuf, sizeof(tmpbuf), "\"driver_name\": \"%s\", ", object.driver_name); 
   stream << tmpbuf;
   snprintf(tmpbuf, sizeof(tmpbuf), "\"if_index\": \"0x%04x\", ", object.if_index); 
@@ -70,10 +72,8 @@ std::ostream& operator<<(std::ostream& stream, const rte_eth_dev_info& object) {
   snprintf(tmpbuf, sizeof(tmpbuf), "\"flow_type_rss_offloads\": \"0x%08lx\", ", object.flow_type_rss_offloads); 
   stream << tmpbuf;
 
-  snprintf(tmpbuf, sizeof(tmpbuf), "\"default_rxconf\": \"(elided)\", "); 
-  stream << tmpbuf;
-  snprintf(tmpbuf, sizeof(tmpbuf), "\"default_txconf\": \"(elided)\", "); 
-  stream << tmpbuf;
+  stream << "\"default_rxconf\": " << object.default_rxconf << ", ";
+  stream << "\"default_txconf\": " << object.default_txconf << ", ";
 
   snprintf(tmpbuf, sizeof(tmpbuf), "\"vmdq_queue_base\": \"0x%02x\", ", object.vmdq_queue_base); 
   stream << tmpbuf;
@@ -164,6 +164,26 @@ std::ostream& operator<<(std::ostream& stream, const rte_eth_rxconf& object) {
   snprintf(tmpbuf, sizeof(tmpbuf), "\"offloads\": %08lx, ", object.offloads);
   stream << tmpbuf;
   snprintf(tmpbuf, sizeof(tmpbuf), "\"rx_seg\": \"(elided)\"");
+  stream << tmpbuf;
+
+  stream << "}";
+  return stream;
+}
+
+std::ostream& operator<<(std::ostream& stream, const rte_eth_rss_conf& object) {
+  char tmpbuf[1024];
+  stream << "{";
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"rss_key_len\": 0x%02x, ", object.rss_key_len);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"rss_hf\": 0x%08lx, ", object.rss_hf);
+  stream << tmpbuf;
+  snprintf(tmpbuf, sizeof(tmpbuf), "\"rss_key\": 0x");
+  stream << tmpbuf;
+
+  tmpbuf[0]=0;
+  for (unsigned i=0; i<object.rss_key_len; ++i) {
+    snprintf(tmpbuf+strlen(tmpbuf), sizeof(tmpbuf), "%02x", object.rss_key[i]);
+  }
   stream << tmpbuf;
 
   stream << "}";

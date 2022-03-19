@@ -6,12 +6,21 @@
 #include <string.h>                                                                                                     
 #include <assert.h>
 
+//                                                                                                                      
+// Tell GCC to not enforce '-Wpendantic' for DPDK headers                                                               
+//                                                                                                                      
+#pragma GCC diagnostic push                                                                                             
+#pragma GCC diagnostic ignored "-Wpedantic"                                                                             
+#include <rte_flow.h>                                                                                                
+#include <rte_bus_pci.h>
+#pragma GCC diagnostic pop 
+
 namespace Reinvent {
 
 int Dpdk::InitAWS::configTxRouting(const std::string& prefix, Util::Environment *env, AWSEnaConfig *config,                
-    std::vector<int>& defaultTxSrcPort, std::vector<int>& defaultTxDstPort, std::string& defaultTxSrcMac,  
-    std::vector<std::string>& defaultTxDstMac, std::string& defaultTxSrcIp, std::vector<std::string>& defaultTxDstIp,
-    std::vector<UDPRoute>& defaultTxRoute) {
+  std::vector<int>& defaultTxSrcPort, std::vector<int>& defaultTxDstPort, std::string& defaultTxSrcMac,  
+  std::vector<std::string>& defaultTxDstMac, std::string& defaultTxSrcIp, std::vector<std::string>& defaultTxDstIp,
+  std::vector<UDPRoute>& defaultTxRoute) {
 
   assert(env);
   assert(config);
@@ -498,7 +507,7 @@ int Dpdk::InitAWS::configPerQueueMempool(const std::string& prefix, Util::Enviro
     valid = rxSize==rxqMemPoolSize->size();
     if (!valid) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),
-        variable.c_str(), config->rxqThreadCount(), rxSize, "values were provided: must be equal");
+        variable.c_str(), config->rxqThreadCount(), rxqMemPoolSize->size(), "values were provided: must be equal");
     }
 
     Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::MEMPOOL_RXQ_CACHE_SIZE);
@@ -508,7 +517,7 @@ int Dpdk::InitAWS::configPerQueueMempool(const std::string& prefix, Util::Enviro
     valid = rxSize==rxqMemPoolCacheSize->size();
     if (!valid) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),
-        variable.c_str(), config->rxqThreadCount(), rxSize, "values were provided: must be equal");
+        variable.c_str(), config->rxqThreadCount(), rxqMemPoolCacheSize->size(), "values were provided: must be equal");
     }
 
     Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::MEMPOOL_RXQ_PRIV_SIZE);
@@ -518,7 +527,7 @@ int Dpdk::InitAWS::configPerQueueMempool(const std::string& prefix, Util::Enviro
     valid = rxSize==rxqMemPoolPrivSize->size();
     if (!valid) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),
-        variable.c_str(), config->rxqThreadCount(), rxSize, "values were provided: must be equal");
+        variable.c_str(), config->rxqThreadCount(), rxqMemPoolPrivSize->size(), "values were provided: must be equal");
     }
 
     Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::MEMPOOL_RXQ_DATA_ROOM_SIZE);
@@ -528,7 +537,7 @@ int Dpdk::InitAWS::configPerQueueMempool(const std::string& prefix, Util::Enviro
     valid = rxSize==rxqMemPoolDataRoomSize->size();
     if (!valid) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),
-        variable.c_str(), config->rxqThreadCount(), rxSize, "values were provided: must be equal");
+        variable.c_str(), config->rxqThreadCount(), rxqMemPoolDataRoomSize->size(), "values were provided: must be equal");
     }
   }
 
@@ -540,7 +549,7 @@ int Dpdk::InitAWS::configPerQueueMempool(const std::string& prefix, Util::Enviro
     valid = txSize==txqMemPoolSize->size();
     if (!valid) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),
-        variable.c_str(), config->txqThreadCount(), txSize, "values were provided: must be equal");
+        variable.c_str(), config->txqThreadCount(), txqMemPoolSize->size(), "values were provided: must be equal");
     }
 
     Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::MEMPOOL_TXQ_CACHE_SIZE);
@@ -550,7 +559,7 @@ int Dpdk::InitAWS::configPerQueueMempool(const std::string& prefix, Util::Enviro
     valid = txSize==txqMemPoolCacheSize->size();
     if (!valid) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),
-        variable.c_str(), config->txqThreadCount(), rxSize, "values were provided: must be equal");
+        variable.c_str(), config->txqThreadCount(), txqMemPoolCacheSize->size(), "values were provided: must be equal");
     }
 
     Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::MEMPOOL_TXQ_PRIV_SIZE);
@@ -560,7 +569,7 @@ int Dpdk::InitAWS::configPerQueueMempool(const std::string& prefix, Util::Enviro
     valid = txSize==txqMemPoolPrivSize->size();
     if (!valid) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),
-        variable.c_str(), config->txqThreadCount(), txSize, "values were provided: must be equal");
+        variable.c_str(), config->txqThreadCount(), txqMemPoolPrivSize->size(), "values were provided: must be equal");
     }
 
     Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::MEMPOOL_TXQ_DATA_ROOM_SIZE);
@@ -570,7 +579,7 @@ int Dpdk::InitAWS::configPerQueueMempool(const std::string& prefix, Util::Enviro
     valid = txSize==txqMemPoolDataRoomSize->size();
     if (!valid) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),
-        variable.c_str(), config->txqThreadCount(), txSize, "values were provided: must be equal");
+        variable.c_str(), config->txqThreadCount(), txqMemPoolPrivSize->size(), "values were provided: must be equal");
     }
   }
 
@@ -990,7 +999,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   // Get RX offload mask
   //
   Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::RX_OFFLOAD_MASK);
-  if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+  if ((rc = env->valueAsInt(variable, &intValue, true, 0, 1000000))!=0) {
     return rc;
   }
   config->setRxOffloadMask(intValue);
@@ -999,7 +1008,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   // Get TX offload mask
   //
   Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TX_OFFLOAD_MASK);
-  if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+  if ((rc = env->valueAsInt(variable, &intValue, true, 0, 1000000))!=0) {
     return rc;
   }
   config->setTxOffloadMask(intValue);
@@ -1080,6 +1089,29 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   rte_eth_dev_info_get(config->deviceId(), ethDeviceInfo);
   REINVENT_UTIL_LOG_DEBUG("DPDK reported deviceInfo: " << *ethDeviceInfo << std::endl);
 
+  //
+  // See if the DPDK device has the same PCI ID requested
+  //
+  valid = false;
+  char pciName[128];
+  snprintf(pciName, sizeof(pciName), "%s", "**(uninitialized)**");
+  if (ethDeviceInfo->device) {
+    const struct rte_bus *bus = rte_bus_find_by_device(ethDeviceInfo->device);
+    if (bus && !strcmp(bus->name, "pci")) {
+      const struct rte_pci_device *pci_dev = RTE_DEV_TO_PCI(ethDeviceInfo->device);
+      snprintf(pciName, sizeof(pciName), "%04x:%02x:%02x.%x", pci_dev->addr.domain, pci_dev->addr.bus,
+        pci_dev->addr.devid, pci_dev->addr.function);
+      if (pciName==config->pciId()) {
+        valid=true;
+      }
+    }
+  }
+  if (!valid) {
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, valid,
+      config->pciId().c_str(), 1, 0, pciName);
+  }
+  REINVENT_UTIL_LOG_DEBUG("DPDK found device: '" << pciName << "'" << std::endl);
+
   // See if RXQ size exceeds size known to DPDK
   valid = (config->rxqCount()>=0&&config->rxqCount()<=ethDeviceInfo->max_rx_queues);
   if (!valid) {
@@ -1121,6 +1153,11 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
     REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Get DPDK device status", rte_strerror(rc), rc);
   }
   REINVENT_UTIL_LOG_DEBUG("DPDK reported link status: " << status << std::endl);
+
+  //
+  // Get device RSS configuration
+  //
+
 
   // =================================================================================
   // Start initialization of NIC, queues
@@ -1253,9 +1290,12 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   //
   // Create RXQs
   //
+  rte_eth_rxconf rxCfg = ethDeviceInfo->default_rxconf;
+  rxCfg.offloads = deviceConfig->rxmode.offloads;
+  REINVENT_UTIL_LOG_DEBUG("RXQ conf: " << rxCfg << std::endl);
   for (int i=0; i<config->rxqThreadCount(); ++i) {
-    if ((rc = rte_eth_rx_queue_setup(config->deviceId(), i, config->rxq()[i].ringSize(), config->numaNode(),
-      0, config->rxq()[i].mempool()))!=0) {
+    if ((rc = rte_eth_rx_queue_setup(config->deviceId(), i, config->rxq()[i].ringSize(), config->numaNode(), &rxCfg,
+      config->rxq()[i].mempool()))!=0) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK AWS ENA RXQ", rte_strerror(rc), rc);
     }
   }
@@ -1282,12 +1322,6 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   if ((rc = rte_eth_dev_start(config->deviceId()))!=0) {
     REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Start DPDK AWS ENA device", rte_strerror(rc), rc);
   }
-
-  //
-  // Attempt to enable RX promiscuous mode even if no RX queues setup
-  // This call seems not to work on AWS ENA
-  //
-  rte_eth_promiscuous_enable(config->deviceId());
 
   return 0;
 }
