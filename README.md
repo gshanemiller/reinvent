@@ -95,7 +95,7 @@ the TXQ code can't detect nor wait for the TXQ output queue to flush before stop
 there will be some 10s or 100s of packets in the TXQ's output queue that are not flushed meaning the elapsed time is a
 little low
 
-**Amazon advertises 100Gbps for `c5n.metal` instances if ENA is enabled. At this point in time, the second cut of
+**Amazon advertises 100Gbps for `c5n.metal` instances if ENA is enabled**. At this point in time, the second cut of
 performance testing may need to reflect improvements in one or all of the following:
 
 * bigger ring size
