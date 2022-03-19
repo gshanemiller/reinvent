@@ -30,7 +30,7 @@ environment variables. The library then works out RXQ/TXQ assignments from there
 * [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_packet_design.md)
 
 # Benchmarks
-Frankly, the **first cut of code is terrible**. Consider sending data UDP with `ncat`. This code reads a file and sends
+The **first cut of code seems to be terrible**. Consider sending data UDP with `ncat`. This code reads a file and sends
 data IPV4 UDP between the same two machines as DPDK tests:
 
 ```
@@ -68,7 +68,7 @@ Ncat: Connected to 172.31.67.198:1234.
 Ncat: 1073741824 bytes sent, 0 bytes received in 1.23 seconds.     <--- .81 Gb/sec
 ```
 
-In contrast the DPDK code is almost two orders of 10 slower. There are two caveats (to follow) which make it a bit worse:
+In contrast the DPDK code is almost two orders of 10 slower. There are three caveats (to follow) which make it a bit worse:
 The best rate is only `0.118042` falling to `0.039643` Gb/sec:
 
 ```
@@ -89,11 +89,49 @@ time to PCI write one packet of 54 bytes to the NIC.
 
 The caveats are:
 
+* `ncat` seems to send far fewer much larger 8192 byte packets
 * DPDK code has no disk I/O. ncat does
 * Because of [this missing AWS driver API](https://github.com/amzn/amzn-drivers/issues/166), which will be fixed soon,
 the TXQ code can't detect nor wait for the TXQ output queue to flush before stopping and taking stats. So, in general,
 there will be some 10s or 100s of packets in the TXQ's output queue that are not flushed meaning the elapsed time is a
 little low
+
+When `ncat` transmits work we can watch the per-TXQ packet counts:
+
+```
+$ watch -d -n 0.5 "ethtool -S eth0 | grep tx_cnt"
+```
+
+By watching which queue significantly changes and taking a difference one can see:
+
+```
+before ncat: queue_24_tx_cnt: 1280
+after  ncat: queue_24_tx_cnt: 155849
+------------------------------------
+est. of ncat packets sent   : 154569
+
+bytes sent: 1266227200 in 2.04 seconds
+Gbp.  rate: 0.58   (1266227200/1024/1024/1024/2.04)
+PktSz byte: 8192 bytes
+```
+
+Thus, this is an unfair comparison to DPDK which sends 54 bytes per packets (not 8182) even though the total byte count can be made to the same. DPDK and the NIC is doing far more work. 
+
+[A better comparison is based on Cloudfare work](https://blog.cloudflare.com/how-to-receive-a-million-packets/). This demonstrates UDP code sending 72 byte packets. The maximum I was able to achieve was around 1.1 million packets/sec:
+
+```
+# on sender machine:
+$ sudo taskset -c 1,2 ./udpsender 172.31.68.106:432
+
+# on receiver machine:
+taskset -c 1,2,3 ./udpreceiver1 0.0.0.0:4321 3 1
+  1.101M pps  33.596MiB / 281.820Mb
+  1.103M pps  33.662MiB / 282.376Mb
+  1.102M pps  33.637MiB / 282.170Mb
+  1.103M pps  33.647MiB / 282.249Mb
+```
+
+All this work hits one queue on the RX side. However, that means DPDK is still an order of 10 slower than the Cloudfare kernel based work.
 
 **Amazon advertises 100Gbps for `c5n.metal` instances if ENA is enabled**. Per Amazon:
 
@@ -110,6 +148,5 @@ in one or all of the following:
 * a different TXQ burst size
 * see if Amazon AWS ENA drivers will support RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE. Right now it does not
 * better TXQ threshhold management. Right now config uses default which programs in 0 for all threshhold values
-* force-set a different link speed. The code is not able to determine the link speed; both `rte_eth_link_get_nowait`
-and `rte_eth_link_get` report `0x00` which does not correspond to `RTE_ETH_SPEED_NUM_` define not `RTE_ETH_SPEED_NUM_NONE`.
-* need to determine if ncat is somehow using multiple TXQs. The DPDK test uses one
+* force-set a different link speed. The code is not able to determine the link speed; both `rte_eth_link_get_nowait`. and `rte_eth_link_get` report `0x00` which does not correspond to `RTE_ETH_SPEED_NUM_` define not `RTE_ETH_SPEED_NUM_NONE`. After some testing via DPDK's `dpdk-testpmd` task, there seems to be no way to set or get a link speed. It seems unknowable and unsettable.
+* need to determine if ncat is somehow using multiple TXQs. The DPDK test uses one. As per above, `ncat` uses one TXQ but much larger packet sizes.
