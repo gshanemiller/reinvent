@@ -95,8 +95,16 @@ the TXQ code can't detect nor wait for the TXQ output queue to flush before stop
 there will be some 10s or 100s of packets in the TXQ's output queue that are not flushed meaning the elapsed time is a
 little low
 
-**Amazon advertises 100Gbps for `c5n.metal` instances if ENA is enabled**. At this point in time, the second cut of
-performance testing may need to reflect improvements in one or all of the following:
+**Amazon advertises 100Gbps for `c5n.metal` instances if ENA is enabled**. Per Amazon:
+
+```
+This instance type supports the Elastic Fabric Adapter (EFA). EFAs support OS-bypass functionality, which enables High
+Performance Computing (HPC) and Machine Learning (ML) applications to communicate directly with the network interface
+hardware. EFAs provide lower latency and higher throughput than traditional TCP channels.
+```
+
+So perhaps there is hope. At this point in time, the second cut of performance testing may need to reflect improvements
+in one or all of the following:
 
 * bigger ring size
 * a different TXQ burst size
