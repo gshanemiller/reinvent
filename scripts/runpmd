@@ -1,0 +1,8 @@
+#!/bin/bash
+
+#
+# run as sudo
+#
+TASK="/home/ec2-user/Dev/dpdk/build/app/dpdk-testpmd"
+ARGS="--proc-type primary --in-memory --log-level 7 --huge-dir /mnt/huge -n 12 -- -i"
+$TASK $ARGS
