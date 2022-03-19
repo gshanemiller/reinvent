@@ -117,7 +117,7 @@ PktSz byte: 8192 bytes
 
 Thus, this is an unfair comparison to DPDK which sends 54 bytes per packets (not 8182) even though the total byte count can be made to the same. DPDK and the NIC is doing far more work. 
 
-[A better comparison is based on Cloudfare work](https://blog.cloudflare.com/how-to-receive-a-million-packets/). This demonstrates UDP code sending 72 byte packets. The maximum I was able to achieve was around 1.1 million packets/sec:
+[A better comparison is based on Cloudfare work](https://blog.cloudflare.com/how-to-receive-a-million-packets/). This demonstrates UDP code sending 72 byte packets which includes 32 bytes of payload. The maximum I was able to achieve was around 1.1 million packets/sec:
 
 ```
 # on sender machine:
@@ -125,10 +125,11 @@ $ sudo taskset -c 1,2 ./udpsender 172.31.68.106:432
 
 # on receiver machine:
 taskset -c 1,2,3 ./udpreceiver1 0.0.0.0:4321 3 1
-  1.101M pps  33.596MiB / 281.820Mb
+  1.101M pps  33.596MiB / 281.820Mb 
   1.103M pps  33.662MiB / 282.376Mb
   1.102M pps  33.637MiB / 282.170Mb
   1.103M pps  33.647MiB / 282.249Mb
+  1.104M pps  33.684MiB / 282.563Mb <--- 1.104*1000000*32/1024/1024=33.6MiB/sec, 1.104*1000000*32*8/1000/1000=282.6 million bits/sec 
 ```
 
 All this work hits one queue on the RX side. However, that means DPDK is still an order of 10 slower than the Cloudfare kernel based work.
