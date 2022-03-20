@@ -17,6 +17,8 @@ set(SOURCES
   dpdk/reinvent_dpdk_awsworker.cpp
   dpdk/reinvent_dpdk_stream.cpp
   dpdk/reinvent_dpdk_util.cpp
+
+  perf/reinvent_perf_rdpmc.cpp
 )
 
 #

@@ -10,7 +10,7 @@ This library intends to be a rewrite of [eRPC](https://github.com/erpc-io/eRPC) 
 (in its DPDK implementation) is a UDP only RPC library running over DPDK in userspace with congestion control to handle
 UDP packet loss and flow control. The result is a highly efficient yet general purpose NIC I/O library.
 
-# Current Reinvent features
+# Reinvent features
 * Decently documented
 * Ships with a working IPV4 UDP TX/RX example
 * Shows ENA checksum offload for IPV4, UDP checksums
@@ -25,99 +25,61 @@ environment variables. The library then works out RXQ/TXQ assignments from there
 * Reinvent provides a uniform structure to report errors: no ad hoc logging/assertions
 * Tested on AWS `c5n` bare metal instances running AWS ENA NICs
 
+# Experimental Support
+* Micro benchmarking using Intel PMU programmable counters
+* [See](https://github.com/rodgarrison/rdpmc) and [this example](https://github.com/rodgarrison/reinvent/blob/dev/performance_tests/reinvent_perf_test1/test1.cpp#L268)
+and [reinvent's reorganization of rdpmc here](https://github.com/rodgarrison/reinvent/blob/dev/src/reinvent/perf/reinvent_perf_rdpmc.h)
+
 # Getting Started
 * [Read setup instructions](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_setup.md)
 * [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_packet_design.md)
 
 # Benchmarks
-The **first cut of code seems to be terrible**. Consider sending data UDP with `ncat`. This code reads a file and sends
-data IPV4 UDP between the same two machines as DPDK tests:
+An AWS ENA NIC is not a physical HW device in the `c5n.metal` instance tested here. I am unclear therefore what kind of
+performance hit this imposes relative to the normal case where the NIC is a bonafide NIC card plugged into the HW's PCI
+bus.
+
+After playing with the code for a long time, I learned there are not a lot of knobs to turn. Some of the items that
+appear to have zero effect on TX performance include:
+
+* queue thresholds. Even though reinvent faithly programs in threshhold values into TX/RX queues as per Amazon they
+are not used. See [this closed question](https://github.com/amzn/amzn-drivers/issues/213)
+* whether or not 1Gb or 2Mb huge pages are used
+* whether or not the dataroom size is as small as possible to fit the packet size sent or wastefully large. For example,
+dataroom size of 1K or 2K is not worse that the minimum size DPDK will accept when, in these tests, it only sends 72
+byte packets
+* whether or not the total memory pool size is overly big or just big enough e.g. if sending 10,000 packets the pool
+size can be set to 10,000 as opposed to some much larger size
+* whether or not the memory pool does per-lcore caching. [Refer to this documentation](https://doc.dpdk.org/api/rte__mempool_8h.html#a503f2f889043a48ca9995878846db2fd)
+where it says "The access to the per-lcore table is of course faster than the multi-producer/consumer pool."
+* TX bursting: preparing several packets in a batch then enqueuing them into the TXQ's ring seems to offer no major
+benefit over one at a time. Put another way the constant overhead in `rte_eth_tx_burst` does not seem big.
+
+**The number one contraint on performance is TXQ-ring full**. In these log results we program 1 TXQ using the maximum TXQ
+ring size of 1024. Each call to `rte_eth_tx_burst` provides 1 packet. We start sending 1000 packets of 74 bytes total
+including 32-bytes of application payload. As the number of packets sent crosses 1024 the TXQ ring will become full as
+it attempts to flush outstanding packets. Accordingly subsequent calls to enqueue more TX packets via `rte_eth_tx_burst`
+does not return 1; it returns 0. Each time 0 is returned a counter is incremented, and the code re-runs `rte_eth_tx_burst`
+until DPDK reports 1. This TXQ-ring stalling will decrease performance from around 415 ns/pkt to 1150 ns/pkt:
 
 ```
-Ex. output from: ncat -4 -v -u 172.31.67.198 1234 < <filename>
-------
-Ncat: Version 7.50 ( https://nmap.org/ncat )
-Ncat: Connected to 172.31.67.198:1234.
-Ncat: 1 bytes sent, 0 bytes received in 0.01 seconds.
-Ncat: Version 7.50 ( https://nmap.org/ncat )
-Ncat: Connected to 172.31.67.198:1234.
-Ncat: 64 bytes sent, 0 bytes received in 0.01 seconds.
-Ncat: Version 7.50 ( https://nmap.org/ncat )
-Ncat: Connected to 172.31.67.198:1234.
-Ncat: 128 bytes sent, 0 bytes received in 0.00 seconds.
-Ncat: Version 7.50 ( https://nmap.org/ncat )
-Ncat: Connected to 172.31.67.198:1234.
-Ncat: 512 bytes sent, 0 bytes received in 0.00 seconds.
-Ncat: Version 7.50 ( https://nmap.org/ncat )
-Ncat: Connected to 172.31.67.198:1234.
-Ncat: 1024 bytes sent, 0 bytes received in 0.00 seconds.
-Ncat: Version 7.50 ( https://nmap.org/ncat )
-Ncat: Connected to 172.31.67.198:1234.
-Ncat: 1048576 bytes sent, 0 bytes received in 0.01 seconds.
-Ncat: Version 7.50 ( https://nmap.org/ncat )
-Ncat: Connected to 172.31.67.198:1234.
-Ncat: 52428800 bytes sent, 0 bytes received in 0.06 seconds.
-Ncat: Version 7.50 ( https://nmap.org/ncat )
-Ncat: Connected to 172.31.67.198:1234.
-Ncat: 104857600 bytes sent, 0 bytes received in 0.12 seconds.
-Ncat: Version 7.50 ( https://nmap.org/ncat )
-Ncat: Connected to 172.31.67.198:1234.
-Ncat: 524288000 bytes sent, 0 bytes received in 0.60 seconds.      <--- .81 Gb/sec
-Ncat: Version 7.50 ( https://nmap.org/ncat )
-Ncat: Connected to 172.31.67.198:1234.
-Ncat: 1073741824 bytes sent, 0 bytes received in 1.23 seconds.     <--- .81 Gb/sec
+# this has best performance since TXQ ring never gets full. pps means packets per second.
+# Note stalledTx at end of log line is zero:
+lcoreId: 00, txqIndex: 00: elsapsedNs: 414640, packetsQueued: 1000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 2411730.657920, nsPerPkt: 414.640000, bytesPerSec: 178468068.686089, mbPerSec: 170.200413, mbPerSecPayloadOnly: 73.600179 stalledTx 0
+
+# In all of the following cases the TXQ ring gets full. Note stalledTx at end of log line.
+# For example, in the last run when 10,000 packets were sent it took around 309000 calls to
+# rte_eth_tx_burst to flush those 10000 packets out:
+lcoreId: 00, txqIndex: 00: elsapsedNs: 1351623, packetsQueued: 2000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 1479702.550193, nsPerPkt: 675.811500, bytesPerSec: 109497988.714309, mbPerSec: 104.425420, mbPerSecPayloadOnly: 45.156938 stalledTx 23896
+lcoreId: 00, txqIndex: 00: elsapsedNs: 3878514, packetsQueued: 4000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 1031322.821060, nsPerPkt: 969.628500, bytesPerSec: 76317888.758427, mbPerSec: 72.782410, mbPerSecPayloadOnly: 31.473475 stalledTx 74911
+lcoreId: 00, txqIndex: 00: elsapsedNs: 6369604, packetsQueued: 6000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 941973.786753, nsPerPkt: 1061.600667, bytesPerSec: 69706060.219756, mbPerSec: 66.476879, mbPerSecPayloadOnly: 28.746759 stalledTx 169046
+lcoreId: 00, txqIndex: 00: elsapsedNs: 8852744, packetsQueued: 8000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 903674.612075, nsPerPkt: 1106.593000, bytesPerSec: 66871921.293556, mbPerSec: 63.774034, mbPerSecPayloadOnly: 27.577961 stalledTx 244140
+lcoreId: 00, txqIndex: 00: elsapsedNs: 11436274, packetsQueued: 10000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 874410.669069, nsPerPkt: 1143.627400, bytesPerSec: 64706389.511129, mbPerSec: 61.708822, mbPerSecPayloadOnly: 26.684896 stalledTx 309042
 ```
 
-In contrast the DPDK code is almost two orders of 10 slower. There are three caveats (to follow) which make it a bit worse:
-The best rate is only `0.118042` falling to `0.039643` Gb/sec:
-
-```
-lcoreId: 00, txqIndex: 00: elsapsedNs: 43347, packetsQueued: 15, packetSizeBytes: 54, nsPerPkt: 2889.800000, bytesPerSec: 18686414.284726, gbPerSec: 0.017403
-lcoreId: 00, txqIndex: 00: elsapsedNs: 63907, packetsQueued: 150, packetSizeBytes: 54, nsPerPkt: 426.046667, bytesPerSec: 126746678.767584, gbPerSec: 0.118042
-lcoreId: 00, txqIndex: 00: elsapsedNs: 702288, packetsQueued: 1500, packetSizeBytes: 54, nsPerPkt: 468.192000, bytesPerSec: 115337297.518967, gbPerSec: 0.107416
-lcoreId: 00, txqIndex: 00: elsapsedNs: 18049829, packetsQueued: 15000, packetSizeBytes: 54, nsPerPkt: 1203.321933, bytesPerSec: 44875771.399275, gbPerSec: 0.041794
-lcoreId: 00, txqIndex: 00: elsapsedNs: 37171258, packetsQueued: 30000, packetSizeBytes: 54, nsPerPkt: 1239.041933, bytesPerSec: 43582060.096002, gbPerSec: 0.040589
-lcoreId: 00, txqIndex: 00: elsapsedNs: 113252273, packetsQueued: 90000, packetSizeBytes: 54, nsPerPkt: 1258.358589, bytesPerSec: 42913045.992463, gbPerSec: 0.039966
-lcoreId: 00, txqIndex: 00: elsapsedNs: 189744955, packetsQueued: 150000, packetSizeBytes: 54, nsPerPkt: 1264.966367, bytesPerSec: 42688882.031145, gbPerSec: 0.039757
-lcoreId: 00, txqIndex: 00: elsapsedNs: 379995938, packetsQueued: 300000, packetSizeBytes: 54, nsPerPkt: 1266.653127, bytesPerSec: 42632034.661381, gbPerSec: 0.039704
-lcoreId: 00, txqIndex: 00: elsapsedNs: 1142983532, packetsQueued: 900000, packetSizeBytes: 54, nsPerPkt: 1269.981702, bytesPerSec: 42520297.659022, gbPerSec: 0.039600
-lcoreId: 00, txqIndex: 00: elsapsedNs: 1268608467, packetsQueued: 1000005, packetSizeBytes: 54, nsPerPkt: 1268.602124, bytesPerSec: 42566537.591933, gbPerSec: 0.039643
-```
-
-In other tests I have seen `nsPerPkt` go as low as `250` but typically is around `500` in the better cases. That's a long
-time to PCI write one packet of 54 bytes to the NIC.
-
-The caveats are:
-
-* `ncat` seems to send far fewer much larger 8192 byte packets
-* DPDK code has no disk I/O. ncat does
-* Because of [this missing AWS driver API](https://github.com/amzn/amzn-drivers/issues/166), which will be fixed soon,
-the TXQ code can't detect nor wait for the TXQ output queue to flush before stopping and taking stats. So, in general,
-there will be some 10s or 100s of packets in the TXQ's output queue that are not flushed meaning the elapsed time is a
-little low
-
-When `ncat` transmits work we can watch the per-TXQ packet counts:
-
-```
-$ watch -d -n 0.5 "ethtool -S eth0 | grep tx_cnt"
-```
-
-By watching which queue significantly changes and taking a difference one can see:
-
-```
-before ncat: queue_24_tx_cnt: 1280
-after  ncat: queue_24_tx_cnt: 155849
-------------------------------------
-est. of ncat packets sent   : 154569
-
-bytes sent: 1266227200 in 2.04 seconds
-Gbp.  rate: 0.58   (1266227200/1024/1024/1024/2.04)
-PktSz byte: 8192 bytes
-```
-
-Thus, this is an unfair comparison to DPDK which sends 54 bytes per packets (not 8182) even though the total byte count can be made to the same. DPDK and the NIC is doing far more work. 
-
-[A better comparison is based on Cloudfare work](https://blog.cloudflare.com/how-to-receive-a-million-packets/). This demonstrates UDP code sending 72 byte packets which includes 32 bytes of payload. The maximum I was able to achieve was around 1.1 million packets/sec:
+For comparison the best **kernel based performance** known to this author comes from [Cloudfare](https://blog.cloudflare.com/how-to-receive-a-million-packets/).
+This demonstrates UDP code sending 72 byte packets which includes 32 bytes of payload like this test. The maximum I was able
+to achieve on the same HW was around 1.1 million packets/sec:
 
 ```
 # on sender machine:
@@ -132,22 +94,18 @@ taskset -c 1,2,3 ./udpreceiver1 0.0.0.0:4321 3 1
   1.104M pps  33.684MiB / 282.563Mb <--- 1.104*1000000*32/1024/1024=33.6MiB/sec, 1.104*1000000*32*8/1000/1000=282.6 million bits/sec 
 ```
 
-All this work hits one queue on the RX side. However, that means DPDK is still an order of 10 slower than the Cloudfare kernel based work.
+Cloudfare work uses 2 cores to TX packets and 3 cores to receive them. The Cloudfare sender uses one TXQ; the receive side
+is also one RXQ. The Cloudfare work also uses a special feature [SO_REUSEPORT](https://lwn.net/Articles/542629/) to help
+get these numbers.
 
-**Amazon advertises 100Gbps for `c5n.metal` instances if ENA is enabled**. Per Amazon:
+In contrast this code uses 1 core to TX and 1 core to RX. The RX side seems to keep with the TX side fine. However, once the
+TXQ gets full, DPDK performance on ENA NICs drops under Cloudfare's 1.1 million packets/sec to as little as 875,000 pkts/sec
+granted on 40% fewer (2 cores total 1 each TX and RX side versus Cloudfare's 5) cores.
 
-```
-This instance type supports the Elastic Fabric Adapter (EFA). EFAs support OS-bypass functionality, which enables High
-Performance Computing (HPC) and Machine Learning (ML) applications to communicate directly with the network interface
-hardware. EFAs provide lower latency and higher throughput than traditional TCP channels.
-```
+But because an AWS ENA NIC has 32-TX and 32-RX queues (and the queues are essentially share nothing) DPDK will be able
+to scale-out and easily beat what traditional kernel based I/O can do.
 
-So perhaps there is hope. At this point in time, the second cut of performance testing may need to reflect improvements
-in one or all of the following:
-
-* bigger ring size
-* a different TXQ burst size
-* see if Amazon AWS ENA drivers will support RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE. Right now it does not
-* better TXQ threshhold management. Right now config uses default which programs in 0 for all threshhold values
-* force-set a different link speed. The code is not able to determine the link speed; both `rte_eth_link_get_nowait`. and `rte_eth_link_get` report `0x00` which does not correspond to `RTE_ETH_SPEED_NUM_` define not `RTE_ETH_SPEED_NUM_NONE`. After some testing via DPDK's `dpdk-testpmd` task, there seems to be no way to set or get a link speed. It seems unknowable and unsettable.
-* need to determine if ncat is somehow using multiple TXQs. The DPDK test uses one. As per above, `ncat` uses one TXQ but much larger packet sizes.
+**Caveat:** [Because of this Amazon Driver Issues](https://github.com/amzn/amzn-drivers/issues/166) which will be fixed soon,
+this benchkark code is not able to determine when all TXQ packets were flushed before recording the stop time. As a result
+the reported elapsed-time and packet rates will be faster that the real value since it does not account for the few packets
+in the TXQ ring not actually written to the wire.
