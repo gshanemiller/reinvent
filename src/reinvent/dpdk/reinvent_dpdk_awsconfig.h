@@ -93,6 +93,17 @@ private:
   int                       d_txOffloadMask;
   int                       d_defaultTxFlow;
 
+  // TXQ/RXQ Threshholds
+  int                       d_txqPrefetchThresh;
+  int                       d_txqHostThresh;
+  int                       d_txqWriteBackThresh;
+  int                       d_txqRsThresh;
+  int                       d_txqFreeThresh;
+  int                       d_rxqPrefetchThresh;
+  int                       d_rxqHostThresh;
+  int                       d_rxqWriteBackThresh;
+  int                       d_rxqFreeThresh;
+
   // DPDK structures initialized
   struct rte_eth_conf       d_ethDeviceConf;
   struct rte_eth_dev_info   d_ethDeviceInfo;
@@ -202,6 +213,33 @@ public:
 
   int defaultTxFlow() const;
     // Return value of 'defaultTxFlow' attribute
+
+  int txqPrefetchThresh() const;
+    // Return value of 'txqPrefetchThresh' attribute
+
+  int txqHostThresh() const;
+    // Return value of 'txqHostThresh' attribute
+
+  int txqWriteBackThresh() const;
+    // Return value of 'txqWriteBackThresh' attribute
+
+  int txqRsThresh() const;
+    // Return value of 'txqRsThresh' attribute
+
+  int txqFreeThresh() const;
+    // Return value of 'txqFreeThresh' attribute
+
+  int rxqPrefetchThresh() const;
+    // Return value of 'rxqPrefetchThresh' attribute
+
+  int rxqHostThresh() const;
+    // Return value of 'rxqHostThresh' attribute
+
+  int rxqWriteBackThresh() const;
+    // Return value of 'rxqWriteBackThresh' attribute
+
+  int rxqFreeThresh() const;
+    // Return value of 'rxqFreeThresh' attribute
   
   // MANIPULATORS
   void setIsValid(int value);
@@ -310,6 +348,33 @@ public:
   void setMemzone(const struct rte_memzone *value);
     // Assign value to the 'memzone' attribute
 
+  void setTxqPrefetchThresh(int value);
+    // Assign value to the 'txqPrefetchThresh` attribute
+
+  void setTxqHostThresh(int value);
+    // Assign value to the 'txqHostThresh` attribute
+
+  void setTxqWriteBackThresh(int value);
+    // Assign value to the 'txqWritebackThresh` attribute
+
+  void setTxqRsThresh(int value);
+    // Assign value to the 'txqRsThresh` attribute
+
+  void setTxqFreeThresh(int value);
+    // Assign value to the 'txqFreeThresh` attribute
+
+  void setRxqPrefetchThresh(int value);
+    // Assign value to the 'rxqPrefetchThresh` attribute
+
+  void setRxqHostThresh(int value);
+    // Assign value to the 'rxqHostThresh` attribute
+
+  void setRxqWriteBackThresh(int value);
+    // Assign value to the 'rxqWriteBackThresh` attribute
+
+  void setRxqFreeThresh(int value);
+    // Assign value to the 'rxqFreeThresh` attribute
+
   // ASPECTS
   std::ostream& print(std::ostream& stream) const;
     // Print into specified 'stream' a human readable dump of 'this' returning 'stream'
@@ -338,6 +403,15 @@ AWSEnaConfig::AWSEnaConfig()
 , d_rxOffloadMask(0)
 , d_txOffloadMask(0)
 , d_defaultTxFlow(0)
+, d_txqPrefetchThresh(0)
+, d_txqHostThresh(0)
+, d_txqWriteBackThresh(0)
+, d_txqRsThresh(0)
+, d_txqFreeThresh(0)
+, d_rxqPrefetchThresh(0)
+, d_rxqHostThresh(0)
+, d_rxqWriteBackThresh(0)
+, d_rxqFreeThresh(0)
 , d_memzone(0)
 {
   memset(static_cast<void*>(&d_ethDeviceConf), 0, sizeof(struct rte_eth_conf));
@@ -493,6 +567,51 @@ int AWSEnaConfig::txOffloadMask() const {
 inline
 int AWSEnaConfig::defaultTxFlow() const {
   return d_defaultTxFlow;
+}
+
+inline
+int AWSEnaConfig::txqPrefetchThresh() const {
+  return d_txqPrefetchThresh;
+}
+
+inline
+int AWSEnaConfig::txqHostThresh() const {
+  return d_txqHostThresh;
+}
+
+inline
+int AWSEnaConfig::txqWriteBackThresh() const {
+  return d_txqWriteBackThresh;
+}
+
+inline
+int AWSEnaConfig::txqRsThresh() const {
+  return d_txqRsThresh;
+}
+
+inline
+int AWSEnaConfig::txqFreeThresh() const {
+  return d_txqFreeThresh;
+}
+
+inline
+int AWSEnaConfig::rxqPrefetchThresh() const {
+  return d_rxqPrefetchThresh;
+}
+
+inline
+int AWSEnaConfig::rxqHostThresh() const {
+  return d_rxqHostThresh;
+}
+
+inline
+int AWSEnaConfig::rxqWriteBackThresh() const {
+  return d_rxqWriteBackThresh;
+}
+
+inline
+int AWSEnaConfig::rxqFreeThresh() const {
+  return d_rxqFreeThresh;
 }
 
 // MANIPULATORS
@@ -669,6 +788,51 @@ rte_eth_dev_info *AWSEnaConfig::ethDeviceInfo() {
 inline
 void AWSEnaConfig::setMemzone(const struct rte_memzone *value) {
   d_memzone = value;
+}
+
+inline
+void AWSEnaConfig::setTxqPrefetchThresh(int value) {
+  d_txqPrefetchThresh = value;
+}
+
+inline
+void AWSEnaConfig::setTxqHostThresh(int value) {
+  d_txqHostThresh = value;
+}
+
+inline
+void AWSEnaConfig::setTxqWriteBackThresh(int value) {
+  d_txqWriteBackThresh = value;
+}
+
+inline
+void AWSEnaConfig::setTxqRsThresh(int value) {
+  d_txqRsThresh = value;
+}
+
+inline
+void AWSEnaConfig::setTxqFreeThresh(int value) {
+  d_txqFreeThresh = value;
+}
+
+inline
+void AWSEnaConfig::setRxqPrefetchThresh(int value) {
+  d_rxqPrefetchThresh = value;
+}
+
+inline
+void AWSEnaConfig::setRxqHostThresh(int value) {
+  d_rxqHostThresh = value;
+}
+
+inline
+void AWSEnaConfig::setRxqWriteBackThresh(int value) {
+  d_rxqWriteBackThresh = value;
+}
+
+inline
+void AWSEnaConfig::setRxqFreeThresh(int value) {
+  d_rxqFreeThresh = value;
 }
 
 // FREE OPERATORS

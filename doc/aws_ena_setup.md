@@ -113,6 +113,13 @@ GRUB_TERMINAL="ec2-console"
 GRUB_X86_USE_32BIT="true"
 ```
 
+You can also run this command to double-check change on reboot:
+
+```
+$ cat /proc/cmdline
+BOOT_IMAGE=/boot/vmlinuz-5.10.96-90.460.amzn2.x86_64 root=UUID=f047d80e-fad3-443d-9478-af686284acba ro console=tty0 console=ttyS0,115200n8 net.ifnames=0 biosdevname=0 nvme_core.io_timeout=4294967295 rd.emergency=poweroff rd.shell=0 iommu=1 intel_iommu=on
+```
+
 Failure to enable IOMMU is evidenced by DPDK-bind error during post-build-instructions: `Cannot bind to driver vfio-pci: [Errno 19] No such device`.
 
 # Build instructions (25mins)

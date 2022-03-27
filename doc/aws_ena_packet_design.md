@@ -112,21 +112,48 @@ The Reinvent library approach is to specify the number of lcores to be run for R
 own RXQ (TXQ). lcores may share a HW CORE if the allocation policy is `SHARED` or never share a HW core if 'DISTINCT'.
 
 # RSS (Receive Side Scaling)
-This section is woefully incomplete. I do not have the background to go into details. 
-
 RSS is NIC behavior that, based on a packet content hash, determines which RXQ will take delivery of each packet.
 Without this facility packet RX cannot be load balanced across all RXQs and their managing lcores which will eventually
-lead to dropped packets or back pressure on TX queues.
-
-Understanding what/how RSS hashes on is of crtitical importance if TXQs indend to route packets to a specific RXQ. That
-is TXQs will prepare packet contents by anticipating how RSS' hash algorithm will assign a RX packet for processing. In
-very round numbers RSS hashes packet header contents modulus the number of active RXQs. The main parameters TXQs might
-alter are ports for routing purposes are UDP IP4V ports (if UDP IPV4 is used).
+lead to dropped packets or back pressure on TX queues. 
 
 Routing packets is, again at very high level of abstraction, occurs in two phases:
 
 * Switches/routers connected to the NICs route packets based on the MAC/IPV4 addresss in the packet headers
 * Once the receiving NIC gets the packets, RSS is used to pick and deliver packets to specific RXQs 
+
+The AWS ENA NIC supports RSS. It has to be enabled by setting the RXQ mask to 1 (RTE_ETH_MQ_RX_RSS_FLAG). RSS performs
+a hash of packet contents then mods the result to the number of running RXQs. As long as the TX side varies the packet
+contents enough so the hash changes enough, RSS will load balance. Some NICs support programming in a hash which DPDK
+does support. However, AWS ENA NICs do not support this functionality. The default RSS hash can be seen like this:
+
+```
+$ ethtool -x ens6
+RX flow hash indirection table for ens6 with 32 RX ring(s):
+    0:      0     1     2     3     4     5     6     7
+    8:      8     9    10    11    12    13    14    15
+   16:     16    17    18    19    20    21    22    23
+   24:     24    25    26    27    28    29    30    31
+   32:      0     1     2     3     4     5     6     7
+   40:      8     9    10    11    12    13    14    15
+   48:     16    17    18    19    20    21    22    23
+   56:     24    25    26    27    28    29    30    31
+   64:      0     1     2     3     4     5     6     7
+   72:      8     9    10    11    12    13    14    15
+   80:     16    17    18    19    20    21    22    23
+   88:     24    25    26    27    28    29    30    31
+   96:      0     1     2     3     4     5     6     7
+  104:      8     9    10    11    12    13    14    15
+  112:     16    17    18    19    20    21    22    23
+  120:     24    25    26    27    28    29    30    31
+RSS hash key:
+86:e8:45:9a:35:c5:9f:b3:2e:be:89:73:fc:db:ea:29:a6:a5:e8:d5:fe:dd:43:da:2a:89:76:52:ae:b8:65:f7:99:9d:41:22:24:4e:b2:01
+RSS hash function:
+    toeplitz: on
+    xor: off
+    crc32: off
+```
+
+If RTE_ETH_MQ_RX_RSS_FLAG is not set, all packets seem to go to one RXQ.
 
 # Packet Memory Mental Picture
 Read this diagram with [DPDK 10.1 diagram](https://doc.dpdk.org/guides/prog_guide/mbuf_lib.html#figure-mbuf1):
@@ -660,3 +687,78 @@ REINVENT_UTIL_LOG_DEBUG("sent " << txCount << " packets" << std::endl);
 # Receiving UDP Packet(s)
 
 RX is very simple. See [serverMainLoop](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_udp/reinvent_dpdk_udp_integration_test.cpp#L270).
+
+# On Queue Thresholds
+
+Although AWS does not yet provide a data sheet on its NICs, my research suggests most NIC H/W process packets in part
+parameterized through several threshhold values. As a result DPDK provides structures to hold these values so they can
+be configured into the NIC: The [RXQ configs are here](https://doc.dpdk.org/api/structrte__eth__rxconf.html#ab7d7dbc33adbb1740718c9a841555dce);
+the [TXQ configs are here](https://doc.dpdk.org/api/structrte__eth__txconf.html#ab7d7dbc33adbb1740718c9a841555dce).
+
+The DPDK documentation for these threshhold values is underwhelming. And since AWS does not provide a datasheet, I cannot
+be specific. I can, however, lift the intent of these fields based on [Intel's datasheet](https://interfacemasters.com/pdf/82599_datasheet.pdf).
+See page 290, 494.
+
+TXQ Perspective:
+* **PTHRESH**: Pre-Fetch Threshold. Controls when a prefetch of descriptors is considered. This threshold refers to the
+number of valid, unprocessed transmit descriptors the 82599 has in its on-chip buffer. If this number drops below PTHRESH,
+the algorithm considers pre-fetching descriptors from host memory. However, this fetch does not happen unless there are at least
+HTHRESH valid descriptors in host memory to fetch. Note: HTHRESH should be given a non-zero value each time PTHRESH is used.
+* **HTHRESH**: Host Threshold
+* **WTHRESH**: Write-Back Threshold. Controls the write-back of processed transmit descriptors. This threshold refers to the
+number of transmit descriptors in the on-chip buffer that are ready to be written back to host memory. In the absence of
+external events (explicit flushes), the write-back occurs only after at least WTHRESH descriptors are available for write-back.
+Note: Since the default value for write-back threshold is 0b, descriptors are normally written back as soon as they are processed.
+WTHRESH must be written to a non-zero value to take advantage of the write-back bursting capabilities of the 82599.
+Note: When WTHRESH is set to a non-zero value, the software driver should not set the RS bit in the Tx descriptors. When
+WTHRESH is set to zero the software driver should set the RS bit in the last Tx descriptors of every packet (in the case
+of TSO it is the last descriptor of the entire large send). Note: When Head write-back is enabled (TDWBAL[n].Head_WB_En = 1b), the
+WTHRESH must be set to zero
+
+RXQ Perspective:
+Intel does not seem to document pthresh, hthresh, wthresh fields for RX even though DPDK provides a structure to receive them.
+
+On the other hand [this Intel web page](https://www.intel.com/content/www/us/en/developer/articles/guide/dpdk-performance-optimization-guidelines-white-paper.html)
+refers to DPDK's defaults for in its [test_pmd_perf.c source code)(http://dpdk.org/browse/dpdk/tree/app/test/test_pmd_perf.c).
+They are optimized for Intel's 82599 10 GbE:
+
+```
+/*
+ * RX and TX Prefetch, Host, and Write-back threshold values should be
+ * carefully set for optimal performance. Consult the network
+ * controller's datasheet and supporting DPDK documentation for guidance
+ * on how these parameters should be set.
+ */
+#define RX_PTHRESH 8 /**< Default values of RX prefetch threshold reg. */
+#define RX_HTHRESH 8 /**< Default values of RX host threshold reg. */
+#define RX_WTHRESH 0 /**< Default values of RX write-back threshold reg. */
+
+/*
+ * These default values are optimized for use with the Intel(R) 82599 10 GbE
+ * Controller and the DPDK ixgbe PMD. Consider using other values for other
+ * network controllers and/or network drivers.
+ */
+#define TX_PTHRESH 32 /**< Default values of TX prefetch threshold reg. */
+#define TX_HTHRESH 0  /**< Default values of TX host threshold reg. */
+#define TX_WTHRESH 0  /**< Default values of TX write-back threshold reg. */
+
+static struct rte_eth_rxconf rx_conf = {
+	.rx_thresh = {
+		.pthresh = RX_PTHRESH,
+		.hthresh = RX_HTHRESH,
+		.wthresh = RX_WTHRESH,
+	},
+	.rx_free_thresh = 32,
+};
+
+static struct rte_eth_txconf tx_conf = {
+	.tx_thresh = {
+		.pthresh = TX_PTHRESH,
+		.hthresh = TX_HTHRESH,
+		.wthresh = TX_WTHRESH,
+	},
+	.tx_free_thresh = 32, /* Use PMD default values */
+	.tx_rs_thresh = 32, /* Use PMD default values */
+};
+```
+

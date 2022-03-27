@@ -1030,11 +1030,78 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   std::vector<std::string> defaultTxDstIp;
   std::vector<UDPRoute> defaultTxRoute;
 
+  //
+  // Get default routes for TXQ
+  //
   if (config->txqPolicy() != Dpdk::Names::OFF) {
     if ((rc = configTxRouting(prefix, env, config, defaultTxSrcPort, defaultTxDstPort, defaultTxSrcMac,
       defaultTxDstMac, defaultTxSrcIp, defaultTxDstIp, defaultTxRoute))!=0) {
         return rc;
     }
+  }
+
+  //
+  // Get TXQ threshold values
+  //
+  if (config->txqPolicy() != Dpdk::Names::OFF) {
+    Dpdk::Names::make(prefix, &variable, "%s", "TXQ_PTHRESH");
+    if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+      return rc;
+    }
+    config->setTxqPrefetchThresh(intValue);
+
+    Dpdk::Names::make(prefix, &variable, "%s", "TXQ_HTHRESH");
+    if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+      return rc;
+    }
+    config->setTxqHostThresh(intValue);
+  
+    Dpdk::Names::make(prefix, &variable, "%s", "TXQ_WTHRESH");
+    if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+      return rc;
+    }
+    config->setTxqWriteBackThresh(intValue);
+
+    Dpdk::Names::make(prefix, &variable, "%s", "TXQ_RS_THRESH");
+    if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+      return rc;
+    }
+    config->setTxqRsThresh(intValue);
+
+    Dpdk::Names::make(prefix, &variable, "%s", "TXQ_FREE_THRESH");
+    if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+      return rc;
+    }
+    config->setTxqFreeThresh(intValue);
+  }
+
+  //
+  // Get RXQ threshold values
+  //
+  if (config->rxqPolicy() != Dpdk::Names::OFF) {
+    Dpdk::Names::make(prefix, &variable, "%s", "RXQ_PTHRESH");
+    if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+      return rc;
+    }
+    config->setRxqPrefetchThresh(intValue);
+
+    Dpdk::Names::make(prefix, &variable, "%s", "RXQ_HTHRESH");
+    if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+      return rc;
+    }
+    config->setRxqHostThresh(intValue);
+
+    Dpdk::Names::make(prefix, &variable, "%s", "RXQ_WTHRESH");
+    if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+      return rc;
+    }
+    config->setRxqWriteBackThresh(intValue);
+
+    Dpdk::Names::make(prefix, &variable, "%s", "RXQ_FREE_THRESH");
+    if ((rc = env->valueAsInt(variable, &intValue))!=0) {
+      return rc;
+    }
+    config->setRxqFreeThresh(intValue);
   }
 
   // =================================================================================
@@ -1153,11 +1220,6 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
     REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Get DPDK device status", rte_strerror(rc), rc);
   }
   REINVENT_UTIL_LOG_DEBUG("DPDK reported link status: " << status << std::endl);
-
-  //
-  // Get device RSS configuration
-  //
-
 
   // =================================================================================
   // Start initialization of NIC, queues
@@ -1292,6 +1354,10 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   //
   rte_eth_rxconf rxCfg = ethDeviceInfo->default_rxconf;
   rxCfg.offloads = deviceConfig->rxmode.offloads;
+  rxCfg.rx_thresh.pthresh = config->rxqPrefetchThresh();
+  rxCfg.rx_thresh.hthresh = config->rxqHostThresh();
+  rxCfg.rx_thresh.wthresh = config->rxqWriteBackThresh();
+  rxCfg.rx_free_thresh = config->rxqFreeThresh();
   REINVENT_UTIL_LOG_DEBUG("RXQ conf: " << rxCfg << std::endl);
   for (int i=0; i<config->rxqThreadCount(); ++i) {
     if ((rc = rte_eth_rx_queue_setup(config->deviceId(), i, config->rxq()[i].ringSize(), config->numaNode(), &rxCfg,
@@ -1305,6 +1371,11 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   //
   rte_eth_txconf txCfg = ethDeviceInfo->default_txconf;
   txCfg.offloads = deviceConfig->txmode.offloads;
+  txCfg.tx_thresh.pthresh = config->txqPrefetchThresh();
+  txCfg.tx_thresh.hthresh = config->txqHostThresh();
+  txCfg.tx_thresh.wthresh = config->txqWriteBackThresh();
+  txCfg.tx_rs_thresh = config->txqRsThresh();
+  txCfg.tx_free_thresh = config->txqFreeThresh();
   REINVENT_UTIL_LOG_DEBUG("TXQ conf: " << txCfg << std::endl);
   for (int i=0; i<config->txqThreadCount(); ++i) {
     if ((rc = rte_eth_tx_queue_setup(config->deviceId(), i, config->txq()[i].ringSize(), config->numaNode(), &txCfg))!=0) {
