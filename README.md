@@ -35,6 +35,8 @@ and [reinvent's reorganization of rdpmc here](https://github.com/rodgarrison/rei
 * [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_packet_design.md)
 
 # Benchmarks
+(RX stats not given - will follow shorty)
+
 An AWS ENA NIC is not a physical HW device in the `c5n.metal` instance tested here. I am unclear therefore what kind of
 performance hit this imposes relative to the normal case where the NIC is a bonafide NIC card plugged into the HW's PCI
 bus.
@@ -64,7 +66,9 @@ until DPDK reports 1. This TXQ-ring stalling will decrease performance from arou
 
 ```
 # this has best performance since TXQ ring never gets full. pps means packets per second.
-# Note stalledTx at end of log line is zero:
+# Note stalledTx at end of log line is zero. **Important** this stat captures packets
+# enqueued not necessarily written onto the wire or received. But it makes clear that TXQ
+# ring size (currently max of 1024) is a primary performance limitation:
 lcoreId: 00, txqIndex: 00: elsapsedNs: 414640, packetsQueued: 1000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 2411730.657920, nsPerPkt: 414.640000, bytesPerSec: 178468068.686089, mbPerSec: 170.200413, mbPerSecPayloadOnly: 73.600179 stalledTx 0
 
 # In all of the following cases the TXQ ring gets full. Note stalledTx at end of log line.
@@ -100,7 +104,7 @@ get these numbers.
 
 In contrast this code uses 1 core to TX and 1 core to RX. The RX side seems to keep with the TX side fine. However, once the
 TXQ gets full, DPDK performance on ENA NICs drops under Cloudfare's 1.1 million packets/sec to as little as 875,000 pkts/sec
-granted on 40% fewer (2 cores total 1 each TX and RX side versus Cloudfare's 5) cores.
+granted on 40% of Cloudfare's 5 cores.
 
 But because an AWS ENA NIC has 32-TX and 32-RX queues (and the queues are essentially share nothing) DPDK will be able
 to scale-out and easily beat what traditional kernel based I/O can do.
