@@ -33,7 +33,7 @@ target_link_options(${TEST_TARGET} PUBLIC --coverage -fprofile-arcs -ftest-cover
 
 target_include_directories(${TEST_TARGET} PUBLIC . ../../src/reinvent)
 
-target_link_libraries(${TEST_TARGET} PUBLIC gtest)
+target_link_libraries(${TEST_TARGET} PUBLIC gtest pthread)
 
 add_test(
     NAME    ${TEST_TARGET}

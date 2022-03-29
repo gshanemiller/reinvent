@@ -11,5 +11,5 @@ echo 2048 > /sys/devices/system/node/node1/hugepages/hugepages-2048kB/nr_hugepag
 mkdir -p /mnt/huge
 mount -t hugetlbfs nodev /mnt/huge
 modprobe vfio-pci
-python3 /home/ec2-user/Dev/dpdk/usertools/dpdk-devbind.py -b vfio-pci 7f:00.0
-python3 /home/ec2-user/Dev/dpdk/usertools/dpdk-devbind.py -s
+python3 ${H}/dpdk/usertools/dpdk-devbind.py -b vfio-pci 7f:00.0
+python3 ${H}/dpdk/usertools/dpdk-devbind.py -s

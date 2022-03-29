@@ -16,26 +16,17 @@ mkdir -p $H
 #
 export D=${HOME}/local
 mkdir -p $D
-export LD_LIBRARY_PATH=${D}/lib64:${LD_LIBRARY_PATH}
-export PKG_CONFIG_PATH=${D}/lib64/pkgconfig:${PKG_CONFIG_PATH}
+export LD_LIBRARY_PATH=${D}/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
+export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig:${PKG_CONFIG_PATH}
 
 #
 # Install some of the prereqs
 #
-sudo /usr/bin/amazon-linux-extras
-sudo yum install make numactl-libs.x86_64 numactl-devel.x86_64 rdma-core-devel.x86_64 git ethtool gcc-c++.x86_64 gtest-devel.x86_64 gtest-.x86_64
+apt update
+apt install make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev
 pip3 install --user meson pyelftools ninja
-
-# sudo yum install cmake too old
-# install cmake without yum
-cd $H
-rm -rf ./cmake-3.22.1-linux-x86_64
-wget https://cmake.org/files/v3.22/cmake-3.22.1-linux-x86_64.sh
-chmod 500 cmake-3.22.1-linux-x86_64.sh
-# this unpacks and installs cmake. Accept license and answer 'Y' to install under cmake-3.22.1-linux-x86_64 dir
-./cmake-3.22.1-linux-x86_64.sh
-rm -f cmake-3.22.1-linux-x86_64.sh
-export PATH=${H}/cmake-3.22.1-linux-x86_64/bin:${PATH}
+# where meson/ninja are installed
+export PATH=/root/.local/bin:${PATH}
 
 #
 # Clone repos 
@@ -45,14 +36,6 @@ rm -rf ./dpdk
 git clone git://dpdk.org/dpdk
 rm -rf ./reinvent
 git clone https://github.com/rodgarrison/reinvent.git
-sudo rm -rf ./amzn-drivers
-git clone https://github.com/amzn/amzn-drivers.git
-
-#
-# Install Amazon driver updates for DPDK
-#
-cd $H/amzn-drivers/userspace/dpdk/enav2-vfio-patch
-sudo ./get-vfio-with-wc.sh
 
 #
 # Build and install DPDK
@@ -68,7 +51,7 @@ ninja -j 10 -C build install
 cd $H/reinvent
 mkdir build
 cd build
-cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON ..
+cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DDPERFORMANCE_TEST=ON ..
 make -j 10
 
 #
@@ -76,6 +59,9 @@ make -j 10
 #
 echo "export H=${H}" >> ${HOME}/.bashrc
 echo "export D=${D}" >> ${HOME}/.bashrc
-echo "export LD_LIBRARY_PATH=${D}/lib64" >> ${HOME}/.bashrc
-echo "export PKG_CONFIG_PATH=${D}/lib64/pkgconfig" >> ${HOME}/.bashrc
-echo "export PATH=${H}/cmake-3.22.1-linux-x86_64/bin:${PATH}" >> ${HOME}/.bashrc
+echo "export PATH=/root/.local/bin:${PATH}" >> ${HOME}/.bashrc
+echo "export LD_LIBRARY_PATH=${D}/lib/x86_64-linux-gnu" >> ${HOME}/.bashrc
+echo "export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig" >> ${HOME}/.bashrc
+echo "alias ll=\"ls -la\"" >> >> ${HOME}/.bashrc
+echo "alias edit=\"vi\"" >> >> ${HOME}/.bashrc
+echo "alias initbld=\"cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DPERFORMANCE_TEST=ON ..\"" >> ${HOME}/.bashrc

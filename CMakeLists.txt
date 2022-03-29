@@ -16,7 +16,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Wall -Wextra -Werror")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-diagnostics-color")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/home/ec2-user/local/include")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/root/local/include")
 
 #
 # DPDK Link Libraries
@@ -38,7 +38,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/home/ec2-user/local/include")
 #
 # Approach 2: (Default) Link selected DPDK libraries only
 #
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -L/home/ec2-user/local/lib64)
+set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -L/root/local/lib/x86_64-linux-gnu)
 set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -Wl,--whole-archive)
 set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_ethdev)
 set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_telemetry)
