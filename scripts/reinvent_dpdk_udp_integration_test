@@ -25,7 +25,7 @@ fi
 #
 # Run as root
 #
-export LD_LIBRARY_PATH=/home/ec2-user/local/lib64:${LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH=/root/local/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
 
 #
 # In this basic UDP test, client transmit only; server receives only
