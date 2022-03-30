@@ -43,15 +43,16 @@ git clone https://github.com/rodgarrison/reinvent.git
 cd $H/dpdk
 meson -Db_lto=true -Dplatform=native -Dprefix=${D} build
 # Note: running too many jobs will exhaust tmp space due to LTO
-ninja -j 10 -C build install
+ninja -j 10 -C build clean install
 
 #
 # Build reinvent
 #
 cd $H/reinvent
+rm -rf build
 mkdir build
 cd build
-cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DDPERFORMANCE_TEST=ON ..
+cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DPERFORMANCE_TEST=ON ..
 make -j 10
 
 #
@@ -62,6 +63,6 @@ echo "export D=${D}" >> ${HOME}/.bashrc
 echo "export PATH=/root/.local/bin:${PATH}" >> ${HOME}/.bashrc
 echo "export LD_LIBRARY_PATH=${D}/lib/x86_64-linux-gnu" >> ${HOME}/.bashrc
 echo "export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig" >> ${HOME}/.bashrc
-echo "alias ll=\"ls -la\"" >> >> ${HOME}/.bashrc
-echo "alias edit=\"vi\"" >> >> ${HOME}/.bashrc
+echo "alias ll=\"ls -la\"" >> ${HOME}/.bashrc
+echo "alias edit=\"vi\"" >> ${HOME}/.bashrc
 echo "alias initbld=\"cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DPERFORMANCE_TEST=ON ..\"" >> ${HOME}/.bashrc
