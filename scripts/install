@@ -23,7 +23,7 @@ export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig:${PKG_CONFIG_PATH}
 # Install some of the prereqs
 #
 apt update
-apt install make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev
+apt install make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlibc zlib1g
 pip3 install --user meson pyelftools ninja
 # where meson/ninja are installed
 export PATH=/root/.local/bin:${PATH}
@@ -43,17 +43,18 @@ git clone https://github.com/rodgarrison/reinvent.git
 cd $H/dpdk
 meson -Db_lto=true -Dplatform=native -Dprefix=${D} build
 # Note: running too many jobs will exhaust tmp space due to LTO
-ninja -j 10 -C build clean install
+ninja -j 16 -C build install
 
 #
 # Build reinvent
 #
 cd $H/reinvent
+git checkout ubuntu
 rm -rf build
 mkdir build
 cd build
 cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DPERFORMANCE_TEST=ON ..
-make -j 10
+make -j 16
 
 #
 # Add variables to ~/.bashrc
