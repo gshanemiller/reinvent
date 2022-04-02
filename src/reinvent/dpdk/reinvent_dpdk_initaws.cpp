@@ -1238,6 +1238,11 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   deviceConfig->txmode.mq_mode    = static_cast<rte_eth_tx_mq_mode>(config->txMqMask());
   deviceConfig->txmode.offloads   = config->txOffloadMask();
 
+  if (ethDeviceInfo->tx_offload_capa & RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE) {
+    deviceConfig->txmode.offloads |= RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE;
+    REINVENT_UTIL_LOG_DEBUG("enabled txmode.offloads RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE option" << std::endl);
+  }
+
   if ((rc = rte_eth_dev_configure(config->deviceId(), config->rxqThreadCount(), config->txqThreadCount(), deviceConfig))!=0) {
     REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK AWS ENA device config", rte_strerror(rc), rc);
   }
