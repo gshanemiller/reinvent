@@ -40,6 +40,7 @@ for vcpu in range(max_cpus + 1):
 
 vcpus = sorted(VCPU.keys())
 
+print('export {0}_VCPU_MAX={1}'.format(PREFIX, len(vcpus)))
 for key in vcpus:
     print('export {0}_VCPU_{1}_SOFT_ENABLED="TRUE"'.format(PREFIX, key))
     print('export {0}_VCPU_{1}_IN_CORE="{2}"'.format(PREFIX, key, VCPU[key]['core']))

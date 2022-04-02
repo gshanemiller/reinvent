@@ -3,6 +3,12 @@
 #
 # run as sudo
 #
-TASK="/home/ec2-user/Dev/dpdk/build/app/dpdk-testpmd"
-ARGS="--proc-type primary --in-memory --log-level 7 --huge-dir /mnt/huge -n 12 -- -i"
+
+echo Typical first time commands:
+echo 1. show port info 0
+echo
+echo
+
+TASK="${H}/dpdk/build/app/dpdk-testpmd"
+ARGS="--proc-type primary --in-memory --log-level 7 -n 12 --allow 01:00.1 -- -i"
 $TASK $ARGS

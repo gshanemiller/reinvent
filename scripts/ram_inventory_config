@@ -8,5 +8,5 @@ fi
 
 # assume all NUMA nodes have same number of banks. Therefore
 # only inspect NUMA node 1
-COUNT=`dmidecode -t memory | grep Bank | grep "NODE 1" | wc -l`
+COUNT=`dmidecode -t memory | grep Bank | grep Node0 | wc -l`
 echo "export ${1}_DRAM_MEMORY_CHANNELS=${COUNT}"
