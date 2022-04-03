@@ -1,22 +1,4 @@
 #!/bin/bash -x
 
-NIC="enp1s0f1"
-
-ifconfig -a
-
-echo "-${NIC}" > /sys/class/net/bond0/bonding/slaves
-ifdown ${NIC}
-
-echo
-echo
-
-cd /sys/devices
-cat ./pci0000:00/0000:00:1b.4/0000:03:00.0/net/eno1/address
-cat ./pci0000:00/0000:00:01.0/0000:01:00.0/net/enp1s0f0/address
-cat ./pci0000:00/0000:00:01.0/0000:01:00.1/net/enp1s0f1/address
-cat ./pci0000:00/0000:00:1b.5/0000:04:00.0/net/eno2/address
-
-ifconfig -a
-
 ${H}/dpdk/usertools/dpdk-hugepages.py -p 1G --setup 1G
 ${H}/dpdk/usertools/dpdk-hugepages.py -s

@@ -1251,7 +1251,20 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   if ((rc = rte_eth_dev_adjust_nb_rx_tx_desc(config->deviceId(), &adjustedRxq, &adjustedTxq))!=0) {
     REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK AWS ENA device config", rte_strerror(rc), rc);
   }
-  
+
+  //
+  // Log the MAC address of device found
+  //
+  union {
+    unsigned long addr;
+    rte_ether_addr dpdkAddr;
+  } macAddress;
+  if (0==rte_eth_macaddr_get(config->deviceId(), &macAddress.dpdkAddr)) {
+    REINVENT_UTIL_LOG_DEBUG_VARGS("DPDK found MAC address 0x%lx\n", macAddress.addr);
+  } else {
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Get DPDK device MAC address", rte_strerror(rc), rc);
+  }
+
   //
   // Allocate memzone
   //
