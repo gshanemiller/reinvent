@@ -7,7 +7,13 @@
 # Where GIT repos will be cloned and built
 #
 export H=${HOME}/Dev
-mkdir -p $H
+mkdir -p ${H}/tmp/isp
+
+#
+# Make a scratch diretories
+#
+mkdir -p ${H}/tmp/iso
+export T=${H}/tmp
 
 #
 # Where the DPDK libraries, headers are installed
@@ -23,10 +29,33 @@ export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig:${PKG_CONFIG_PATH}
 # Install some of the prereqs
 #
 apt update
-apt install make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlibc zlib1g zlib1g-dev
+apt install make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlib* ncat unzip zip gdb gdb-doc infiniband-diags
 pip3 install --user meson pyelftools ninja
 # where meson/ninja are installed
 export PATH=/root/.local/bin:${PATH}
+
+#
+# Get Mellanox deps from non-standard locations
+# The .iso file is based on https://network.nvidia.com/support/firmware/connectx4lxen/
+# after choosing the version/OPN/PSID. The PSID 'MT_2420110034' comes from running one
+# of the Mellanox utils 'ibv_devinfo' which PSID is called 'board_id' which comes from
+# the apt install above. The MFT deb file comes from:
+#     https://network.nvidia.com/products/adapter-software/firmware-tools/
+# it contains mlxconfig
+cd $T
+wget https://www.mellanox.com/downloads/ofed/MLNX_EN-5.5-1.0.3.2/mlnx-en-5.5-1.0.3.2-ubuntu20.04-x86_64.iso
+mount -o ro,loop m*.iso $PWD/iso
+cd iso
+./install
+cd ..
+/etc/init.d/mlnx-en.d restart
+wget https://www.mellanox.com/downloads/MFT/mft-4.18.0-106-x86_64-deb.tgz
+tar zxvf mft-4.18.0-106-x86_64-deb.tgz
+cd mft-4.18.0-106-x86_64-deb
+./install.sh
+mst start
+cd ..
+umount ${T}/iso
 
 #
 # Clone repos 
@@ -67,3 +96,17 @@ echo "export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig" >> ${HOME}/.ba
 echo "alias ll=\"ls -la\"" >> ${HOME}/.bashrc
 echo "alias edit=\"vi\"" >> ${HOME}/.bashrc
 echo "alias initbld=\"cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DPERFORMANCE_TEST=ON ..\"" >> ${HOME}/.bashrc
+
+#
+# Add variables to .vimrc
+#
+echo "set expandtab" > ~/.vimrc
+echo "set tabstop=2" >> ~/.vimrc
+echo "set shiftwidth=2" >> ~/.vimrc
+echo "set bg=dark" >> ~/.vimrc
+echo "set noautoindent" >> ~/.vimrc
+echo "set nosmartindent" >> ~/.vimrc
+echo "set nocindent" >> ~/.vimrc
+echo "set wrap" >> ~/.vimrc
+echo ":syntax off" >> ~/.vimrc
+echo ":set colorcolumn=120" >> ~/.vimrc
