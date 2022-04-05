@@ -7,7 +7,7 @@
 # Where GIT repos will be cloned and built
 #
 export H=${HOME}/Dev
-mkdir -p ${H}/tmp/isp
+mkdir -p ${H}/tmp/iso
 
 #
 # Make a scratch diretories
