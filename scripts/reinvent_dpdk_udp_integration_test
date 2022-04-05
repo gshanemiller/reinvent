@@ -25,7 +25,7 @@ fi
 #
 # Run as root
 #
-export LD_LIBRARY_PATH=/root/local/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH=/root/local/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
 
 #
 # In this basic UDP test, client transmit only; server receives only
@@ -215,7 +215,7 @@ export TEST_SERVER_DPDK_NIC_DEVICE_TXQ_DEFAULT_DST_IP=""
 export TEST_SERVER_DPDK_NIC_DEVICE_TXQ_DEFAULT_SRC_PORT=""
 export TEST_SERVER_DPDK_NIC_DEVICE_TXQ_DEFAULT_DST_PORT=""
 
-export TEST_SERVER_DPDK_INITIALIZATION_PARAMETERS="--proc-type,primary,--in-memory,--log-level,7,--allow,${TEST_SERVER_DPDK_NIC_DEVICE_PCI_DEVICE_ID},class=eth"
+export TEST_SERVER_DPDK_INITIALIZATION_PARAMETERS="--proc-type,primary,--in-memory,--log-level,7,--allow,${TEST_SERVER_DPDK_NIC_DEVICE_PCI_DEVICE_ID}"
 
 export TEST_SERVER_DRAM_MEMORY_CHANNELS=4
 

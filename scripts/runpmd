@@ -10,5 +10,5 @@ echo
 echo
 
 TASK="${H}/dpdk/build/app/dpdk-testpmd"
-ARGS="--proc-type primary --in-memory --log-level 7 -n 12 --allow 01:00.1 -- -i"
+ARGS="--proc-type primary --in-memory --log-level 7 -n 12 --allow 01:00.1,class=eth -- -i"
 $TASK $ARGS
