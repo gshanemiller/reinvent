@@ -305,5 +305,5 @@ then
   $TASK -m $MODE -p $PREFIX $ARGS
 else
   echo $TASK -m $MODE -p $PREFIX $ARGS
-  strace $TASK -m $MODE -p $PREFIX $ARGS 1>log 2>&1
+  $TASK -m $MODE -p $PREFIX $ARGS 1>log 2>&1
 fi
