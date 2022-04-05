@@ -46,9 +46,8 @@ cd $T
 wget https://www.mellanox.com/downloads/ofed/MLNX_EN-5.5-1.0.3.2/mlnx-en-5.5-1.0.3.2-ubuntu20.04-x86_64.iso
 mount -o ro,loop m*.iso $PWD/iso
 cd iso
-./install
+./install --dpdk
 cd ..
-/etc/init.d/mlnx-en.d restart
 wget https://www.mellanox.com/downloads/MFT/mft-4.18.0-106-x86_64-deb.tgz
 tar zxvf mft-4.18.0-106-x86_64-deb.tgz
 cd mft-4.18.0-106-x86_64-deb
