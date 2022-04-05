@@ -90,7 +90,7 @@ make -j 16
 echo "export H=${H}" >> ${HOME}/.bashrc
 echo "export D=${D}" >> ${HOME}/.bashrc
 echo "export PATH=/root/.local/bin:${PATH}" >> ${HOME}/.bashrc
-echo "export LD_LIBRARY_PATH=${D}/lib/x86_64-linux-gnu" >> ${HOME}/.bashrc
+echo "export LD_LIBRARY_PATH=${D}/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu" >> ${HOME}/.bashrc
 echo "export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig" >> ${HOME}/.bashrc
 echo "alias ll=\"ls -la\"" >> ${HOME}/.bashrc
 echo "alias edit=\"vi\"" >> ${HOME}/.bashrc
