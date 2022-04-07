@@ -29,7 +29,7 @@ export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig:${PKG_CONFIG_PATH}
 # Install some of the prereqs
 #
 apt update
-apt install make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlib* ncat unzip zip gdb gdb-doc infiniband-diags
+apt install make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlib* ncat unzip zip gdb gdb-doc infiniband-diags pkgconf*
 pip3 install --user meson pyelftools ninja
 # where meson/ninja are installed
 export PATH=/root/.local/bin:${PATH}
@@ -87,8 +87,8 @@ make -j 16
 #
 # Add variables to ~/.bashrc
 #
-echo "export H=${H}" >> ${HOME}/.bashrc
-echo "export D=${D}" >> ${HOME}/.bashrc
+echo "export H=${HOME}/Dev" >> ${HOME}/.bashrc
+echo "export D=${HOME}/local" >> ${HOME}/.bashrc
 echo "export PATH=/root/.local/bin:${PATH}" >> ${HOME}/.bashrc
 echo "export LD_LIBRARY_PATH=${D}/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu" >> ${HOME}/.bashrc
 echo "export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig" >> ${HOME}/.bashrc
