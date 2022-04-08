@@ -209,10 +209,12 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, u
   int32_t         txqId(0);
   uint32_t        count(0);
   uint32_t        stalledTx(0);
+  uint32_t        ip_cksum;
+  uint16_t       *ptr16;
   srcMac = {0};
 
   // Demonstrate above vars on cache boundary <= 1 cache line
-  unsigned long diff = reinterpret_cast<unsigned long>(&stalledTx)-reinterpret_cast<unsigned long>(&srcMac);
+  unsigned long diff = reinterpret_cast<unsigned long>(&ptr16)-reinterpret_cast<unsigned long>(&srcMac);
   printf("address of srcMac: %p, diff in addresses: %lu, cache line size %u\n", static_cast<void*>(&srcMac),
     diff, RTE_CACHE_LINE_SIZE);
 
@@ -342,16 +344,32 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, u
     payload->sequence = ++sequence;
 
     //
+    // Compute IP checksum
+    //
+    #pragma GCC diagnostic push                                                                                             
+    #pragma GCC diagnostic ignored "-Waddress-of-packed-member"                                                                             
+    ptr16 = reinterpret_cast<uint16_t*>(ip4Hdr);
+    #pragma GCC diagnostic pop 
+    ip_cksum = 0;
+    ip_cksum += ptr16[0]; ip_cksum += ptr16[1];
+    ip_cksum += ptr16[2]; ip_cksum += ptr16[3];
+    ip_cksum += ptr16[4];
+    ip_cksum += ptr16[6]; ip_cksum += ptr16[7];
+    ip_cksum += ptr16[8]; ip_cksum += ptr16[9];
+	  // Reduce 32 bit checksum to 16 bits and complement it.
+    ip_cksum = ((ip_cksum & 0xFFFF0000) >> 16) + (ip_cksum & 0x0000FFFF);
+    if (ip_cksum > 65535) ip_cksum -= 65535;
+    ip_cksum = (~ip_cksum) & 0x0000FFFF;
+    if (ip_cksum == 0) ip_cksum = 0xFFFF;
+    ip4Hdr->hdr_checksum = static_cast<uint16_t>(ip_cksum);
+
+    //
     // Finalize mbuf in DPDK
     //
     mbuf->nb_segs = 1;
     mbuf->pkt_len = packetSize;
     mbuf->data_len = packetSize;
-    mbuf->ol_flags = (RTE_MBUF_F_TX_IPV4|RTE_MBUF_F_TX_IP_CKSUM);
-    mbuf->l2_len = sizeof(rte_ether_hdr);
-    mbuf->l3_len = sizeof(rte_ipv4_hdr);
-    mbuf->l4_len = sizeof(rte_udp_hdr);
-    mbuf->packet_type = (RTE_PTYPE_L2_ETHER|RTE_PTYPE_L3_IPV4|RTE_PTYPE_L4_UDP);
+    mbuf->ol_flags = 0;
 
     if (unlikely(0==rte_eth_tx_burst(deviceId, txqId, &mbuf, 1))) {
       do {
