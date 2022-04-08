@@ -394,6 +394,7 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
   printf("lcoreId %02d rxqIndex %02d listening for packets\n", id, rxqIndex);
   
   unsigned count(0);
+  unsigned stalledRx(0);
   std::vector<rte_mbuf*> mbuf(RX_BURST_CAPACITY);
 
   struct timespec start;
@@ -405,6 +406,7 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
     //
     uint16_t rxCount = rte_eth_rx_burst(deviceId, rxqIndex, mbuf.data(), RX_BURST_CAPACITY);
     if (likely(rxCount==0)) {
+      ++stalledRx;
       continue;
     }
 
@@ -442,6 +444,8 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
       clock_gettime(CLOCK_REALTIME, &start);
     }
   }
+
+  printf("stalledRx: %u\n", stalledRx);
 
   return 0;
 }
