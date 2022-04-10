@@ -38,7 +38,7 @@ export PATH=/root/.local/bin:${PATH}
 #
 # Get Mellanox deps from non-standard locations
 # [not used] The firmware comes from: https://network.nvidia.com/support/firmware/connectx4lxen/
-# [not used] MFT toolset  comes from: https://network.nvidia.com/products/adapter-software/firmware-tools/
+# [used]     MFT toolset  comes from: https://network.nvidia.com/products/adapter-software/firmware-tools/
 # [used]     OFED dwnload comes from: https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/
 # OFED comes as an ISO file and .tar file. However, the ISO file does not contain 'mlnxofedinstall'
 # which is mentioned all over the web. Second, the .tgz not wgettable because the page redirects to a 
@@ -51,13 +51,13 @@ cd ${H}/tmp
 tar zxf /tmp/MLNX*
 cd MLNX*
 ./mlnxofedinstall --without-fw-update --dpdk
-
-# wget https://www.mellanox.com/downloads/MFT/mft-4.18.0-106-x86_64-deb.tgz
-# tar zxvf mft-4.18.0-106-x86_64-deb.tgz
-# cd mft-4.18.0-106-x86_64-deb
-# ./install.sh
-
+cd ..
+wget https://www.mellanox.com/downloads/MFT/mft-4.18.0-106-x86_64-deb.tgz
+tar zxvf mft-4.18.0-106-x86_64-deb.tgz
+cd mft-4.18.0-106-x86_64-deb
+./install.sh --oem
 mst start
+mst status -v
 
 #
 # Clone repos 
