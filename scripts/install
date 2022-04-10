@@ -7,7 +7,7 @@
 # Where GIT repos will be cloned and built
 #
 export H=${HOME}/Dev
-mkdir -p ${H}/tmp/iso
+mkdir -p ${H}/tmp
 
 #
 # Make a scratch diretories
@@ -37,25 +37,27 @@ export PATH=/root/.local/bin:${PATH}
 
 #
 # Get Mellanox deps from non-standard locations
-# The .iso file is based on https://network.nvidia.com/support/firmware/connectx4lxen/
-# after choosing the version/OPN/PSID. The PSID 'MT_2420110034' comes from running one
-# of the Mellanox utils 'ibv_devinfo' which PSID is called 'board_id' which comes from
-# the apt install above. The MFT deb file comes from:
-#     https://network.nvidia.com/products/adapter-software/firmware-tools/
-# it contains mlxconfig
-cd $T
-wget https://www.mellanox.com/downloads/ofed/MLNX_EN-5.5-1.0.3.2/mlnx-en-5.5-1.0.3.2-ubuntu20.04-x86_64.iso
-mount -o ro,loop m*.iso $PWD/iso
-cd iso
-./install --dpdk --without-fw-update
-cd ..
+# [not used] The firmware comes from: https://network.nvidia.com/support/firmware/connectx4lxen/
+# [not used] MFT toolset  comes from: https://network.nvidia.com/products/adapter-software/firmware-tools/
+# [used]     OFED dwnload comes from: https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/
+# OFED comes as an ISO file and .tar file. However, the ISO file does not contain 'mlnxofedinstall'
+# which is mentioned all over the web. Second, the .tgz not wgettable because the page redirects to a 
+# license acceptance page where the URL for the download is not clear. Therefore it'll have to scp'd into
+# this machine by hand:
+#
+echo "example command: scp -i ~/Documents/Pem/i4 MLNX_OFED_LINUX-5.5-1.0.3.2-ubuntu20.04-x86_64.tgz root@<ip-address>:/tmp"
+read -p "scp .tgz file in by hand to /tmp then press ENTER: "
+cd ${H}/tmp
+tar zxf /tmp/MLNX*
+cd MLNX*
+./mlnxofedinstall --without-fw-update --dpdk
+
 # wget https://www.mellanox.com/downloads/MFT/mft-4.18.0-106-x86_64-deb.tgz
 # tar zxvf mft-4.18.0-106-x86_64-deb.tgz
 # cd mft-4.18.0-106-x86_64-deb
 # ./install.sh
+
 mst start
-cd ..
-umount ${T}/iso
 
 #
 # Clone repos 
