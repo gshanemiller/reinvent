@@ -93,6 +93,11 @@ vi /etc/default/grub
 grub-mkconfig > /boot/grub2/grub.cfg
 
 #
+# fix interfaces
+#
+vi /etc/network/interfaces
+
+#
 # Add variables to ~/.bashrc
 #
 echo "export H=${HOME}/Dev" >> ${HOME}/.bashrc
