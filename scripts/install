@@ -31,7 +31,7 @@ export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig:${PKG_CONFIG_PATH}
 apt update
 apt install --yes make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlib* ncat unzip zip gdb gdb-doc infiniband-diags pkgconf*
 pip3 install --user meson pyelftools ninja
-apt update --yes
+apt upgrade --yes
 # where meson/ninja are installed
 export PATH=/root/.local/bin:${PATH}
 
