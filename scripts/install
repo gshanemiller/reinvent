@@ -69,6 +69,7 @@ git clone https://github.com/rodgarrison/reinvent.git
 # Build and install DPDK
 #
 cd $H/dpdk
+vi app/meson.build
 meson -Db_lto=true -Dplatform=native -Dprefix=${D} build
 # Note: running too many jobs will exhaust tmp space due to LTO
 ninja -j 16 -C build install
