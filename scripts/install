@@ -86,6 +86,12 @@ cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DPERFORMANCE_TEST=ON ..
 make -j 16
 
 #
+# Enable IOMMU passthrough
+#
+vi /etc/default/grub
+grub-mkconfig > /boot/grub2/grub.cfg
+
+#
 # Add variables to ~/.bashrc
 #
 echo "export H=${HOME}/Dev" >> ${HOME}/.bashrc
