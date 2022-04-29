@@ -125,7 +125,7 @@ array to include only `test-pmd` then write the changes and quit with `:wq`. Onc
 DPDK.
 23. After about 10 minutes the script will prompt `you need to enable IOMMU`. Press ENTER to continue and run VI on the grub
 boot file.
-24. In the editor change the `GRUB_CMDLINE_LINUX` line adding a space plus `iommu=1 intel_iommu=on' so that it reads
+24. In the editor change the `GRUB_CMDLINE_LINUX` line adding a space plus `iommu=1 intel_iommu=on'` so that it reads
 `export GRUB_CMDLINE_LINUX='console=tty0 console=ttyS1,115200n8 iommu=1 intel_iommu=on'`
 25. Save and exit by escaping and entering `:wq`
 26. Installation part 1 is done. Press ENTER to reboot. The Mellanox kernel driver set needs to initialize and run.
@@ -133,7 +133,7 @@ boot file.
 # Procedure Part 2 of 3
 By default Equinix configures both Mellanox cards into a single bonded device. The purpose of this procedure is to break
 the bond leaving one Mellanox NIC for DPDK. This will require about 10 mins per machine. Your public IP address will
-not change and, other than redundancy, there is no other effect including price.
+not change and, other than reduced redundancy, there is no other effect including price.
 
 1. In your browser go to: `https://console.equinix.com`.
 2. From your machine list, locate the action column right most.
@@ -144,7 +144,7 @@ not change and, other than redundancy, there is no other effect including price.
 7. Click on `Convert to Hybrid Network` blue button
 8. Repeat steps 1-7 for your other machines
 
-The next step is to connect all of the machines to the same VLAN:
+The next step is to connect all of the machines to the same VLAN. In Equinix a VLAN is private non-public virtual network.
 
 9. In your browser click on the `IPs & Networks` drop down middle top of page then choose `Layer 2`
 10. Click on `Add VLAN` blue button top right
@@ -243,8 +243,92 @@ TELEMETRY: No legacy callbacks, legacy socket not created
 lcoreId 00 rxqIndex 00 listening for packets
 ```
 
+Cores reads 16 not 8 because CPU hyper threads are enabled. In fact, this is often disabled for production work loads.
+
 13. On your client machine run command: `./reinvent_dpdk_udp_integration_test client perf`
 14. The client will exit to the shell when done; to terminate the server press CTRL-C at any time.
 
+# Brief Discussion of benchmark output
 
+For every 100,000 packets recceived the server will print the current receive rate two ways: pps (packets per second)
+and the inverse (nanoseconds per packet). The client will send the serveral bursts of packets UDP. Each packet is 74 bytes
+with 32 bytes of payload. The difference is IP headers. It'll also display transmission rates for example:
 
+```
+lcoreId: 00, txqIndex: 00: elsapsedNs: 368201, packetsQueued: 2000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 5431815.774536, nsPerPkt: 184.100500, bytesPerSec: 401954367.315678, mbPerSec: 383.333556, mbPerSecPayloadOnly: 165.765862 stalledTx 0
+```
+
+Not only is this performance far superior to kernel based I/O (see the aws setup document in this directory), it's better
+than AWS virtual NICs running the exact same code which usually requires at least 500ns/packet. AWS ENA NICs have other
+smaller problems too.
+
+The client sends all packets on one TXQ and all packets are received on one RX queue. RSS is disabled. Except when the PCI
+bus or DRAM bandwidth is saturated, these numbers will basically scale linearly as more and more Mellanox queues are used.
+The client uses one thread pinned to one core, as does the server in this demonstration. This Mellanox NIC supports up to
+1024 RXQ and 1024 TXQs, which are located in the NIC itself. You can confirm this as follows:
+
+```
+$ cd /root/Dev/reinvent/scripts
+$ ./runpmd # run DPDK's helper program
+testpmd> show port info 0
+********************* Infos for port 0  *********************
+MAC address: 0C:42:A1:97:FA:A5
+Device name: 01:00.1
+Driver name: mlx5_pci
+Firmware-version: 14.27.1016
+Devargs: class=eth
+Connect to socket: 0
+memory allocation on the socket: 0
+Link status: up
+Link speed: 10 Gbps
+Link duplex: full-duplex
+Autoneg status: On
+MTU: 1500
+Promiscuous mode: enabled
+Allmulticast mode: disabled
+Maximum number of MAC addresses: 128
+Maximum number of MAC addresses of hash filtering: 0
+VLAN offload: 
+  strip off, filter off, extend off, qinq strip off
+Hash key size in bytes: 40
+Redirection table size: 1
+Supported RSS offload flow types:
+  ipv4
+  ipv4-frag
+  ipv4-tcp
+  ipv4-udp
+  ipv4-other
+  ipv6
+  ipv6-frag
+  ipv6-tcp
+  ipv6-udp
+  ipv6-other
+  ipv6-ex
+  ipv6-tcp-ex
+  ipv6-udp-ex
+  user defined 60
+  user defined 61
+  user defined 62
+  user defined 63
+Minimum size of RX buffer: 32
+Maximum configurable length of RX packet: 65536
+Maximum configurable size of LRO aggregated packet: 65280
+Current number of RX queues: 1
+Max possible RX queues: 1024
+Max possible number of RXDs per queue: 65535
+Min possible number of RXDs per queue: 0
+RXDs number alignment: 1
+Current number of TX queues: 1
+Max possible TX queues: 1024
+Max possible number of TXDs per queue: 65535
+Min possible number of TXDs per queue: 0
+TXDs number alignment: 1
+Max segment number per packet: 40
+Max segment number per MTU/TSO: 40
+Device capabilities: 0x10( FLOW_SHARED_OBJECT_KEEP )
+Switch name: 01:00.1
+Switch domain Id: 0
+Switch Port Id: 65535
+```
+
+Enter CTRL-D to exit.
