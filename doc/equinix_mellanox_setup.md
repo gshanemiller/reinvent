@@ -1,7 +1,7 @@
 # Equinix Bare Metal https://console.equinix.com/
 
 For general DPDK or NIC I/O development, Equinix provides arguably better hardware
-and half the price. A c3.small.x86 server,
+and half the price compared to AWS. A c3.small.x86 server,
 
 * 1x Xeon E-2278G 3.40Ghz 8-cores
 * 2x 480Gb SSD
