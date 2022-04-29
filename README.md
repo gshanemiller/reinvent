@@ -24,6 +24,7 @@ environment variables. The library then works out RXQ/TXQ assignments from there
 * Reinvent AWSConfig is streamable and is output in JSON format. Pipe into `python3 -m json.tool` to pretty print
 * Reinvent provides a uniform structure to report errors: no ad hoc logging/assertions
 * Tested on AWS `c5n` bare metal instances running AWS ENA NICs
+* Tested on Equinix `c3.small.x86` bare metal boxes running Mellanox NICs
 
 # Experimental Support
 * Micro benchmarking using Intel PMU programmable counters
@@ -31,10 +32,11 @@ environment variables. The library then works out RXQ/TXQ assignments from there
 and [reinvent's reorganization of rdpmc here](https://github.com/rodgarrison/reinvent/blob/dev/src/reinvent/perf/reinvent_perf_rdpmc.h)
 
 # Getting Started
-* [Read setup instructions](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_setup.md)
-* [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_packet_design.md)
+* [Read AWS setup instructions](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_setup.md)
+* [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_packet_design.md). This document applies pretty much to all DPDPDK development regardless of NIC.
+* [Read Equinix setup instructions](https://github.com/rodgarrison/reinvent/blob/ubuntu/doc/equinix_mellanox_setup.md)
 
-# Benchmarks
+# AWS Benchmarks
 (RX stats not given - will follow shorty)
 
 An AWS ENA NIC is not a physical HW device in the `c5n.metal` instance tested here. I am unclear therefore what kind of
@@ -113,3 +115,7 @@ to scale-out and easily beat what traditional kernel based I/O can do.
 this benchkark code is not able to determine when all TXQ packets were flushed before recording the stop time. As a result
 the reported elapsed-time and packet rates will be faster that the real value since it does not account for the few packets
 in the TXQ ring not actually written to the wire.
+
+# Equinix Benchmarks
+[Please see](https://github.com/rodgarrison/reinvent/blob/ubuntu/doc/equinix_mellanox_setup.md) last section. Mellanox PCI
+cards are superior to AWS NICs without any of the issues discussed above.
