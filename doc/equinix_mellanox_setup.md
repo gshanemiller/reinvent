@@ -16,7 +16,7 @@ CPUs are larger and more powerful. It has more memory. But for development purpo
 I find Equinix a better bang for the buck.
 
 The purpose of this article to explain how to set up a pair of c3.small.x86 servers
-for reinvent development and testing. In particular, this procedure make one of the
+for reinvent development and testing. In particular, this procedure makes one of the
 available Mellanox NICs available for DPDK use.
 
 # Expected Outcome
