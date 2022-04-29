@@ -250,8 +250,8 @@ Cores reads 16 not 8 because CPU hyper threads are enabled. In fact, this is oft
 
 # Brief Discussion of benchmark output
 
-For every 100,000 packets recceived the server will print the current receive rate two ways: pps (packets per second)
-and the inverse (nanoseconds per packet). The client will send the serveral bursts of packets UDP. Each packet is 74 bytes
+For every 100,000 packets received the server will print the current receive rate two ways: pps (packets per second)
+and the inverse (nanoseconds per packet). The client will send serveral bursts of packets UDP. Each packet is 74 bytes
 with 32 bytes of payload. The difference is IP headers. It'll also display transmission rates for example:
 
 ```
@@ -259,7 +259,7 @@ lcoreId: 00, txqIndex: 00: elsapsedNs: 368201, packetsQueued: 2000, packetSizeBy
 ```
 
 Not only is this performance far superior to kernel based I/O (see the aws setup document in this directory), it's better
-than AWS virtual NICs running the exact same code which usually requires at least 500ns/packet. AWS ENA NICs have other
+than AWS virtual NICs running the exact same code which usually requires at least 550ns/packet. AWS ENA NICs have other
 smaller problems too.
 
 The client sends all packets on one TXQ and all packets are received on one RX queue. RSS is disabled. Except when the PCI
