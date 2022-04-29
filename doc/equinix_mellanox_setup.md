@@ -248,7 +248,7 @@ Cores reads 16 not 8 because CPU hyper threads are enabled. In fact, this is oft
 13. On your client machine run command: `./reinvent_dpdk_udp_integration_test client perf`
 14. The client will exit to the shell when done; to terminate the server press CTRL-C at any time.
 
-# Brief Discussion of benchmark output
+# Brief Discussion of Benchmark Output
 
 For every 100,000 packets received the server will print the current receive rate two ways: pps (packets per second)
 and the inverse (nanoseconds per packet). The client will send serveral bursts of packets UDP. Each packet is 74 bytes
