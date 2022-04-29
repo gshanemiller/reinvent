@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash
 
 # This script is indempotent. You should be able to run it
 # multiple times and get to the same end state
@@ -45,7 +45,13 @@ export PATH=/root/.local/bin:${PATH}
 # license acceptance page where the URL for the download is not clear. Therefore it'll have to scp'd into
 # this machine by hand:
 #
-echo "example command: scp -i ~/Documents/Pem/i4 MLNX_OFED_LINUX-5.5-1.0.3.2-ubuntu20.04-x86_64.tgz root@<ip-address>:/tmp"
+echo
+echo "Mellanox/Nvida MLNX_OFED_LINUX driver set cannot be obtained by curl/wget. You'll need to obtain it by hand"
+echo "at https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/ after accepting the EUA. Then scp it"
+echo "into this machine into the /tmp directory:"
+echo
+echo "example command: scp -i <ssh-key/pem-file> MLNX_OFED_LINUX-5.5-1.0.3.2-ubuntu20.04-x86_64.tgz root@<ip-address>:/tmp"
+echo
 read -p "scp .tgz file in by hand to /tmp then press ENTER: "
 cd ${H}/tmp
 tar zxf /tmp/MLNX*
@@ -91,13 +97,13 @@ make -j 16
 #
 # Enable IOMMU passthrough
 #
+echo
+echo "you need to enable IOMMU. To do so add a space then 'iommu=1 intel_iommu=on' to the end of the GRUB_CMDLINE_LINUX"
+echo "variable in /etc/default/grub."
+echo
+read -p "Press ENTER to edit /etc/default/grub: "
 vi /etc/default/grub
 grub-mkconfig > /boot/grub2/grub.cfg
-
-#
-# fix interfaces
-#
-vi /etc/network/interfaces
 
 #
 # Add variables to ~/.bashrc
@@ -124,3 +130,10 @@ echo "set nocindent" >> ~/.vimrc
 echo "set wrap" >> ~/.vimrc
 echo ":syntax off" >> ~/.vimrc
 echo ":set colorcolumn=120" >> ~/.vimrc
+
+echo
+echo "Installation is done except for VLAN/network setup."
+
+echo
+read -p "You need to reboot your machine. Press ENTER to reboot or CTRL-C to exit: "
+reboot
