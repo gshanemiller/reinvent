@@ -33,7 +33,7 @@ and [reinvent's reorganization of rdpmc here](https://github.com/rodgarrison/rei
 
 # Getting Started
 * [Read AWS setup instructions](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_setup.md)
-* [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_packet_design.md). This document applies pretty much to all DPDPDK development regardless of NIC.
+* [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_packet_design.md). This document applies pretty much to all DPDK development regardless of NIC.
 * [Read Equinix setup instructions](https://github.com/rodgarrison/reinvent/blob/ubuntu/doc/equinix_mellanox_setup.md)
 
 # AWS Benchmarks
