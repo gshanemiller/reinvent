@@ -47,22 +47,22 @@ uploading one file.
 except for the machine time you reserve. Charges are per hour, and you can return
 the machines to Equinix at will. You'll also need to setup your SSH keys. All this
 is a one-time effort.
-2. [Go to Equinix console page.](https://console.equinix.com/). Click on the new
+2. [Go to Equinix console page](https://console.equinix.com/). Click on the new
 server button. Then click on the on-demand box.
-3. In the next page choose you're preferred data center. Locations in the US,
+3. In the next page choose your preferred data center. Locations are in the US,
 Europe, Hong Kong, and others.
-4. Click on the c3.small.x76 box selecting server size.
+4. Click on the c3.small.x86 box selecting server size.
 5. Choose Ubuntu 20.04 LTS O/S
-6. Select or provision two machines. Name then, for example, 'client, server'.
+6. Select or provision two machines. Name them, for example, 'client, server'.
 7. Click on 'Deploy Now'. All machines will be equipped with all ssh keys you
 provided in step 1.
 8. Your screen will refresh after a momemt and display a two lines with your
 servers and their public IP addresses. On the far right under the actions column
-note a clock reading 3-o'clock. Wait for it to disappear meaning your boxes are
+note a clock icon reading 3-o'clock. Wait for it to disappear meaning your boxes are
 ready.
 9. Login to one of the machines with `ssh -i <ssh-key-pem-file> root@<public-ip-address>`
 using the public IP address from step 8. Make sure your machine has the four NIC
-cards mention earlier. Very rarely you'll get a machine which does not:
+cards mentioned above. Very rarely you'll get a machine which does not:
 
 ```
 $ lspci | grep Ether
@@ -121,13 +121,13 @@ apps = [
 ```
 
 22. Inside the VI editor on `app/meson.build` either immediately quit and exit with vi command `:wq` or change the `apps`
-array to include only `test-pmd' then write the changes and quit with `:wq`. Once down the script will build and install
+array to include only `test-pmd` then write the changes and quit with `:wq`. Once done the script will build and install
 DPDK.
-23. After about 10 minutes the script will prompt `you need to enable IOMMU'. Press ENTER to continue run VI on the grub
+23. After about 10 minutes the script will prompt `you need to enable IOMMU`. Press ENTER to continue and run VI on the grub
 boot file.
 24. In the editor change the `GRUB_CMDLINE_LINUX` line adding a space plus `iommu=1 intel_iommu=on' so that it reads
 `export GRUB_CMDLINE_LINUX='console=tty0 console=ttyS1,115200n8 iommu=1 intel_iommu=on'`
-25. Save and exchanges by escaping and entering `:wq`
+25. Save and exit by escaping and entering `:wq`
 26. Installation part 1 is done. Press ENTER to reboot. The Mellanox kernel driver set needs to initialize and run.
 
 # Procedure Part 2 of 3
@@ -195,7 +195,7 @@ This will require about 10 minutes.
 There are two small bits of configuration left. You'll need to plug-in the ethenet addresses and IP addresses of the
 DPDK Mellanox cards. And you'll need to run a premade script to setup huge-pages. 
 
-Pick two if your machines. Call one `client` and call the other one `server`.
+Pick two of your machines. Call one `client` and call the other one `server`.
 
 1. Login to your client machine and run `ifconfig enp1s0f1`. This should record the 192.168.x.x address you configured
 above. For example,
@@ -215,7 +215,7 @@ enp1s0f1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
 
 2. Login to your server machine and run `ifconfig enp1s0f1`.
 3. In your client machine run command: `cd /root/Dev/reinvent/scripts`
-4. In your clinet machine run command: `vi reinvent_dpdk_udp_integration_test`
+4. In your client machine run command: `vi reinvent_dpdk_udp_integration_test`
 5. Near line 83 change `TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_SRC_MAC` to hold the ethernet address from your client's
 enp1s0f1 device ex. `0c:42:a1:97:fa:a5`.
 6. Near line 84 change `TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_DST_MAC` to hold the ethernet address from your server's
@@ -241,6 +241,7 @@ EAL: Probe PCI driver: mlx5_pci (15b3:1015) device: 0000:01:00.1 (socket 0)
 mlx5_net: No available register for sampler.
 TELEMETRY: No legacy callbacks, legacy socket not created
 lcoreId 00 rxqIndex 00 listening for packets
+```
 
 13. On your client machine run command: `./reinvent_dpdk_udp_integration_test client perf`
 14. The client will exit to the shell when done; to terminate the server press CTRL-C at any time.
