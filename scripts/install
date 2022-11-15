@@ -6,6 +6,9 @@
 #
 # Where GIT repos will be cloned and built
 #
+rm -rf ${HOME}/Dev 1>/dev/null 2>&1
+rm -rf /tmp/MLNX*logs
+
 export H=${HOME}/Dev
 mkdir -p ${H}/tmp
 
@@ -45,22 +48,27 @@ export PATH=/root/.local/bin:${PATH}
 # license acceptance page where the URL for the download is not clear. Therefore it'll have to scp'd into
 # this machine by hand:
 #
+
+# current as of Nov 2022
+MLNX="MLNX_OFED_LINUX-5.8-1.0.1.1-ubuntu22.04-x86_64.tgz"
+MFT="mft-4.22.0-96-x86_64-deb.tgz"
+
 echo
 echo "Mellanox/Nvida MLNX_OFED_LINUX driver set cannot be obtained by curl/wget. You'll need to obtain it by hand"
 echo "at https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/ after accepting the EUA. Then scp it"
 echo "into this machine into the /tmp directory:"
 echo
-echo "example command: scp -i <ssh-key/pem-file> MLNX_OFED_LINUX-5.5-1.0.3.2-ubuntu20.04-x86_64.tgz root@<ip-address>:/tmp"
+echo "example command: scp -i <ssh-key/pem-file> ${MLNX} root@<ip-address>:/tmp"
 echo
 read -p "scp .tgz file in by hand to /tmp then press ENTER: "
 cd ${H}/tmp
-tar zxf /tmp/MLNX*
+tar zxf /tmp/MLNX*tgz
 cd MLNX*
 ./mlnxofedinstall --without-fw-update --dpdk
 cd ..
-wget https://www.mellanox.com/downloads/MFT/mft-4.18.0-106-x86_64-deb.tgz
-tar zxvf mft-4.18.0-106-x86_64-deb.tgz
-cd mft-4.18.0-106-x86_64-deb
+wget https://www.mellanox.com/downloads/MFT/${MFT}
+tar zxvf ${MFT}
+cd ${MFT%%.tgz}
 ./install.sh --oem
 mst start
 mst status -v
