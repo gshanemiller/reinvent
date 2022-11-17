@@ -1,4 +1,11 @@
 #!/bin/bash -x
 
-${H}/dpdk/usertools/dpdk-hugepages.py -p 1G --setup 1G
-${H}/dpdk/usertools/dpdk-hugepages.py -s
+mst start
+mst status -v
+ip link set enp1s0f1 down
+
+$H/dpdk/usertools/dpdk-hugepages.py --setup 2G --pagesize 1GB
+echo 2 > /sys/devices/system/node/node0/hugepages/hugepages-1048576kB/nr_hugepages
+$H/dpdk/usertools/dpdk-hugepages.py --show
+
+modprobe -a ib_uverbs mlx5_core mlx5_ib
