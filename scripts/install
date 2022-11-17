@@ -159,7 +159,7 @@ cd ${H}/tmp
 cp /tmp/MLNX*tgz ~
 tar zxf /tmp/MLNX*tgz
 cd MLNX*
-./mlnxofedinstall --without-fw-update --dpdk
+./mlnxofedinstall --dpdk
 cd ..
 # get MFT tool set
 wget https://www.mellanox.com/downloads/MFT/${MFT}
@@ -170,6 +170,9 @@ cd ${MFT%%.tgz}
 ./install.sh --oem
 mst start
 mst status -v
+mlxconfig -y -d /dev/mst/mt4117_pciconf0.1 s CQE_COMPRESSION=1
+flint --qq -d /dev/mst/mt4117_pciconf0   query
+flint --qq -d /dev/mst/mt4117_pciconf0.1 query
 
 #
 # Clone repos 

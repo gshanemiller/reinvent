@@ -4,12 +4,13 @@ mst start
 mst status -v
 ip link set enp1s0f1 up
 
-$H/dpdk/usertools/dpdk-hugepages.py --setup 2G --pagesize 1GB
+$H/dpdk/usertools/dpdk-hugepages.py --clear
+$H/dpdk/usertools/dpdk-hugepages.py --setup 2G --pagesize 1G
 $H/dpdk/usertools/dpdk-hugepages.py --show
 
 # per https://doc.dpdk.org/guides/nics/mlx5.html
 ethtool -A enp1s0f1 rx off tx off
 # optional
-ethtool -s enp1s0f1 speed 25000 duplex full autoneg off
+ethtool -s enp1s0f1 speed 25000 duplex full autoneg on
 
 modprobe -a ib_uverbs mlx5_core mlx5_ib
