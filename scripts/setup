@@ -10,7 +10,18 @@ $H/dpdk/usertools/dpdk-hugepages.py --show
 
 # per https://doc.dpdk.org/guides/nics/mlx5.html
 ethtool -A enp1s0f1 rx off tx off
+
+# Nov 2022: this does not work b/c Equinix does have 25Gb cables
 # optional
-ethtool -s enp1s0f1 speed 25000 duplex full autoneg on
+# ethtool -s enp1s0f1 speed 25000 autoneg off
 
 modprobe -a ib_uverbs mlx5_core mlx5_ib
+
+echo mt4117_pciconf0 Firmware:
+echo --------------------------------------------------------------
+flint --qq -d /dev/mst/mt4117_pciconf0   query
+echo
+echo
+echo mt4117_pciconf0.1 Firmware:
+echo --------------------------------------------------------------
+flint --qq -d /dev/mst/mt4117_pciconf0.1   query
