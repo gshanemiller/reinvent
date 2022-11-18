@@ -41,19 +41,26 @@ export PATH=/root/.local/bin:${PATH}
 #
 # Get Mellanox deps:
 #
-# [optional] The firmware comes from: https://network.nvidia.com/support/firmware/connectx4lxen/
 # [used]     MFT toolset  comes from: https://network.nvidia.com/products/adapter-software/firmware-tools/
 # [used]     OFED dwnload comes from: https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/
+# [unused]   The firmware comes from: https://network.nvidia.com/support/firmware/connectx4lxen/
 # 
 # OFED comes as an ISO file and .tar file. However, the ISO file does not contain 'mlnxofedinstall'
 # which is mentioned all over the web. Second, the .tgz not wgettable because the page redirects to a 
 # license acceptance page where the URL for the download is not given. Therefore it'll have to scp'd into
 # this machine by hand. Wgetting this file directly is not possible.
 #
-# On firmware: this procedure does NOT change the firmware in the MLNX PCI NICs. To assess what's installed and
-# what one can update to do the following AFTER this script is done, and the machine is rebooted. The steps have not
-# been tested as of this writing. For example, it's not clear if updating the firmware closes the connection to
-# the box.
+# On firmware: this procedure DOES change the firmware as a side effect of installing OFED. This way a separate
+# FW update step is not needed. However, should one wish to do FW update seperately or later do the following:
+#
+# (*) install OFED without firmware then self update: ./mlnxofedinstall --without-fw-update --dpdk
+# (*) install OFED with    firmware then self update: ./mlnxofedinstall --dpdk
+#
+# To self update FW:
+#
+# To assess what's installed and what one can update to do the following AFTER this script is done, and the machine
+# is rebooted. Updating the FW seems to work fine. The new FW will not show as running until after the machine is
+# rebooted following update as usual.
 #
 # Run `lspci -v | less`. Search for Ethernet then look for those PCI entries corresponding to MLNX ex:
 #
@@ -144,6 +151,7 @@ export PATH=/root/.local/bin:${PATH}
 #
 MLNX="MLNX_OFED_LINUX-5.8-1.0.1.1-ubuntu22.04-x86_64.tgz"
 MFT="mft-4.22.0-96-x86_64-deb.tgz"
+# downloaded but NOT USED OR INSTALLED
 MLNX_FW="https://www.mellanox.com/downloads/firmware/fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin.zip"
 
 echo

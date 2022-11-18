@@ -1,12 +1,14 @@
-#!/bin/bash -x
+#!/bin/bash
 
 mst start
 mst status -v
 ip link set enp1s0f1 up
 
+# add two (2) 1Gb hugepages
 $H/dpdk/usertools/dpdk-hugepages.py --clear
 $H/dpdk/usertools/dpdk-hugepages.py --setup 2G --pagesize 1G
 $H/dpdk/usertools/dpdk-hugepages.py --show
+echo
 
 # per https://doc.dpdk.org/guides/nics/mlx5.html
 ethtool -A enp1s0f1 rx off tx off
@@ -15,12 +17,16 @@ ethtool -A enp1s0f1 rx off tx off
 # optional
 # ethtool -s enp1s0f1 speed 25000 autoneg off
 
+# just in case, load modules needed
 modprobe -a ib_uverbs mlx5_core mlx5_ib
 
+# correct numa node. 01:00.1 <-> enp1s0f1 per above
+echo 0 > /sys/devices/pci0000:00/0000:00:01.0/0000:01:00.1/numa_node
+
+# print the FW versions in the NICs:
 echo mt4117_pciconf0 Firmware:
 echo --------------------------------------------------------------
 flint --qq -d /dev/mst/mt4117_pciconf0   query
-echo
 echo
 echo mt4117_pciconf0.1 Firmware:
 echo --------------------------------------------------------------
