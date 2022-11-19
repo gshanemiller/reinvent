@@ -12,6 +12,7 @@
 #pragma GCC diagnostic push                                                                                             
 #pragma GCC diagnostic ignored "-Wpedantic"                                                                             
 #include <rte_flow.h>                                                                                                
+#include <rte_bus.h>
 #include <rte_bus_pci.h>
 #pragma GCC diagnostic pop 
 
@@ -1160,24 +1161,20 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   // See if the DPDK device has the same PCI ID requested
   //
   valid = false;
-  char pciName[128];
-  snprintf(pciName, sizeof(pciName), "%s", "**(uninitialized)**");
   if (ethDeviceInfo->device) {
     const struct rte_bus *bus = rte_bus_find_by_device(ethDeviceInfo->device);
-    if (bus && !strcmp(bus->name, "pci")) {
-      const struct rte_pci_device *pci_dev = RTE_DEV_TO_PCI(ethDeviceInfo->device);
-      snprintf(pciName, sizeof(pciName), "%04x:%02x:%02x.%x", pci_dev->addr.domain, pci_dev->addr.bus,
-        pci_dev->addr.devid, pci_dev->addr.function);
-      if (pciName==config->pciId()) {
+    if (bus && !strcmp(rte_bus_name(bus), "pci")) {
+      uint16_t foundPortId;
+      if (0==rte_eth_dev_get_port_by_name(config->pciId().c_str(), &foundPortId) && foundPortId==config->deviceId()) {
         valid=true;
       }
     }
   }
   if (!valid) {
     REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, valid,
-      config->pciId().c_str(), 1, 0, pciName);
+      config->pciId().c_str(), 1, 0, "bad");
   }
-  REINVENT_UTIL_LOG_DEBUG("DPDK found device: '" << pciName << "'" << std::endl);
+  REINVENT_UTIL_LOG_DEBUG("DPDK found device: '" << config->pciId().c_str() << "'" << std::endl);
 
   // See if RXQ size exceeds size known to DPDK
   valid = (config->rxqCount()>=0&&config->rxqCount()<=ethDeviceInfo->max_rx_queues);
