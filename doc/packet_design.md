@@ -23,7 +23,7 @@ You may also find these links helpful:
 * [Example UDP client/server configuration](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_udp_integration_test)
 * [Lcore description](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_lcore.h)
 * [How your threads get started](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_awsworker.h)
-* [How to build this library and setup an AWS bare metal with a NIC](https://github.com/rodgarrison/reinvent/blob/main/doc/aws_ena_setup.md)
+* [How to build this library and run UDP send/receive tests](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md)
 
 # H/W Mental Picture
 ```
