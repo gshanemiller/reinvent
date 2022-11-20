@@ -9,8 +9,8 @@ and half the price compared to AWS. A c3.small.x86 server,
 * 2x Mellanox Technologies MT27710 Family [ConnectX-4 Lx] NICs
 * 2x Intel Corporation I210 Gigabit NICs
 
-runs only $0.50/hr. Not only are Mellanox NICs more powerful than AWS virtual
-NICs, they are plugged directly into the PCI bus. Two instances cost less than
+runs only $0.75/hr. Not only are Mellanox NICs more powerful than AWS virtual
+NICs, they are plugged directly into the PCI bus. Two instances cost the same as
 one AWS c5n. Now, to be fair, AWS was never going to be fully baremetal and c5n
 CPUs are larger and more powerful. It has more memory. But for development purposes
 I find Equinix a better bang for the buck.

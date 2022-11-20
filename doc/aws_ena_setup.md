@@ -1,3 +1,6 @@
+# DEPRECATED
+This document is no longer maintained. I quit using AWS (almost) bare metal instances in favor of Equinix hosts.
+
 # General Requirements
 * Intel Xeon x86 64-bit running Linux `Amazon Linux 2 AMI (HVM)`
 * GNU C/C++ tool chain. 
