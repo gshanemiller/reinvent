@@ -1,15 +1,33 @@
 #!/bin/bash
 
-#
-# Run this script as ROOT once following machine reboot or restart
-#
+mst start
+mst status -v
+ip link set enp1s0f1 up
 
-umount /dev/hugepages
-umount /mnt/huge
-echo 2048 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages
-echo 2048 > /sys/devices/system/node/node1/hugepages/hugepages-2048kB/nr_hugepages
-mkdir -p /mnt/huge
-mount -t hugetlbfs nodev /mnt/huge
-modprobe vfio-pci
-python3 /home/ec2-user/Dev/dpdk/usertools/dpdk-devbind.py -b vfio-pci 7f:00.0
-python3 /home/ec2-user/Dev/dpdk/usertools/dpdk-devbind.py -s
+# add two (2) 1Gb hugepages
+$H/dpdk/usertools/dpdk-hugepages.py --clear
+$H/dpdk/usertools/dpdk-hugepages.py --setup 2G --pagesize 1G
+$H/dpdk/usertools/dpdk-hugepages.py --show
+echo
+
+# per https://doc.dpdk.org/guides/nics/mlx5.html
+ethtool -A enp1s0f1 rx off tx off
+
+# Nov 2022: this does not work b/c Equinix does have 25Gb cables
+# optional
+# ethtool -s enp1s0f1 speed 25000 autoneg off
+
+# just in case, load modules needed
+modprobe -a ib_uverbs mlx5_core mlx5_ib
+
+# correct numa node. 01:00.1 <-> enp1s0f1 per above
+echo 0 > /sys/devices/pci0000:00/0000:00:01.0/0000:01:00.1/numa_node
+
+# print the FW versions in the NICs:
+echo mt4117_pciconf0 Firmware:
+echo --------------------------------------------------------------
+flint --qq -d /dev/mst/mt4117_pciconf0   query
+echo
+echo mt4117_pciconf0.1 Firmware:
+echo --------------------------------------------------------------
+flint --qq -d /dev/mst/mt4117_pciconf0.1   query

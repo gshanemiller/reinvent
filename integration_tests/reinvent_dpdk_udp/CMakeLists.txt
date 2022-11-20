@@ -25,7 +25,6 @@ set(SOURCES
   ../../src/reinvent/util/reinvent_util_environment.cpp
 
   reinvent_dpdk_udp_integration_test.cpp
-  libperf.c
 ) 
 
 #

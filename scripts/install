@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash
 
 # This script is indempotent. You should be able to run it
 # multiple times and get to the same end state
@@ -6,8 +6,17 @@
 #
 # Where GIT repos will be cloned and built
 #
+rm -rf ${HOME}/Dev 1>/dev/null 2>&1
+rm -rf /tmp/MLNX*logs
+
 export H=${HOME}/Dev
-mkdir -p $H
+mkdir -p ${H}/tmp
+
+#
+# Make a scratch diretories
+#
+mkdir -p ${H}/tmp/iso
+export T=${H}/tmp
 
 #
 # Where the DPDK libraries, headers are installed
@@ -16,26 +25,162 @@ mkdir -p $H
 #
 export D=${HOME}/local
 mkdir -p $D
-export LD_LIBRARY_PATH=${D}/lib64:${LD_LIBRARY_PATH}
-export PKG_CONFIG_PATH=${D}/lib64/pkgconfig:${PKG_CONFIG_PATH}
+export LD_LIBRARY_PATH=${D}/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
+export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig:${PKG_CONFIG_PATH}
 
 #
 # Install some of the prereqs
 #
-sudo /usr/bin/amazon-linux-extras
-sudo yum install make numactl-libs.x86_64 numactl-devel.x86_64 rdma-core-devel.x86_64 git ethtool gcc-c++.x86_64 gtest-devel.x86_64 gtest-.x86_64
+apt update
+apt install --yes make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlib* ncat unzip zip gdb gdb-doc infiniband-diags libmnl-dev pkgconf*
 pip3 install --user meson pyelftools ninja
+# apt upgrade --yes
+# where meson/ninja are installed
+export PATH=/root/.local/bin:${PATH}
 
-# sudo yum install cmake too old
-# install cmake without yum
-cd $H
-rm -rf ./cmake-3.22.1-linux-x86_64
-wget https://cmake.org/files/v3.22/cmake-3.22.1-linux-x86_64.sh
-chmod 500 cmake-3.22.1-linux-x86_64.sh
-# this unpacks and installs cmake. Accept license and answer 'Y' to install under cmake-3.22.1-linux-x86_64 dir
-./cmake-3.22.1-linux-x86_64.sh
-rm -f cmake-3.22.1-linux-x86_64.sh
-export PATH=${H}/cmake-3.22.1-linux-x86_64/bin:${PATH}
+#
+# Get Mellanox deps:
+#
+# [used]     MFT toolset  comes from: https://network.nvidia.com/products/adapter-software/firmware-tools/
+# [used]     OFED dwnload comes from: https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/
+# [unused]   The firmware comes from: https://network.nvidia.com/support/firmware/connectx4lxen/
+# 
+# OFED comes as an ISO file and .tar file. However, the ISO file does not contain 'mlnxofedinstall'
+# which is mentioned all over the web. Second, the .tgz not wgettable because the page redirects to a 
+# license acceptance page where the URL for the download is not given. Therefore it'll have to scp'd into
+# this machine by hand. Wgetting this file directly is not possible.
+#
+# On firmware: this procedure DOES change the firmware as a side effect of installing OFED. This way a separate
+# FW update step is not needed. However, should one wish to do FW update seperately or later do the following:
+#
+# (*) install OFED without firmware then self update: ./mlnxofedinstall --without-fw-update --dpdk
+# (*) install OFED with    firmware then self update: ./mlnxofedinstall --dpdk
+#
+# To self update FW:
+#
+# To assess what's installed and what one can update to do the following AFTER this script is done, and the machine
+# is rebooted. Updating the FW seems to work fine. The new FW will not show as running until after the machine is
+# rebooted following update as usual.
+#
+# Run `lspci -v | less`. Search for Ethernet then look for those PCI entries corresponding to MLNX ex:
+#
+# 01:00.0 Ethernet controller: Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+#       Subsystem: Mellanox Technologies Stand-up ConnectX-4 Lx EN, 25GbE dual-port SFP28, PCIe3.0 x8, MCX4121A-ACAT
+# . . .
+# 01:00.1 Ethernet controller: Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+#       Subsystem: Mellanox Technologies Stand-up ConnectX-4 Lx EN, 25GbE dual-port SFP28, PCIe3.0 x8, MCX4121A-ACAT
+#
+# The identifier `MCX4121A-ACAT` identifies the PCI card also called the OPN. Next, wait until this script is done and
+# machine is rebooted. Then run the command `mst start; mst status -v`. You should see output like:
+#
+# $ mst start
+# Starting MST (Mellanox Software Tools) driver set
+# Loading MST PCI module - Success
+# Loading MST PCI configuration module - Success
+# Create devices
+# Unloading MST PCI module (unused) - Success
+#
+# $ mst status -v 
+# MST modules:
+# ------------
+#     MST PCI module is not loaded
+#     MST PCI configuration module loaded
+# PCI devices:
+# ------------
+# DEVICE_TYPE             MST                           PCI       RDMA            NET                       NUMA  
+# ConnectX4LX(rev:0)      /dev/mst/mt4117_pciconf0.1    01:00.1   mlx5_bond_0     net-bond0                 -1    
+# 
+# ConnectX4LX(rev:0)      /dev/mst/mt4117_pciconf0      01:00.0   mlx5_bond_0     net-bond0                 -1    
+#
+# which matches the PCI information. To see the current firmware version by devId, run the flint command giving each
+# of the two MST devIds:
+#
+# $ flint --qq -d /dev/mst/mt4117_pciconf0 query
+# Image type:            FS3
+# FW Version:            14.28.2006
+# FW Release Date:       15.9.2020
+# Product Version:       14.28.2006
+# Rom Info:              type=UEFI version=14.21.17 cpu=AMD64,AARCH64
+#                        type=PXE version=3.6.102 cpu=AMD64
+# Description:           UID                GuidsNumber
+# Base GUID:             043f720300d78016        4
+# Base MAC:              043f72d78016            4
+# Image VSD:             N/A
+# Device VSD:            N/A
+# PSID:                  MT_2420110034
+# Security Attributes:   N/A
+#
+# $ flint --qq -d /dev/mst/mt4117_pciconf0.1 query
+# Image type:            FS3
+# FW Version:            14.28.2006
+# FW Release Date:       15.9.2020
+# Product Version:       14.28.2006
+# Rom Info:              type=UEFI version=14.21.17 cpu=AMD64,AARCH64
+#                        type=PXE version=3.6.102 cpu=AMD64
+# Description:           UID                GuidsNumber
+# Base GUID:             043f720300d78016        4
+# Base MAC:              043f72d78016            4
+# Image VSD:             N/A
+# Device VSD:            N/A
+# PSID:                  MT_2420110034
+# Security Attributes:   N/A
+#
+# These commands show the current firmware version is version=UEFI 14.21.17 from 9/15/2020.
+#
+# Meanwhile at the URL https://network.nvidia.com/support/firmware/connectx4lxen/
+# we can drill down by current version then OPN here `MCX4121A-ACAT` and see the last PSID is `MT_2420110034` with
+# firmware version is `UEFI-14.25.17` from 05/12/2021 about 8 months later. The webpage will give a URL to download
+# the firmware:
+#
+# https://www.mellanox.com/downloads/firmware/fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin.zip
+#
+# After wgetting this file and unzipping it, the instructions to install the firmware are at the URL
+# https://network.nvidia.com/support/firmware/nic/ which instruct:
+#
+# $ flint -d /dev/mst/mt4117_pciconf0   -i fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin
+# $ flint -d /dev/mst/mt4117_pciconf0.1 -i fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin
+
+#
+# CURRENT AS OF NOV 2022 for ConnectX-4 Lx EN, 25GbE dual-port SFP28, PCIe3.0 x8, MCX4121A-ACAT:
+#
+# Also note per https://doc.dpdk.org/guides-19.05/nics/mlx5.html this mlx5 poll mode driver is for ConnectX-4 Lx:
+#
+# The MLX5 poll mode driver library (librte_pmd_mlx5) provides support for Mellanox ConnectX-4, Mellanox ConnectX-4 Lx
+# Mellanox ConnectX-5, Mellanox ConnectX-6 and Mellanox BlueField families of 10/25/40/50/100/200 Gb/s adapters as well
+# as their virtual functions (VF) in SR-IOV context.
+#
+MLNX="MLNX_OFED_LINUX-5.8-1.0.1.1-ubuntu22.04-x86_64.tgz"
+MFT="mft-4.22.0-96-x86_64-deb.tgz"
+# downloaded but NOT USED OR INSTALLED
+MLNX_FW="https://www.mellanox.com/downloads/firmware/fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin.zip"
+
+echo
+echo "Mellanox/Nvida MLNX_OFED_LINUX driver set cannot be obtained by curl/wget. You'll need to obtain it by hand"
+echo "at https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/ after accepting the EUA. Then scp it"
+echo "into this machine into the /tmp directory:"
+echo
+echo "example command: scp -i <ssh-key/pem-file> ${MLNX} root@<ip-address>:/tmp"
+echo
+read -p "scp .tgz file in by hand to /tmp then press ENTER: "
+cd ${H}/tmp
+# copy the file so after reboot it's still on machine. /tmp is erased on reboot
+cp /tmp/MLNX*tgz ~
+tar zxf /tmp/MLNX*tgz
+cd MLNX*
+./mlnxofedinstall --dpdk
+cd ..
+# get MFT tool set
+wget https://www.mellanox.com/downloads/MFT/${MFT}
+# download the firmware but do nothing with it
+wget ${MLNX_FW}
+tar zxvf ${MFT}
+cd ${MFT%%.tgz}
+./install.sh --oem
+mst start
+mst status -v
+mlxconfig -y -d /dev/mst/mt4117_pciconf0.1 s CQE_COMPRESSION=1
+flint --qq -d /dev/mst/mt4117_pciconf0   query
+flint --qq -d /dev/mst/mt4117_pciconf0.1 query
 
 #
 # Clone repos 
@@ -45,37 +190,67 @@ rm -rf ./dpdk
 git clone git://dpdk.org/dpdk
 rm -rf ./reinvent
 git clone https://github.com/rodgarrison/reinvent.git
-sudo rm -rf ./amzn-drivers
-git clone https://github.com/amzn/amzn-drivers.git
-
-#
-# Install Amazon driver updates for DPDK
-#
-cd $H/amzn-drivers/userspace/dpdk/enav2-vfio-patch
-sudo ./get-vfio-with-wc.sh
 
 #
 # Build and install DPDK
 #
 cd $H/dpdk
+vi app/meson.build
 meson -Db_lto=true -Dplatform=native -Dprefix=${D} build
 # Note: running too many jobs will exhaust tmp space due to LTO
-ninja -j 10 -C build install
+ninja -j 16 -C build install
 
 #
 # Build reinvent
 #
 cd $H/reinvent
+git checkout ubuntu
+rm -rf build
 mkdir build
 cd build
-cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON ..
-make -j 10
+cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DPERFORMANCE_TEST=ON ..
+make -j 16
+
+#
+# Enable IOMMU passthrough
+#
+echo
+echo "you need to enable IOMMU. To do so add a space then 'iommu=1 intel_iommu=on' to the end of the GRUB_CMDLINE_LINUX"
+echo "variable in /etc/default/grub."
+echo
+read -p "Press ENTER to edit /etc/default/grub: "
+vi /etc/default/grub
+grub-mkconfig > /boot/grub2/grub.cfg
 
 #
 # Add variables to ~/.bashrc
 #
-echo "export H=${H}" >> ${HOME}/.bashrc
-echo "export D=${D}" >> ${HOME}/.bashrc
-echo "export LD_LIBRARY_PATH=${D}/lib64" >> ${HOME}/.bashrc
-echo "export PKG_CONFIG_PATH=${D}/lib64/pkgconfig" >> ${HOME}/.bashrc
-echo "export PATH=${H}/cmake-3.22.1-linux-x86_64/bin:${PATH}" >> ${HOME}/.bashrc
+echo "export H=${HOME}/Dev" >> ${HOME}/.bashrc
+echo "export D=${HOME}/local" >> ${HOME}/.bashrc
+echo "export PATH=/root/.local/bin:${PATH}" >> ${HOME}/.bashrc
+echo "export LD_LIBRARY_PATH=${D}/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu" >> ${HOME}/.bashrc
+echo "export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig" >> ${HOME}/.bashrc
+echo "alias ll=\"ls -la\"" >> ${HOME}/.bashrc
+echo "alias edit=\"vi\"" >> ${HOME}/.bashrc
+echo "alias initbld=\"cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DPERFORMANCE_TEST=ON ..\"" >> ${HOME}/.bashrc
+
+#
+# Add variables to .vimrc
+#
+echo "set expandtab" > ~/.vimrc
+echo "set tabstop=2" >> ~/.vimrc
+echo "set shiftwidth=2" >> ~/.vimrc
+echo "set bg=dark" >> ~/.vimrc
+echo "set noautoindent" >> ~/.vimrc
+echo "set nosmartindent" >> ~/.vimrc
+echo "set nocindent" >> ~/.vimrc
+echo "set wrap" >> ~/.vimrc
+echo ":syntax off" >> ~/.vimrc
+echo ":set colorcolumn=120" >> ~/.vimrc
+
+echo
+echo "Installation is done except for VLAN/network setup."
+
+echo
+read -p "You need to reboot your machine. Press ENTER to reboot or CTRL-C to exit: "
+reboot

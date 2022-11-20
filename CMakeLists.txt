@@ -16,45 +16,32 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Wall -Wextra -Werror")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-diagnostics-color")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/home/ec2-user/local/include")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/root/local/include")
 
 #
 # DPDK Link Libraries
 #
+# Requires pre-exported ENV, for example, as done in ./install:
+#   PKG_CONFIG_PATH=<path-to-DPDK-pkgconfig>
 #
-# Approach 1: Link all DPDK 170+ libraries
-#
-# Requires pre-exported ENV:
-#   PKG_CONFIG_PATH=/home/ec2-user/local/lib64/pkgconfig
-#
-# execute_process(
-#   COMMAND /usr/bin/pkg-config --static --libs libdpdk
-#   RESULT_VARIABLE DPDK_LIB_RESULT
-#   OUTPUT_VARIABLE DPDK_SELECTED_LIBRARIES
-#   OUTPUT_STRIP_TRAILING_WHITESPACE
-# )
-# message(STATUS "pkg-config DPDK: ${DPDK_SELECTED_LIBRARIES}")
-
-#
-# Approach 2: (Default) Link selected DPDK libraries only
-#
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -L/home/ec2-user/local/lib64)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -Wl,--whole-archive)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_ethdev)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_telemetry)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_kvargs)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_mbuf)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_mempool)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_timer)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_eal)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_net_ena)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -lrte_net)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} -Wl,--no-whole-archive)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} dl)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} numa)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} rt)
-set(DPDK_SELECTED_LIBRARIES ${DPDK_SELECTED_LIBRARIES} pthread)
-message(STATUS "DPDK selected libraries: ${DPDK_SELECTED_LIBRARIES}")
+if (DPDK_STATIC_LINK)
+  execute_process(
+    COMMAND /usr/bin/pkg-config --static --libs libdpdk
+    RESULT_VARIABLE DPDK_LIB_RESULT
+    OUTPUT_VARIABLE DPDK_SELECTED_LIBRARIES
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  set(DPDK_SELECTED_LIBRARIES "-Wl,-Bstatic" ${DPDK_SELECTED_LIBRARIES})
+  message(STATUS "Reinvent will static link to DPDK: ${DPDK_SELECTED_LIBRARIES}")
+else()
+  execute_process(
+    COMMAND /usr/bin/pkg-config --libs libdpdk
+    RESULT_VARIABLE DPDK_LIB_RESULT
+    OUTPUT_VARIABLE DPDK_SELECTED_LIBRARIES
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  message(STATUS "Reinvent will dynamic link to DPDK: ${DPDK_SELECTED_LIBRARIES}")
+endif()
 
 #
 # Add library code for building library

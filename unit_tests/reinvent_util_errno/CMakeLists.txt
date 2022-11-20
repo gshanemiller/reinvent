@@ -23,11 +23,9 @@ target_compile_definitions(${TEST_TARGET} PUBLIC REINVENT_UTIL_LOGGING_ERRNO)
 target_compile_definitions(${TEST_TARGET} PUBLIC REINVENT_UTIL_LOGGING_SHORT_FILENAME)                                           
 target_compile_definitions(${TEST_TARGET} PUBLIC REINVENT_UTIL_LOGGING_TEST_FORMAT)                                           
 target_compile_definitions(${TEST_TARGET} PUBLIC NDEBUG)                                                                    
-target_compile_options(${TEST_TARGET} PUBLIC -g --coverage)
 target_include_directories(${TEST_TARGET} PUBLIC ../../src/reinvent)
 
-target_link_options(${TEST_TARGET} PUBLIC --coverage)
-target_link_libraries(${TEST_TARGET} PUBLIC gtest)
+target_link_libraries(${TEST_TARGET} PUBLIC gtest pthread)
 
 add_test(
     NAME    ${TEST_TARGET}

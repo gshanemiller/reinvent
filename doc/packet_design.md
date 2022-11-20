@@ -9,6 +9,14 @@ attempts to resolve those issues. The reader will need passing familiarity with 
 hardware (NICs, memory, and CPUs) into NUMA groups, and understand how multi-socket CPUs are futher sub-divided
 into cores. 
 
+This document refers to AWS c5n bare metal instances. AWS machines were used during early development. Later, I switched
+to [Equinix](https://www.equinix.com/) servers because they are actually baremetal, come with better NICs (Mellanox),
+and are cheaper to use. Being real bare metal machines the NICs are actual HW plugged into the PCI bus of the host.
+AWS NICs are virtual. Bonafide HW cards avoid obviate virtual AWS NIC drivers as a software dependency. AWS virtual NICs
+have limitations a PCI Mellanox NIC does not have. 
+
+Nonetheless everything in this document applies to Equinix and DPDK compatible NICs in general.
+
 You may also find these links helpful:
 
 * [UDP client/server example](https://github.com/rodgarrison/reinvent/tree/main/integration_tests/reinvent_dpdk_udp) 
@@ -69,7 +77,7 @@ nodes, their NICs, each with its queues which can co-exist. This diagram illustr
 zero. Other NUMA nodes, its CPU cores, and memory is not shown.
 
 Even with those omissions many important aspects shine through. First, **lcore here refers to a pthread** which has
-been pinned to a physical core (aka vCPU). DPDK `lcore` tends to draw the reader's focus solely onto a CPU core
+been pinned to a physical core (aka vCPU). DPDK `lcore` tends to draw the reader's focus solely on a CPU core
 ommitting the pthread. Applications can only create threads; H/W is fixed. Threads may be pinned or not to a CPU core.
 DPDK jargon **lcore** is short hand for an application created pthread pinned to a CPU core.
 

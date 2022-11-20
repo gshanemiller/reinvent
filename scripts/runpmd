@@ -3,6 +3,17 @@
 #
 # run as sudo
 #
-TASK="/home/ec2-user/Dev/dpdk/build/app/dpdk-testpmd"
-ARGS="--proc-type primary --in-memory --log-level 7 --huge-dir /mnt/huge -n 12 -- -i"
+
+echo Typical first time commands:
+echo 1. show port info 0
+echo
+echo
+
+TASK="${H}/dpdk/build/app/dpdk-testpmd"
+
+# -n <ram-channels> : use value from `./ram_inventory_config` 
+# args on LHS of '--' documented by running $TASK -h
+# args on RHS of '--' documented at https://doc.dpdk.org/guides/testpmd_app_ug/run_app.html
+ARGS="--proc-type primary --in-memory --log-level 7 -n 4 -l 4,5,6,7,8 --allow 01:00.1,class=eth -- -i --numa --port-numa-config=(0,0) --ring-numa-config=(0,3,0)"
+
 $TASK $ARGS
