@@ -13,8 +13,9 @@ echo
 # per https://doc.dpdk.org/guides/nics/mlx5.html
 ethtool -A enp1s0f1 rx off tx off
 
-# Nov 2022: this does not work b/c Equinix does have 25Gb cables
-# optional
+# Nov 2022: this does not work b/c Equinix does have 25Gbit cables
+# We're stuck at default 10Gbit even though Mellonax Connect4-LX
+# are 25Gbit capable
 # ethtool -s enp1s0f1 speed 25000 autoneg off
 
 # just in case, load modules needed
