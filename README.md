@@ -42,9 +42,9 @@ instances.
 
 Provided NICs are supported by DPDK the main differences between this setup and an alternate valid setup are
 system administration related not code. Ultimately you'll need two or more boxes (sender/clients, and receiver/servers)
-such that each box has at least one DPDK compatible NIC which is **unused by the operating systems**. Your NIC may or
-may not require installation of its own dependencies. In addition the DPDK NICs must have an IP address and the machines
-must connected to each other over a local LAN. Note DC Equinix machines come with four NICs each.
+such that each box has at least one DPDK compatible NIC which is **unused by the operating system**. Your NIC may or
+may not require installation of its own dependencies. Mellanox does. In addition the DPDK NICs must have an IP address
+and the machines must connected to each other over a local LAN.
 
 # Getting Started
 * [Read setup instructions](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md). This will
