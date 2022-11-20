@@ -30,7 +30,7 @@ self-contained. The setup script takes a bare machine with nothing on it to bein
 and all Mellanox dependencies built and ready for use by this library. The `doc` subdirectory contains an explainer
 on DPDK concepts and usage.
 
-# HW/OS Requirements
+# Requirements
 * Linux Ubuntu 22.04 LTS
 * Equinix `c3.small.x86` bare metal (x86 Xeon E-2278G 3.40Ghz 32Gb RAM) with Mellanox Connect4-LX NICs
 * Not all boxes in all Equinix data centers have Mellanox NICs. However, the DC center instances do
@@ -43,10 +43,11 @@ instances.
 Provided NICs are supported by DPDK the main differences between this setup and an alternate valid setup are
 system administration related not code. Ultimately you'll need two or more boxes (sender/clients, and receiver/servers)
 such that each box has at least one DPDK compatible NIC which is **unused by the operating system**. Your NIC may or
-may not require installation of its own dependencies. Mellanox does. In addition the DPDK NICs must have an IP address
-and the machines must connected to each other over a local LAN.
+may not require installation of its own dependencies. Mellanox does and the choice of Mellanox dependencies depends
+in turn on the O/S and version. DPDK NICs must have an IP address assignment and the machines must connected to each 
+other over a local LAN.
 
 # Getting Started
 * [Read setup instructions](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md). This will
-take you from just-provisioned Equinix boxes to running UDP sender/receiver tests.
+take you from just-provisioned Equinix boxes to running UDP sender/receiver tests through DPDK.
 * [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/packet_design.md)
