@@ -304,5 +304,6 @@ then
   $TASK -m $MODE -p $PREFIX $ARGS
 else
   echo $TASK -m $MODE -p $PREFIX $ARGS
-  $TASK -m $MODE -p $PREFIX $ARGS
+  gdb --args $TASK -m $MODE -p $PREFIX $ARGS
+  # $TASK -m $MODE -p $PREFIX $ARGS
 fi

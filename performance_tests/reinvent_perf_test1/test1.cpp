@@ -553,7 +553,9 @@ int main(int argc, char **argv) {
   REINVENT_UTIL_LOG_INFO(config << std::endl);
   if (rc!=0) {
     REINVENT_UTIL_LOG_FATAL_VARGS("Cannot initialize AWS ENA device rc=%d\n", rc);                                      
-    onExit(config);
+    if (Reinvent::Dpdk::UnInitAWS::device(config)!=0) {
+      REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize AWS ENA device\n");
+    }
     return 1;
   }
 
@@ -575,9 +577,7 @@ int main(int argc, char **argv) {
     }
   }
   
-  //
-  // Cleanup and exit from main thread
-  //
+  // Cleanup and dump stats on exit
   onExit(config);
 
   return 0;
