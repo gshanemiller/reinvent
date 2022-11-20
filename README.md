@@ -49,4 +49,4 @@ and the machines must connected to each other over a local LAN.
 # Getting Started
 * [Read setup instructions](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md). This will
 take you from just-provisioned Equinix boxes to running UDP sender/receiver tests.
-* [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/.packet_design.md)
+* [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/packet_design.md)
