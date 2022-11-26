@@ -8,17 +8,29 @@
 //                 caller specified 'Dpdk::AWSConfig'. Post initialization callers should run rte_eal_mp_remote_launch
 //                 to start and run the RX/TX lcores usually with a helper 'Dpdk::AWSEnaWorker' object.
 //
-// Limitation:     Multi-NICs not supported. DPDK generally will not allow different PIDs to use the same DPDK device.
-//                 So the typical situation is when a host box has multiple NICs and each task runs one NIC. This code
-//                 will properly configure all those NICs except, because it can't know which lcores were created
-//                 by those other tasks, cannot guarantee the assigned lcores are actually DISTINCT if a DISTINCT
-//                 policy was used. To fix this lcore-to-HW-core assignments have shared between each participating
-//                 task.
+// Limitation:     Multi-NICs & distinct HW cores: DPDK generally will not allow different PIDs to use the same DPDK
+//                 device. Typically the host runs one task (pid) per DPDK capable NIC. This code can properly do that.
+//                 However, as currently written, it cannot know if one pid's HW core assignment, and another pid's are
+//                 distinct. It can only guarantee that one session's HW core assignments are distinct. This may be
+//                 important when the lcore config keyword DISTINCT is given. For example, suppose a box has two DPDK
+//                 capable NICs devices 0, 1. One PID (with its config) runs 2 distinct TX queues on two distinct HW
+//                 cores 0, 1 for device 0. The second PID (with its seperate config) wants to do the same thing. But
+//                 because the pid for device 1 doesn't know HW cores 0,1 are already in use for device 0, it can also
+//                 assign HW cores 0, 1. The work around is to manually ensure each config uses distinct HW cores in
+//                 configuration. Device 1's config, for example, should set VCPU core 0, 1 soft disabled.
+// 
+//                 More importantly, not every single config possible in DPDK is covered by this class. There's no
+//                 cyrpto support. Users will find the supported capability here practical but by no means complete.
 //
 // See Also:       Dpdk::AWSConfig
 //                 Dpdk::AWSEnaWorker
 //                 integration_tests/reinvent_dpdk_udp minimal-complete client/server example
-//                 Memory pool sizing documentation in doc/aws_ena_packet_design.md
+//                 Memory pool sizing documentation in doc/ena_packet_design.md
+//
+// Note: you can always dump a configuration to stdout: 'Dpdk::AWSConfig' supports 'operator<<(ostream&)'
+//       the dump will show you how the enviroment was converted into an ENA config
+// Note: you can always dump the Environment to stdout: 'Dpdk::Enviroment' supports 'operator<<(ostream)'.
+//       the dump will show you all the ENV variables read with their raw values
 //  
 // Thread Safety: Not MT thread-safe.
 //                                                                                                                      
@@ -26,45 +38,19 @@
 //
 // Description: DPDK device setup comes in two parts: initialization of the H/W, and reading H/W capabilities to which
 // software resources are created and aligned to leverage that H/W. For example, if a NIC has 32 RXQs the software side
-// can create up to 32 lcores with attendant mempools to perform RX. Thread/NIC-queue association is a major part of
-// this work. Given the many facets of setup, each AWS DPDK supported device has its own initialize method below.
+// can config up to 32 lcores with attendant mempools to perform RX. Thread/NIC-queue association is a major part of
+// this work.
 //
 // Environment variables are the primary way to name and set out configurations. The names are constructed by chaining
-// together constant suffixes with variable length prefixes. Providing a full application suite configuration is done
-// using five mini strategies much like any moderately complex bash script. Programmers alway have the option to
-// combine all configs for all machines in a single bash script of UNIX environment variables or keep seperate as
-// desired:
+// together naming keywords, prefixes, and suffixes like any moderately complex bash script. Programmers alway have the
+// option to combine all configs for all machines in a single file partitioned by prefix names, or keep them separate:
 //
-// * Configurations can run over one or several NICs. So the first issue to make clear is which NIC a configuration is
-//   for. Dpdk::InitAWS initializes one NIC writing the config into one 'Dpdk::AWSConfig' object. In this work the
-//   programmer must focus on a single machine at a time. That machine may have one, two, or more NIC. Each NIC has
-//   zero-based '{devId}' assigned to it by DPDK. Now, the first argument to InitAWS is the text name of the device
-//   denoted by '{deviceName}' whose value is the device number written '{devId}'. From '{deviceName}' initialization
-//   finds '{devId}'. With the NIC identified by name and devId rhe rest of the NIC's configs will have the form 
-//   '{prefix}_{deviceId}_' if the prefix is non-empty, or just '{deviceId}_' if the prefix is empty. This string 
-//   forms the stalk prefix by which all other configs are named. Prefix is discussed in point two, three.
-// * For simple apps where there's only one machine, no prefix is used. Programmers will read off the fixed, constant
-//   part of the enviromment variable name from the table below and provide it with a value. For example, setup must
-//   know the DPDK's 0-based port number for a NIC: '{deviceId}=0' works fine.
-// * Your application works over a fixed number of machines whose role yield simple names. The UDP client/server
-//   provided in this library is a good example. Here we need two sets of configs one for the client running on one
-//   machine and one for the server running on another machine. One can provide everything in the same bash file by
-//   prefixing each config with 'CLIENT' or 'SERVER'. The client machine's DPDK device number is given by
-//   'CLIENT_{deviceId}=0' (i.e. client machine configs DPDK device 0) and the server's 'SERVER_{deviceId}=2' (i.e.
-//   the server machine config is for DPDK device 2).
-// * You have a large but finite number of machines in your configuration where naming each machine is harder. So add a
-//   number to the end of a stalk prefix. This longer prefix can be provided to 'InitAWS::ena'. On a set of 64 boxes,
-//   for example, configure the NIC device numbers with prefixes 'PEER_0', 'PEER_1', 'PEER_2', and so on. This
-//   naming scheme abstracts away from roles desingating each machine simply as a peer. Now a single bash script
-//   config (or separate per machine if preferred) will provide 'PEER_0_{deviceId}=0', 'PEER_1_{deviceId}=1',
-//   'PEER_2_{deviceId}=0'. The application task(s) running on the nth machine will take 'PEER_10' (here n=10) as
-//   a prefix. Now 'Dpdk::InitAWS::ena' can find 'PEER_10_{deviceId}=...' plus the rest of 'PEER_10's config.
-// * Some configs refer to multiple pieces of H/W on the same the same machine e.g. VCPU/lcores. Here again you can
-//   use an optional prefix and print style combination to name and find these items. The UDP client/server example 
-//   provided here gives 'TEST_CLIENT_VCPU_MAX=72' with prefix 'TEST_CLIENT' meaning there's 72 lcores/VCPUs on the
-//   client machine. Each VCPU is appears like 'TEST_CLIENT_VCPU_1_IN_SOCKET=1' (VCPU 1 runs on H/W socket 1),
-//   and so on up to the configured 72 machines. Since this kind of hardware is not on a NIC, no '{deviceId}' is not
-//   needed or expected.
+// * The initialize method takes two strings, a prefix name optionally empty, and device name which cannot be empty.
+// * When locating environment variables the library always looks for variables starting with the concatenation of
+//   '<prefix>+<deviceName>' if it is NIC specific or '<prefix>' if the config is machine specific
+// * Required keywords and optional suffixes are appended to this result to make the full name
+// * Use '<prefix>' and '<deviceName>' to partition your devices from a naming and configuration standpoint
+// * Use the following table to find required keywords and optional suffixes
 //
 // The author is aware that 12-factor style configuration deviates from DPDK code primarly command line and code based.
 // However, DPDK methodology is opaque to beginners. It drags the beginner into DPDK specifics, deep into the DPDK
@@ -79,110 +65,39 @@
 // variable or which can generate it. A subset of configuration variables are common across projects. Here a generator
 // script makes sense. Programmers can run it then extract whatever is required. These scripts are marked 1,2,3 in the
 // 'gen' column. The asterisked items are specific to an application. Reinvent ships with application bash scripts
-// which clearly demo those values. Footnotes are given under the table where these scripts can be found.
+// which clearly demo these values. Footnotes are given under the table where these scripts can be found.
 //
-// The 'Env Variable Name' column gives the schema for the variable name. '{prefix}' refers to a programmer supplied
-// prefix. '{prefix}' is given once, typically in 'main()' where it's passed into 'Dpdk::AWSInit::ena'. '{deviceId}'
-// is the NIC's text name; see above. '{id}' refers to an integer typically an index. For example, the schema
-// 'VCPU_{id}' implies the configs will read like 'VCPU_0, VCPU_1, VCPU_2' and so on up to the H/W maximum given by
-// 'VCPU_MAX'.
+// The 'Env Variable Name' column gives the schema for the variable name. Some configurations are NIC specific; those
+// names have the schema '{prefix}_{deviceId}'; see again '<prefix>+<deviceName>' discussed above. Other configs are
+// not NIC specific but are machine specific. Here the schema starts with '{prefix}'.'{id}' refers to an integer index
+// For example, the schema 'VCPU_{id}' implies the configs read like 'VCPU_0, VCPU_1, VCPU_2' and so on up to the H/W
+// maximum given by 'VCPU_MAX'. Unless otherwise documented in the comment column, the description describes the RX 
+// variation. The TX situation follows analgously.
 //
 // The last column provides a description. If the ENV variable merely holds a value that's passed on uniterpreted to
 // an attribute in 'Dpdk::AwsConfig', that attribute name is given. If there is no direct relationship, the description
-// references the attribitues in 'Dpdk::AwsConfig' influenced. Ultimately a AWS ENA config from the UNIX environment
-// is held solely by an one 'Dpdk::AwsConfig' object.
-//
-// Even with this context, lcore count and lcore-to-queue assignment may remain difficult to extract from the configs
-// alone. The following explanation for RX is analogous for TX. The maximum HW number supported RXQs is provided with 
-// '{prefix}_{deviceId}_RX_QUEUE_SIZE'. If this number exceeds DPDK's assessment of the H/W capability at runtime, an
-// error is reported and initialization stops. '{prefix}_{deviceId}_RXQ_THREAD_COUNT' provides the number of RX lcores
-// to be created at runtime. '{prefix}_{deviceId}_RXQ_VCPU_POLICY' provides a policy on how lcore to HW core assignment
-// is made. Once the lcore to HW core mapping is set, 'Dpdk::InitAWS' will assign to each lcore the roles and
-// responsibility of RX for exactly one RXQ. So upon entering the main event-loop on a lcore it'll always be clear the
-// assigned role: RX (or TX) and on what specific queue number. 
-//
-// The key number here is 'RXQ_THREAD_COUNT'. 'Dpdk::InitAWS' will try make 'RXQ_THREAD_COUNT' lcores each on its own
-// HW core handling exactly one RXQ provided:
-//
-// * '{prefix}_{deviceId}_RXQ_THREAD_COUNT' <= '{prefix}_{deviceId}_RX_QUEUE_SIZE' i.e. you cannot run 128 RXQ lcores
-//   if the NIC H/W only has 32 RXQs. 
-// * If the number of HW cores on the NUMA node to which '{prefix}_{deviceId}' is attached is less than 
-//   '{prefix}_{deviceId}_RXQ_THREAD_COUNT', one or lcores will have to double up on a HW core. You can't 10 lcores
-//   for RX and TX queues if you only have 9 HW cores. One of the HW cores will have to run two lcores or you'll have
-//   to configure fewer lcores to again achieve one lcore per HW core. Whether or not there can be HW sharing is
-//   determined by '{prefix}_{deviceId}_RXQ_VCPU_POLICY'
-//
-// In sum the programmer will set out the number of lcores for RXQ desired. 'Dpdk::InitAWS' will try to achieve that
-// goal assigning one lcore for one RXQ to its own HW core if possible. If that's not possible two more lcores will
-// have to be assigned to the same HW core. Programmers should then set '{prefix}_{deviceId}_RXQ_VCPU_POLICY'
-// to allow or disallow as desired.
-//
-// Example: A 'c5n' bare metal instance has 72 H/W cores of which 36 are on CPU socket 0. Socket 0 is attached to NUMA
-// node 0. Suppose an ENA NIC is attached to NUMA node 0. Now an ENA NIC has 32 RXQs and 32 TXQs. It is not possible 
-// to run 32 RXQ lcores and 32 TXQs lcores such that each lcore is on its own H/W core. That'd require 32+32=64 H/W
-// cores on NUMA node 0. But there are only 36. Nevertheless the programmer provides 'RXQ_THREAD_COUNT=32' and also
-// 'TXQ_THREAD_COUNT=32'. If either 'RXQ_VCPU_POLICY' or 'TXQ_VCPU_POLICY' is 'DISTINCT', 'Dpdk::InitAWS' will abort
-// with an error as there are insufficient resources. If at least one policy is set 'MULTI' 'Dpdk::InitAWS' will assign
-// each of the 32 RXQs each to its own lcore such that the lcore is on its own H/W core. Four of the TXQs will each
-// get an lcore assigned to the remaining four unused H/W cores left on NUMA node 0. That leaves 28 TXQs unassigned.
-// Those 28 TXQs each will get their lcore assigned to some of the H/W cores previously assigned to RXQs. In the end
-// AWSConfig will have configured 64-lcores numbered or identified 0,1,2,...63. AWSConfig provides a map that takes an
-// lcore to the VCPU it runs on. In addition, AWSConfig will have a RXQ/TXQ vector in which each queue is identified
-// 0,1,2,...31 and ditto for the TXQs. AWSConfig also provides maps so you know to which lcore a given RX or TX queue
-// corresponds, and from there, which VCPU it runs on. This way the individual components and their relationship to
-// each other is set out in a straightforward way.
-//
-// Example: Consider again an 'c5n' bare metal instance with a ENA NIC on NUMA node 0. This time the programmer 
-// determines 'RXQ_THREAD_COUNT=10' and 'TXQ_THREAD_COUNT=10' is sufficient to handle the work load. The RX/TXQ queue
-// sizes remain set to 32. But one needs only 10 each of these 32. And since 10+10 is certainly less that that the 36
-// H/W cores available on NUMA node 0 the RXQ and TXQ policy can be distinct. 'Dpdk::InitAWS' will than assign RXQ0
-// through RXQ9 to their lcores each on its own H/W core and ditto TX. As a result RXQs 10 through 31 are unused;
-// ditto TXQ.
-//
-// In this way the programmer picks lcore count which then picks which queues are used subject to the policy
-// constraint. Initialization always works for maximum concurrency where possible. Put another way 'Dpdk::InitAWS'
-// does not allow the configuration to fix RXQ or TXQs which then works backwards into thread or core count. The
-// reverse applies. The design point is that so long as the programmer achieves the right number lcores assigned to
-// the right H/W core complete with a clear assignment to a particular RXQ or TXQ ... that's good enough.
-//
-// Readers must be aware of DPDK's two indexing schemes. Recall the 'RXQ_THREAD_COUNT=10' and 'TXQ_THREAD_COUNT=10'
-// example above. From the lcore perspective DPDK will refer to lcore 0, 1, 2, ..., 19 since there are 20 lcores
-// running. The emphasis is not on what an lcore does, but rather on distinguishing one pinned pthread from another.
-// The other numbering scheme is RXQ0, RXQ1, ..., RXQ9 and TXQ0, TXQ1, ..., TXQ9. This is an alternate way to refer to
-// a lcore this time imbued with roles and responsibilities. Neither indexing scheme is unambiguos. Simply saying
-// lcore9 does not say what it does, nor what HW core it's on. Saying TXQ5 is better but it doesn't tell you which
-// lcore it is nor what HW core runs it. This is the reason 'Dpdk::AWSConfig' holds maps to relate one persective to
-// another.
-//
-// Note: you can always dump a configuration to stdout: 'Dpdk::AWSConfig' supports 'operator<<(ostream&)'
-//       the dump will show you how the enviroment was converted into an ENA config
-// Note: you can always dump the Environment to stdout: 'Dpdk::Enviroment' supports 'operator<<(ostream)'.
-//       the dump will show you all the ENV variables read with their values
-//
-// To avoid a lot of pointless duplication in documentation between the environment variables here, and the attributes
-// into which they ultimatelay are written within 'Dpdk::AWSConfig', all documentation is provided here. Second, if a
-// TX oriented value works likes its RX cousin, the TX variable is listed and grouped with its RX equivalent. However,
-// the TX side of configuration is different or subtley different, it is listed and described separately. 
+// references the attribitues in 'Dpdk::AwsConfig' influenced.
 //
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | Env Variable Name    (DPDK-API related)     | Gen | Comment                                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_DPDK_INITIALIZATION_PARAMETERS       | [*] | Comma separated DPDK initialization arguments. Can be empty. |
+// | {prefix}_DPDK_INITIALIZATION_PARAMETERS     | [*] | Comma separated DPDK initialization arguments. Can be empty. |
 // |                                             |     | Dpdk::InitAws calculates '--lcores, -n' arguments for you.   |
 // |                                             |     | Usually you'll have to provide '--proc-type, --in-memory'    |
 // |                                             |     | plus '--huge-dir'. '--log-level' is optional but typical. See|
 // |                                             |     | integration examples for example configurations. There is no |
 // |                                             |     | {prefix} or {deviceId} in this variable because there can    |
-// |                                             |     | be one set of DPDK initialization parameters for a task no   |
-// |                                             |     | the number of kinds of NICS configured.                      |
+// |                                             |     | be one set of DPDK initialization parameters for a task. This|
+// |                                             |     | variable deviates from the naming schema of all other values |
+// |                                             |     | because, in this case, DPDK takes these parameters only as a |
+// |                                             |     | string which it parses and consumes internally.              |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 //
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | Env Variable Name     (VCPU/DRAM related)   | Gen | Comment                                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_VCPU_MAX                           | [2] | The number of VCPUs machine supports. Individual VCPUs {id}s |
-// |                                             |     | are named in range [0, MAX).                                 |
-// |                                             |     | Effects AWSConfig::vcpu                                      |
+// |                                             |     | are named in range [0, MAX). Effects AWSConfig::vcpu         |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_VCPU_{id}                          | [2] | One of 'true|false'. 'true' means the VCPU {id} is considerd |
 // |                                             |     | enabled for use at runtime; 'false' is soft-disabled         |
@@ -205,7 +120,7 @@
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | Env Variable Name        (NIC related)      | Gen | Comment                                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{deviceId} = {devId}               | [*] | DPDK deviceId n>=0 effects Dpdk::AWSEnaConfig::deviceId.     |
+// | {prefix}_{deviceId} = {id}                  | [*] | DPDK deviceId n>=0 effects Dpdk::AWSEnaConfig::deviceId.     |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_PCI_DEVICE_ID           | [1] | e.g. '0000:7f:00.0' for {deviceId}. Effects                  |
 // |                                             |     | 'AWSEnaConfig::pciId                                         |
@@ -218,11 +133,9 @@
 // |                                             |     | enabled for use at runtime; 'false' is soft-disabled. Usually|
 // |                                             |     | set 'true', may be set false to soft-disable the H/W.        |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{deviceId}_RX_QUEUE_SIZE           | [1] | The maximum number of RX queues {deviceId} H/W supports.     |
-// |                                             |     | Effects AWSConfig::rxqCount/txqCount. If this value is higher|
-// | {prefix}_{deviceId}_TX_QUEUE_SIZE           |     | than DPDK's H/W capability report, init will stop with an    |
-// |                                             |     | error. It may be used to set a soft upper limit for          |
-// |                                             |     | 'QUEUE_SIZE'                                                 |
+// | {prefix}_{deviceId}_RX_QUEUE_SIZE           | [1] | The number of queues to run. Effects AWSConfig::rxqCount and |
+// |                                             |     | txqCount. If this value is higher than the HW max found by   |
+// | {prefix}_{deviceId}_TX_QUEUE_SIZE           |     | DPDK an error reported.                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_RXQ_THREAD_COUNT        | [*] | '1<=N<={prefix}_{deviceId}_RX_QUEUE_SIZE' or 'QUEUE_SIZE'    |
 // |                                             |     | Sets 'AWSEnaConfig::rxqThreadCount'. If set to 'QUEUE_SIZE'  |
