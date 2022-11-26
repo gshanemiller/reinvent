@@ -25,7 +25,7 @@
 // See Also:       Dpdk::AWSConfig
 //                 Dpdk::AWSEnaWorker
 //                 integration_tests/reinvent_dpdk_udp minimal-complete client/server example
-//                 Memory pool sizing documentation in doc/ena_packet_design.md
+//                 Memory pool sizing documentation in doc/packet_design.md
 //
 // Note: you can always dump a configuration to stdout: 'Dpdk::AWSConfig' supports 'operator<<(ostream&)'
 //       the dump will show you how the enviroment was converted into an ENA config
@@ -187,7 +187,7 @@
 // | Env Variable Name (RXQ/TXQ Mempool Related) | Gen | Comment                                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMPOOL_POLICY          | [*] | One of 'PER_QUEUE|SHARED'. The latter means all RXQ and TXQs |
-// |                                             |     | will share the same pool. See 'doc/aws_ena_packet_design.md' |
+// |                                             |     | will share the same pool. See 'doc/packet_design.md'         |
 // |                                             |     | This option is often used when each queue will take mbufs of |
 // |                                             |     | a maximum size using only as many bytes for purpose at hand. |
 // |                                             |     | SHARED mempools requires five additional configs below all   |
@@ -207,45 +207,45 @@
 // |                                             |     | Effects contents of AWSConfig::rxq and txq.                  |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMPOOL_RXQ_SIZE        | [*] | Integer list of number of elements (mbufs) per RXQ mempool   |
-// |                                             |     | See 'doc/aws_ena_packet_design.md'                           |
+// |                                             |     | See 'doc/packet_design.md'                                   |
 // | {prefix}_{deviceId}_MEMPOOL_TXQ_SIZE        |     | Entry count must equal  RXQ_THREAD_COUNT/TXQ_THREAD_COUNT    |
 // |                                             |     | Effects AWSConfig::rxq/txq                                   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMPOOL_RXQ_CACHE_SIZE  | [*] | Integer list of cache size in bytes per RXQ. For non-shared  |
-// |                                             |     | 0 bytes/RXQ is typical. See 'doc/aws_ena_packet_design.md'   |
+// |                                             |     | 0 bytes/RXQ is typical. See 'doc/packet_design.md'           |
 // | {prefix}_{deviceId}_MEMPOOL_TXQ_CACHE_SIZE  |     | Entry count equal to RXQ_THREAD_COUNT/TXQ_THREAD_COUNT       |
 // |                                             |     | Effects AWSConfig::rxq/txq                                   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMPOOL_RXQ_PRIV_SIZE   | [*] | Integer list of private size in bytes per mbuf per RXQ often |
-// |                                             |     | zero. See 'doc/aws_ena_packet_design.md'                     |
+// |                                             |     | zero. See 'doc/packet_design.md'                             |
 // |                                             |     |                                                              |
 // | {prefix}_{deviceId}_MEMPOOL_TXQ_PRIV_SIZE   |     | Entry count equal to RXQ_THREAD_COUNT/TXQ_THREAD_COUNT       |
 // |                                             |     | Effects AWSConfig::rxq/txq                                   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMPOOL_RXQ_DATA_ROOM_\ | [*] | Integer list of data room size in bytes per mbuf per RXQ.    |
-// |   SIZE                                      |     | Critical setting. See 'doc/aws_ena_packet_design.md'         |
+// |   SIZE                                      |     | Critical setting. See 'doc/packet_design.md'                 |
 // |                                             |     |                                                              |
 // | {prefix}_{deviceId}_MEMPOOL_TXQ_DATA_ROOM_\ |     | Entry count equal to RXQ_THREAD_COUNT/TXQ_THREAD_COUNT       |
 // |   SIZE                                      |     | Effects AWSConfig::rxq/txq                                   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SHARED_MEMPOOL_SIZE     | [*] | Number of mbufs (buffers) in shared mempool for all queues   |
-// |                                             |     | uses. See 'doc/aws_ena_packet_design.md'                     |
+// |                                             |     | uses. See 'doc/packet_design.md'                             |
 // |                                             |     | Effects AWSconfig::rxq/txq                                   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SHARED_MEMPOOL_ELT_SIZE | [*] | Size of each mbuf (buffer) in bytes in shared mempool.       |
-// |                                             |     | See 'doc/aws_ena_packet_design.md'                           |
+// |                                             |     | See 'doc/packet_design.md'                                   |
 // |                                             |     | Effects AWSconfig::rxq/txq                                   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SHARED_MEMPOOL_CACHE_\  | [*] | Size of per core cache in bytes for shared mempool.          |
-// |   SIZE                                      |     | See 'doc/aws_ena_packet_design.md'                           |
+// |   SIZE                                      |     | See 'doc/packet_design.md'                                   |
 // |                                             |     | Effects AWSconfig::rxq/txq                                   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SHARED_MEMPOOL_PRIVATE\_| [*] | Private data size in bytes of shared mempool.                |
-// |   DATA_SIZE                                 |     | See 'doc/aws_ena_packet_design.md'                           |
+// |   DATA_SIZE                                 |     | See 'doc/packet_design.md'                                   |
 // |                                             |     | Effects AWSconfig::rxq/txq                                   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SHARED_MEMPOOL_FLAGS    | [*] | Flags refining behavior of per-core caching                  |
-// |                                             |     | See 'doc/aws_ena_packet_design.md'                           |
+// |                                             |     | See 'doc/packet_design.md'                                   |
 // |                                             |     | Effects AWSconfig::rxq/txq                                   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_RXQ_RING_SIZE           | [*] | Number of mbufs (buffers) per RXQ to reserve for NIC to write|
