@@ -204,7 +204,6 @@ ninja -j 16 -C build install
 # Build reinvent
 #
 cd $H/reinvent
-git checkout ubuntu
 rm -rf build
 mkdir build
 cd build
