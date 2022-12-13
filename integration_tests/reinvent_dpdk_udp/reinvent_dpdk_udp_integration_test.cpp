@@ -270,8 +270,6 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, u
   //
   const uint16_t udpSize = rte_cpu_to_be_16(static_cast<uint16_t>(sizeof(rte_udp_hdr)+sizeof(TxMessage)));
 
-  const unsigned max = packetCount;
-
   struct timespec start;
   clock_gettime(CLOCK_REALTIME, &start);
 
@@ -280,7 +278,7 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, u
 
   rte_mbuf * mbuf(0);
  
-  while (likely(count<max)) {
+  while (likely(count<packetCount)) {
     if ((mbuf = rte_pktmbuf_alloc(pool))==0) {
       printf("failed to allocate mbuf\n");
       return 0;
@@ -480,7 +478,7 @@ int clientEntryPoint(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config)
   //
   // Finally enter the main processing loop passing state collected here
   //
-  return clientMainLoop(id, txqIndex, config, static_cast<unsigned>(packetCount));
+  return clientMainLoop(id, txqIndex, config, packetCount);
 }
 
 int serverEntryPoint(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
@@ -514,8 +512,10 @@ int entryPoint(void *arg) {
   rc = -1;
   if (tx) {
     rc = clientEntryPoint(id, txqIndex, config);
+    REINVENT_UTIL_LOG_INFO_VARGS("clientEntryPoint rc=%d\n", rc);
   } else if (rx) {
     rc = serverEntryPoint(id, rxqIndex, config);
+    REINVENT_UTIL_LOG_INFO_VARGS("serverEntryPoint rc=%d\n", rc);
   } else {
     REINVENT_UTIL_LOG_ERROR_VARGS("cannot classify DPDK lcore %d as RX or TX\n", id);
   }
@@ -572,6 +572,8 @@ int main(int argc, char **argv) {
       rte_eal_mp_wait_lcore();
     }
   }
+
+  REINVENT_UTIL_LOG_INFO_VARGS("DPDK worker threads done\n");
 
   //
   // Cleanup and exit from main thread
