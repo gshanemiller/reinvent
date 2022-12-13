@@ -167,7 +167,7 @@ cd ${H}/tmp
 cp /tmp/MLNX*tgz ~
 tar zxf /tmp/MLNX*tgz
 cd MLNX*
-./mlnxofedinstall --dpdk
+./mlnxofedinstall --dpdk --force
 cd ..
 # get MFT tool set
 wget https://www.mellanox.com/downloads/MFT/${MFT}

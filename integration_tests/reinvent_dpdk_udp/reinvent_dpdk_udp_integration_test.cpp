@@ -213,11 +213,6 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, u
   uint16_t       *ptr16;
   srcMac = {0};
 
-  // Demonstrate above vars on cache boundary <= 1 cache line
-  unsigned long diff = reinterpret_cast<unsigned long>(&ptr16)-reinterpret_cast<unsigned long>(&srcMac);
-  printf("address of srcMac: %p, diff in addresses: %lu, cache line size %u\n", static_cast<void*>(&srcMac),
-    diff, RTE_CACHE_LINE_SIZE);
-
   //
   // Device Id
   //
