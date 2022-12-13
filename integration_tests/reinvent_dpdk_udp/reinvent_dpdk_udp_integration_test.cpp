@@ -372,8 +372,8 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, u
     ++count;
 
     if (likely(!constantPorts)) {
-      ++srcPort;
       ++dstPort;
+      ++dstIp;
     }
   }
 

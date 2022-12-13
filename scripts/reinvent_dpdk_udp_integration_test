@@ -289,10 +289,10 @@ export TEST_SERVER_VCPU_15_ON_NUMA_NODE="0"
 if [[ "$MODE" == "client" ]]
 then
   echo $TASK -m $MODE -p $PREFIX $ARGS
-  gdb --args $TASK -m $MODE -p $PREFIX $ARGS
-  # $TASK -m $MODE -p $PREFIX $ARGS
+  # gdb --args $TASK -m $MODE -p $PREFIX $ARGS
+  $TASK -m $MODE -p $PREFIX $ARGS
 else
   echo $TASK -m $MODE -p $PREFIX $ARGS
-  gdb --args $TASK -m $MODE -p $PREFIX $ARGS
-  # $TASK -m $MODE -p $PREFIX $ARGS
+  # gdb --args $TASK -m $MODE -p $PREFIX $ARGS
+  $TASK -m $MODE -p $PREFIX $ARGS
 fi
