@@ -5,6 +5,7 @@
 #include <map>
 #include <string.h>                                                                                                     
 #include <assert.h>
+#include <ctype.h>
 
 //                                                                                                                      
 // Tell GCC to not enforce '-Wpendantic' for DPDK headers                                                               
@@ -627,6 +628,32 @@ int Dpdk::InitAWS::configSharedMempool(const std::string& prefix, Util::Environm
   return 0;
 }
 
+int Dpdk::InitAWS::convertRssKey(const std::string& key, uint8_t *keyBytes) {
+  assert(key.length()==AWSEnaConfig::RSS_HASH_KEY_SIZE*3);
+  assert(keyBytes!=0);
+
+  bool ok      = false;
+  uint16_t i   = 0;
+  uint16_t b   = 0;
+  const char * keyStr = key.c_str();
+
+  do {
+    ok = false;
+    if (isxdigit(int(keyStr[b]))&&isxdigit(int(keyStr[b+1]))&&keyStr[b+2]==':') {
+      uint32_t byte;
+      int rc = sscanf(key.c_str()+b, "%02x:", &byte);
+      if (rc==1 && byte<256) {
+        *keyBytes++ = static_cast<uint8_t>(byte);
+        b += 3;
+        ++i;
+        ok = true;
+      }
+    }
+  } while(ok && i<AWSEnaConfig::RSS_HASH_KEY_SIZE);
+
+  return (ok) ? 0 : -1;
+}
+
 int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefix, Util::Environment *env, AWSEnaConfig *config) {
   assert(!device.empty());
   assert(env);
@@ -636,8 +663,8 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   int intValue, rc;
   int deviceId;
   std::string value;
-  std::string variable;
   std::string prefix;
+  std::string variable;
 
   //
   // Get the deviceId to initialize
@@ -1023,6 +1050,32 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   }
   config->setDefaultTxFlow(intValue);
 
+  //
+  // Get RSS configuration
+  //
+  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::RX_RSS_KEY);
+  if ((rc = env->valueAsString(variable, &value))==0) {
+    Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::RX_RSS_HF);
+    if ((rc = env->valueAsInt(variable, &intValue))==0) {
+      valid = (value.length()==AWSEnaConfig::RSS_HASH_KEY_SIZE*3 &&
+               config->rxMqMask()&RTE_ETH_MQ_RX_RSS_FLAG         &&
+               intValue>0);
+      if (!valid) {
+        REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, (valid), variable.c_str(),
+         value.c_str(), "has unexpected value");
+      }
+      // Convert byte-string to byte-array
+      uint8_t keyBytes[AWSEnaConfig::RSS_HASH_KEY_SIZE];
+      if ((rc = convertRssKey(value, keyBytes))!=0) {
+        REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, (valid), variable.c_str(),
+         value.c_str(), "has unexpected value");
+      }
+
+      // Set RSS configuration
+      config->setRxRss(keyBytes, AWSEnaConfig::RSS_HASH_KEY_SIZE, intValue);                                                               
+    }
+  }
+
   std::vector<int> defaultTxSrcPort;
   std::vector<int> defaultTxDstPort;
   std::string defaultTxSrcMac;
@@ -1234,6 +1287,13 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   deviceConfig->rxmode.offloads   = config->rxOffloadMask();
   deviceConfig->txmode.mq_mode    = static_cast<rte_eth_tx_mq_mode>(config->txMqMask());
   deviceConfig->txmode.offloads   = config->txOffloadMask();
+  // Fold in RSS if enabled
+  if (config->rxMqMask()&&RTE_ETH_MQ_RX_RSS_FLAG && config->rxRssKeySize()==AWSEnaConfig::RSS_HASH_KEY_SIZE &&
+    config->rxRssHf()>0) {
+    deviceConfig->rx_adv_conf.rss_conf.rss_key     = const_cast<uint8_t*>(config->rxRssKey());
+    deviceConfig->rx_adv_conf.rss_conf.rss_hf      = config->rxRssHf();
+    deviceConfig->rx_adv_conf.rss_conf.rss_key_len = config->rxRssKeySize();
+  }
 
   if (ethDeviceInfo->tx_offload_capa & RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE) {
     deviceConfig->txmode.offloads |= RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE;

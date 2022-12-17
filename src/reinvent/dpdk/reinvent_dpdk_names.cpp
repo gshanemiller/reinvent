@@ -41,6 +41,9 @@ const char *Dpdk::Names::RX_OFFLOAD_MASK        = "RX_OFFLOAD_MASK";
 const char *Dpdk::Names::TX_MQ_MASK             = "TX_MQ_MASK";
 const char *Dpdk::Names::TX_OFFLOAD_MASK        = "TX_OFFLOAD_MASK";
 
+const char *Dpdk::Names::RX_RSS_KEY             = "RX_RSS_KEY";
+const char *Dpdk::Names::RX_RSS_HF              = "RX_RSS_HF";
+
 const char *Dpdk::Names::DPDK_INITIALIZATION_PARAMETERS = "DPDK_INITIALIZATION_PARAMETERS";
 
 const char *Dpdk::Names::ALL                    = "ALL";

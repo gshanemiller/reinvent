@@ -199,6 +199,11 @@ export TEST_SERVER_DPDK_NIC_DEVICE_RX_OFFLOAD_MASK="0"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_RING_SIZE="1024"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_THREAD_COUNT="8"
 
+# https://www.ndsl.kaist.edu/~kyoungsoo/papers/TR-symRSS.pdf
+# https://medium.com/@anubhavchoudhary/introduction-to-receive-side-scaling-rss-7cd97307d220
+export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_KEY="6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:"
+export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_HF="133152"
+
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_PTHRESH="8"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_HTHRESH="8"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_WTHRESH="0"

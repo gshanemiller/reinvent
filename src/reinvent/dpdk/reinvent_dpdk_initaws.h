@@ -322,6 +322,8 @@ namespace Dpdk {
 
 class InitAWS {
   // PRIVATE MANIULATORS
+  static int convertRssKey(const std::string& key, uint8_t *keyBytes);
+
   static int configRings(const std::string& prefix, Util::Environment *env, AWSEnaConfig *config,
     std::vector<int>& rxqRingSize, std::vector<int>& txqRingSize);
 

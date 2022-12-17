@@ -49,6 +49,9 @@ struct Names {
   static const char *TX_MQ_MASK;
   static const char *TX_OFFLOAD_MASK;
 
+  static const char *RX_RSS_KEY;
+  static const char *RX_RSS_HF;
+
   static const char *ALL;
   static const char *SHARED;
   static const char *PER_QUEUE;

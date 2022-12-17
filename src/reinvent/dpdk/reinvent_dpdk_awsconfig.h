@@ -47,6 +47,12 @@ namespace Reinvent {
 namespace Dpdk {
 
 class AWSEnaConfig {
+public:
+  // ENUM
+  enum {
+      RSS_HASH_KEY_SIZE=40,
+  };
+
 private:
   // Validity of state
   int d_isValid;
@@ -85,13 +91,16 @@ private:
   // Lcore map
   std::vector<LCORE>        d_lcore;
 
-  // Other NIC or UDP/TCP parms
+  // Other NIC, UDP/TCP, RSS parms
   int                       d_linkSpeed;
   int                       d_rxMqMask;
   int                       d_txMqMask;
   int                       d_rxOffloadMask;
   int                       d_txOffloadMask;
   int                       d_defaultTxFlow;
+  uint8_t                   d_rxRssKey[RSS_HASH_KEY_SIZE]; 
+  int                       d_rxRssKeySize;
+  int                       d_rxRssHf;
 
   // TXQ/RXQ Threshholds
   int                       d_txqPrefetchThresh;
@@ -213,6 +222,15 @@ public:
 
   int defaultTxFlow() const;
     // Return value of 'defaultTxFlow' attribute
+
+  const uint8_t *rxRssKey() const;
+    // Return value of 'rxRssKey' attribute. The valid length of this pointer is given by 'rxRssKeySize'
+
+  int rxRssKeySize() const;
+    // Return value of 'rxRssKeySize' attribute. This value is 0 (RSS not used) or 'RSS_HASH_KEY_SIZE'
+
+  int rxRssHf() const;
+    // Return value of 'rxRssHf' attribute
 
   int txqPrefetchThresh() const;
     // Return value of 'txqPrefetchThresh' attribute
@@ -339,6 +357,11 @@ public:
   void setDefaultTxFlow(int value);
     // Assign specified 'value' to the attribute 'defaultTxFlow 
 
+  void setRxRss(const uint8_t *key, int keySize, int hf);
+    // Assign specified RSS hash 'key' of specified 'keySize' operating over packet types in specified 'hf'. Behavior
+    // is defined provided 'keySize=RSS_HASH_KEY_SIZE' and 'hf>0'. Configuring RSS also requires a valid setting in
+    // 'rxMqMask'. Note a copy of 'key' is taken.
+
   rte_eth_conf *ethDeviceConf();
     // Return modifable pointer to 'ethDeviceConf' attribute
 
@@ -403,6 +426,8 @@ AWSEnaConfig::AWSEnaConfig()
 , d_rxOffloadMask(0)
 , d_txOffloadMask(0)
 , d_defaultTxFlow(0)
+, d_rxRssKeySize(0)
+, d_rxRssHf(0)
 , d_txqPrefetchThresh(0)
 , d_txqHostThresh(0)
 , d_txqWriteBackThresh(0)
@@ -416,6 +441,7 @@ AWSEnaConfig::AWSEnaConfig()
 {
   memset(static_cast<void*>(&d_ethDeviceConf), 0, sizeof(struct rte_eth_conf));
   memset(static_cast<void*>(&d_ethDeviceInfo), 0, sizeof(struct rte_eth_dev_info));
+  memset(static_cast<void*>(d_rxRssKey),       0, RSS_HASH_KEY_SIZE);
 }
 
 // ACCESSORS
@@ -567,6 +593,21 @@ int AWSEnaConfig::txOffloadMask() const {
 inline
 int AWSEnaConfig::defaultTxFlow() const {
   return d_defaultTxFlow;
+}
+
+inline
+const uint8_t *AWSEnaConfig::rxRssKey() const {
+  return d_rxRssKey;
+}
+
+inline
+int AWSEnaConfig::rxRssKeySize() const {
+  return d_rxRssKeySize;
+}
+
+inline
+int AWSEnaConfig::rxRssHf() const {
+  return d_rxRssHf;
 }
 
 inline
@@ -773,6 +814,16 @@ void AWSEnaConfig::setTxOffloadMask(int value) {
 inline
 void AWSEnaConfig::setDefaultTxFlow(int value) {
   d_defaultTxFlow = value;
+}
+
+inline
+void AWSEnaConfig::setRxRss(const uint8_t *key, int keySize, int hf) {
+  assert(key!=0);
+  assert(keySize==RSS_HASH_KEY_SIZE);
+  assert(hf>0);
+  memcpy(static_cast<void*>(d_rxRssKey), (void*)(key), keySize); 
+  d_rxRssKeySize = RSS_HASH_KEY_SIZE;
+  d_rxRssHf = hf;
 }
 
 inline
