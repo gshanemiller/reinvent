@@ -405,7 +405,7 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
   printf("lcoreId %02d rxqIndex %02d listening for packets\n", id, rxqIndex);
   
   unsigned count(0);
-  unsigned stalledRx(0);
+  uint32_t stalledRx(0);
   std::vector<rte_mbuf*> mbuf(RX_BURST_CAPACITY);
 
   struct timespec start;
@@ -447,16 +447,14 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
         (static_cast<double>(elapsedNs)/static_cast<double>(1000000000));
       double payloadMbPerSecond = payloadBytesPerSecond/static_cast<double>(1024)/static_cast<double>(1024);
 
-      printf("lcoreId: %02d, rxqIndex: %02d: elsapsedNs: %lu, packetsQueued: %u, packetSizeBytes: %d, payloadSizeBytes: %lu, pps: %lf, nsPerPkt: %lf, bytesPerSec: %lf, mbPerSec: %lf, mbPerSecPayloadOnly: %lf\n", 
-        id, rxqIndex, elapsedNs, count, packetSize, sizeof(TxMessage), pps, rateNsPerPacket, bytesPerSecond, mbPerSecond, payloadMbPerSecond);
+      printf("lcoreId: %02d, rxqIndex: %02d: elsapsedNs: %lu, packetsDequeued: %u, packetSizeBytes: %d, payloadSizeBytes: %lu, pps: %lf, nsPerPkt: %lf, bytesPerSec: %lf, mbPerSec: %lf, mbPerSecPayloadOnly: %lf, stalledRx: %u\n", 
+        id, rxqIndex, elapsedNs, count, packetSize, sizeof(TxMessage), pps, rateNsPerPacket, bytesPerSecond, mbPerSecond, payloadMbPerSecond, stalledRx);
     
       count = 0;
 
       clock_gettime(CLOCK_REALTIME, &start);
     }
   }
-
-  printf("stalledRx: %u\n", stalledRx);
 
   return 0;
 }
