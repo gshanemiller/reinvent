@@ -7,8 +7,8 @@ programmers, DPDK documentation is lacking in a top-down description of concepts
 
 The specific task of how to create and TX UDP packets then receive them --- a typical first time exercise --- is        
 especially lacking. This guide attempts to resolve those issues. The reader will need passing familiarity with how/why  
-bare metal boxes divide hardware (NICs, memory, and CPUs) into NUMA groups, and understand how multi-socket CPUs are futher sub-divided
-into cores.                                                                                                             
+bare metal boxes divide hardware (NICs, memory, and CPUs) into NUMA groups, and understand how multi-socket CPUs 
+are futher sub-divided into cores.                                                                                                             
 
 You may also find these links helpful:
 
