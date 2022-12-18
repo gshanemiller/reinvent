@@ -92,7 +92,7 @@ export TEST_CLIENT_DPDK_INITIALIZATION_PARAMETERS="--proc-type,primary,--in-memo
 export TEST_CLIENT_DRAM_MEMORY_CHANNELS=4
 
 # number of packets to be transmitted by each TXQ
-export TEST_CLIENT_TXQ_PACKET_COUNT=10
+export TEST_CLIENT_TXQ_PACKET_COUNT=1000
 
 export TEST_CLIENT_VCPU_MAX=16
 export TEST_CLIENT_VCPU_0_SOFT_ENABLED="FALSE"
@@ -202,7 +202,7 @@ export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_THREAD_COUNT="8"
 # https://www.ndsl.kaist.edu/~kyoungsoo/papers/TR-symRSS.pdf
 # https://medium.com/@anubhavchoudhary/introduction-to-receive-side-scaling-rss-7cd97307d220
 export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_KEY="6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:"
-export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_HF="133152"
+export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_HF="41868"
 
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_PTHRESH="8"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_HTHRESH="8"

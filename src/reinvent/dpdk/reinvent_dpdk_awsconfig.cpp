@@ -16,7 +16,6 @@ std::ostream& Dpdk::AWSEnaConfig::print(std::ostream& stream) const {
   }
   stream << "],";
 
-
   stream << "\"deviceId\":"         << d_deviceId         << ","
          << "\"pciId\":\""          << d_pciId            << "\","
          << "\"numaNode\":"         << d_numaNode         << ","
@@ -92,8 +91,20 @@ std::ostream& Dpdk::AWSEnaConfig::print(std::ostream& stream) const {
          << "\"txMqMask\":"         << d_txMqMask         << ","
          << "\"rxOffloadMask\":"    << d_rxOffloadMask    << ","
          << "\"txOffloadMask\":"    << d_txOffloadMask    << ","
-         << "\"defaultTxFlow\":"    << d_defaultTxFlow;
+         << "\"defaultTxFlow\":"    << d_defaultTxFlow    << ","
+         << "\"rxRssKeySize\":"     << d_rxRssKeySize     << ","
+         << "\"rxRssHf\":"          << d_rxRssHf          << ","
+         << "\"rxRssKey\":";
 
+  char buf[RSS_HASH_KEY_SIZE*3+1]={0};
+  if (d_rxRssKeySize==RSS_HASH_KEY_SIZE) {
+    for (unsigned i=0; i<RSS_HASH_KEY_SIZE; ++i) {
+      sprintf(buf+(i*3), "%02x:", (int)d_rxRssKey[i]);
+    }
+    stream << "[" << buf << "]";
+  } else {
+    strcpy(buf, "[]");
+  }
   stream << "}";
 
   return stream;

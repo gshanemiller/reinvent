@@ -1287,7 +1287,8 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   deviceConfig->rxmode.offloads   = config->rxOffloadMask();
   deviceConfig->txmode.mq_mode    = static_cast<rte_eth_tx_mq_mode>(config->txMqMask());
   deviceConfig->txmode.offloads   = config->txOffloadMask();
-  // Fold in RSS if enabled
+
+  // Enable RSS if configure
   if (config->rxMqMask()&&RTE_ETH_MQ_RX_RSS_FLAG && config->rxRssKeySize()==AWSEnaConfig::RSS_HASH_KEY_SIZE &&
     config->rxRssHf()>0) {
     deviceConfig->rx_adv_conf.rss_conf.rss_key     = const_cast<uint8_t*>(config->rxRssKey());
