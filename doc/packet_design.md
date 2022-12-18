@@ -1,13 +1,14 @@
 # Introduction
 
-DPDK is a wonderful and performant library with serious support for non-trivial hardware. But DPDK is also by
-specialists for specialists. You're not gonna like DPDK until you cross third-base. Especially for first-time
-programmers, DPDK documentation is somewhat lacking in a top-down description of concepts. While DPDK provides
-[a programer guide](https://core.dpdk.org/doc), this author did not find it particularly helpful. The specific
-issue of how to create and TX UDP packets --- a typical first time exercise --- is especially lacking. This guide
-attempts to resolve those issues. The reader will need passing familiarity with how/why bare metal boxes divide
-hardware (NICs, memory, and CPUs) into NUMA groups, and understand how multi-socket CPUs are futher sub-divided
-into cores. 
+DPDK is a wonderful and performant library with serious support for non-trivial hardware. But DPDK is also by           
+specialists for specialists. You're not gonna like DPDK until you cross third-base. Especially for first-time           
+programmers, DPDK documentation is lacking in a top-down description of concepts. While DPDK provides          
+[a programer guide](https://core.dpdk.org/doc), this author did not find it particularly helpful. The [DPDK book](https://www.amazon.com/Data-Plane-Development-Kit-DPDK/dp/0367373955/ref=sr_1_1?crid=2HJES3SUAP43U&keywords=dpdk&qid=1671395300&s=books&sprefix=dpdk%2Cstripbooks%2C96&sr=1-1) was too theoretical and full of typos.
+
+The specific task of how to create and TX UDP packets then receive them --- a typical first time exercise --- is        
+especially lacking. This guide attempts to resolve those issues. The reader will need passing familiarity with how/why  
+bare metal boxes divide hardware (NICs, memory, and CPUs) into NUMA groups, and understand how multi-socket CPUs are futher sub-divided
+into cores.                                                                                                             
 
 You may also find these links helpful:
 
