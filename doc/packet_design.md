@@ -78,7 +78,8 @@ Second, the existence of queues arise out of the old story in which CPU frequenc
 of compromise, ship multi-core CPUs. So in order to perform high speed I/O without stalling the NIC --- and thus 
 defeating performance because its H/W buffers are full awaiting CPU handoff --- H/W manufactures created NICs with
 multiple TX and RX queues. Each queue works, for all intents and purposes share-nothing. Typically each queue is pinned
-to one CPU core. Now we're back to scalable performance.
+to one CPU core so that one core alone handles transmitting on it (TXQ) or receiving from it (RXQ). Now we're back 
+to scalable performance.
 
 Third, modern machines are NUMA (Non Uniform Machine Architecture). Programmers incur severe performance penalties
 if a H/W resource on NUMA node A --- which includes CPU cores, DRAM, NICs among others --- access H/W resources on a
@@ -86,10 +87,10 @@ NUMA node `B!=A`. Therefore one should assume client lcores 11, 12, 13 in the di
 the NIC they serve. Ditto for server lcores 0,1,2.
 
 Next, NICs have a MAC address. NICs also have an assigned IPv4/6 address. These identifiers, plus port numbers are
-transmitted as part of a IP UDP packet. If NIC RSS (Receive Side Scaling) is enabled on the server (receiver) side,
-the packets are distributed to a specific RXQ by hashing the source/destination MAC, IP address, and ports. If RSS is
+transmitted as part of a IP packet. If NIC RSS (Receive Side Scaling) is enabled on the server (receiver) side,
+the packets are distributed to a specific RXQ by hashing the source/destination IP address, and ports. If RSS is
 disabled, all packets go to logical RXQ #0. It's important to observe, however, the IP addresses and ports are pseudo
-unlike a traditional UDP TX/RX socket program pair using kernel I/O. See RSS below for more information.
+unlike a traditional TX/RX socket program pair using kernel I/O. See RSS below for more information.
 
 Then, note each NIC has a maximum number of RXQ and TXQs in H/W. The programmer can elect to use as many or as few
 of these queues as desired. But since receiving or transmitting packets on a given NIC/queue requires a lcore to do
@@ -109,8 +110,9 @@ For example in the AWS `c5n bare metal` case where ENA NICs have 32 RXQs and 32 
 and TX queues with an injective `f`. A `c5n` instance does not have `32+32=64` CPU cores all on the same NUMA node as
 the NIC itself. So some CPU cores must do double-duty. Or, optionally, programmers must not use all queues.
 
-The Reinvent library approach is to specify the number of lcores to be run for RXQ and TXQ. Each lcore is assigned its
-own RXQ (TXQ). lcores may share a HW CORE if the allocation policy is `SHARED` or never share a HW core if 'DISTINCT'.
+The Reinvent library approach is to specify the number of lcores to be run in one setting, and the number of RXQ (TXQ)
+queues to configure in a second setting. The library then assigns queues to cores. The assignment is injective if the
+config `DISTINCT` is given. `SHARED` allows multiple queues to be handled one CPU HW core.
 
 # RSS (Receive Side Scaling)
 At a very high level routing packets between clients (senders) and servers (receivers) occurs in three phases:
