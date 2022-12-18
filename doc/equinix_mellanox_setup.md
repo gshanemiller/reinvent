@@ -105,14 +105,13 @@ and download the required file to your local box. You'll `scp` it onto the Equin
 19. Accept the EUA and download it.
 20. After it's downloaded copy it from your local machine running the browser to the Equinix machine in step 9. The command
 you'll use is: `scp -i <ssh-key/pem-file> MLNX_OFED_LINUX-5.5-1.0.3.2-ubuntu20.04-x86_64.tgz root@<public-ip-address>:/tmp`.
-This will require 1-10 mins depending on your link speed. Note it must be copied to '/tmp'.
-21. Once this is done return to the Equinix CLI and press ENTER. You'll be prompted to OK the install of Mellanox drivers.
-Press 'y'.
+This will require 1-10 mins depending on your link speed. Note **it must be copied** to '/tmp'.
+21. Once this is done return to the Equinix CLI and press ENTER. The script will complete Mellanox driver setup
 
 Once step (21) is done, the script will download DPDK from githib. It'll then run `vi` on the main build-setup file. At
 the top of the file there's a variable declaration for `apps` listing all the applications to be built in addition to
-the library. For almost all purposes all but one of these applications is not needed. Building all applications will
-double DPDK built time because DPDK uses LTO. It's recommanded to keep only `test-pmd` so the variable declaration reads:
+the library. For most purposes only one of these applications is needed. Building all applications will double DPDK 
+build time because DPDK uses LTO. It's recommended to keep only `test-pmd` so the variable declaration reads:
 
 ```
 apps = [
@@ -123,10 +122,10 @@ apps = [
 22. Inside the VI editor on `app/meson.build` either immediately quit and exit with vi command `:wq` or change the `apps`
 array to include only `test-pmd` then write the changes and quit with `:wq`. Once done the script will build and install
 DPDK.
-23. After about 10 minutes the script will prompt `you need to enable IOMMU`. Press ENTER to continue and run VI on the grub
-boot file.
-24. In the editor change the `GRUB_CMDLINE_LINUX` line adding a space plus `iommu=1 intel_iommu=on'` so that it reads
-`export GRUB_CMDLINE_LINUX='console=tty0 console=ttyS1,115200n8 iommu=1 intel_iommu=on'`
+23. After about 10 minutes the script will prompt `you need to enable IOMMU`. Press ENTER to continue. VI is run on the
+grub boot file.
+24. In the editor change the `GRUB_CMDLINE_LINUX` line appending a space plus `iommu=1 intel_iommu=on'` so that it reads
+`export GRUB_CMDLINE_LINUX='... iommu=1 intel_iommu=on'`
 25. Save and exit by escaping and entering `:wq`
 26. Installation part 1 is done. Press ENTER to reboot. The Mellanox kernel driver set needs to initialize and run.
 
@@ -176,6 +175,7 @@ iface enp1s0f1 inet manual
 To:
 
 ```
+# assign IP address 192.168.0.2 to enp1s0f1
 auto enp1s0f1
 iface enp1s0f1 inet static
     address 192.168.0.2/28
@@ -186,7 +186,7 @@ and simply remove `enp1s0f1` so it reads `bond-slaves enp1s0f0`. Save and exit.
 25. If you have not rebooted yet do so now by running `reboot` in your shell. If you have rebooted you can simply
 restart the networking subsystem with `systemctl restart networking`
 26. Repeat steps 21-25 for each of your other machines **EXCEPT** do not give the static address `192.168.0.2/28`.
-Use the next IPV4 address e.g. `192.168.0.3/28`.
+Use the next IPV4 address e.g. `192.168.0.3/28` so each machine has a distinct IP address.
 
 # Procedure Part 3 of 3
 You will now exercise the reinvent test UDP program to make a basic assessment of throughput between two of the machines.
@@ -195,7 +195,7 @@ This will require about 10 minutes.
 There are two small bits of configuration left. You'll need to plug-in the ethenet addresses and IP addresses of the
 DPDK Mellanox cards. And you'll need to run a premade script to setup huge-pages. 
 
-Pick two of your machines. Call one `client` and call the other one `server`.
+Pick two of your machines. Call it `client`. Call the other machine `server`.
 
 1. Login to your client machine and run `ifconfig enp1s0f1`. This should record the 192.168.x.x address you configured
 above. For example,
