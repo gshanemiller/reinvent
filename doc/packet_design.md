@@ -153,6 +153,12 @@ enables all IP packet types).
 [Source code](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_initaws.h) provides
 additional information with links to the DPDK API documentation where values may be found. Search for RSS.
 
+To get symmetrical RSS assignment meaning the reverse route `B` to `A` goes back to the same source lcore that originally
+transmitted and routed `A` to `B` see:
+
+* [Microsoft RSS Paper](https://www.ndsl.kaist.edu/~kyoungsoo/papers/TR-symRSS.pdf)
+* [Technical Article](https://medium.com/@anubhavchoudhary/introduction-to-receive-side-scaling-rss-7cd97307d220)  
+
 As of this writing I was unable to confirm `ethtool -x` or DPDK's `test-pmd` prints out the RSS configurations Reinvent
 sets.
 
