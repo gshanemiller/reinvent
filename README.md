@@ -4,7 +4,7 @@ Library: DPDK userspace library read/write UDP messages with congestion control
 # Status
 * Early-alpha: under heavy development. [Major limitations given here.](https://github.com/rodgarrison/reinvent/issues)
 * See [AWS name issue](https://github.com/rodgarrison/reinvent/issues/23). As discussed there, no code in this library
-depends on or requires AWS. References to AWS in types or class names need to replaced with a generic name
+depends on or requires AWS. References to AWS in types or class names need to replaced with a generic name. TBD.
 
 # Design Goals
 This library intends to be a rewrite of [eRPC](https://github.com/erpc-io/eRPC) which was the motivation for this work.
@@ -14,8 +14,7 @@ UDP packet loss and flow control. The result is a highly efficient yet general p
 
 # Reinvent features
 * Decently documented
-* Ships with a working IPV4 UDP TX/RX example
-* Shows ENA checksum offload for IPV4, UDP checksums
+* Ships with a working IPV4 UDP RSS TX/RX example
 * No-copy TX packet preparation
 * DPDK configuration including UDP IPV4 routing information is defined outside code as enviromment variables ala
 12-factor. For beginners it's far easier to understand configuration because readers are not dragged into DPDK code,
@@ -41,11 +40,11 @@ of operating systems and hardware --- testing and setup here is confirmed on Equ
 instances.
 
 Provided NICs are supported by DPDK the main differences between this setup and an alternate valid setup are
-system administration related not code. Ultimately you'll need two or more boxes (sender/clients, and receiver/servers)
+system administration not code. Ultimately you'll need two or more boxes (sender/clients, and receiver/servers)
 such that each box has at least one DPDK compatible NIC which is **unused by the operating system**. Your NIC may or
 may not require installation of its own dependencies. Mellanox does and the choice of Mellanox dependencies depends
 in turn on the O/S and version. DPDK NICs must have an IP address assignment and the machines must connected to each 
-other over a local LAN.
+other over a local LAN. The Equinix setup guide (link below) deals with all these issues.
 
 # Getting Started
 * [Read setup instructions](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md). This will

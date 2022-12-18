@@ -9,14 +9,6 @@ attempts to resolve those issues. The reader will need passing familiarity with 
 hardware (NICs, memory, and CPUs) into NUMA groups, and understand how multi-socket CPUs are futher sub-divided
 into cores. 
 
-This document refers to AWS c5n bare metal instances. AWS machines were used during early development. Later, I switched
-to [Equinix](https://www.equinix.com/) servers because they are actually baremetal, come with better NICs (Mellanox),
-and are cheaper to use. Being real bare metal machines the NICs are actual HW plugged into the PCI bus of the host.
-AWS NICs are virtual. Bonafide HW cards avoid obviate virtual AWS NIC drivers as a software dependency. AWS virtual NICs
-have limitations a PCI Mellanox NIC does not have. 
-
-Nonetheless everything in this document applies to Equinix and DPDK compatible NICs in general.
-
 You may also find these links helpful:
 
 * [UDP client/server example](https://github.com/rodgarrison/reinvent/tree/main/integration_tests/reinvent_dpdk_udp) 
@@ -59,8 +51,8 @@ You may also find these links helpful:
 
 Figure 1: One way communication
 -------------------------------
-NIC with MAC address 01:23:45:67:78:90 is attached to NUMA node 0 of a server machine. Server receives only.
 NIC with MAC address 23:45:67:89:0a:bc is attached to NUMA node 0 of a client machine. Client transmits only.
+NIC with MAC address 01:23:45:67:78:90 is attached to NUMA node 0 of a server machine. Server receives only.
 
 NICs have both RXQ (recceive queues) and TXQ (transmit queues). To start simple, this diagram illustrates the
 client machine only transmitting (so no RXQs) while the server machine only receives (so no TXQs). Production
@@ -68,13 +60,13 @@ configurations almost certainly do both in the same NIC.
 
 Each queue has a dedicated lcore e.g. pthread pinned to a CPU HW core to handle the roles and responsibilities
 of that queue.
-
 ``` 
 
-Consider simple one-way communication where a client machine sends packets to a server machine. The server does not
-respond. In consequence the client does not receive and the server does not transmit. For brevity I omit other NUMA
-nodes, their NICs, each with its queues which can co-exist. This diagram illustrates one NIC attached to NUMA node
-zero. Other NUMA nodes, its CPU cores, and memory is not shown.
+This diagram illustrates one NIC attached to one NUMA node one machine once on the client side, and again on the 
+server side. It's simple one-way communication where a client machine sends packets to a server machine. The server
+does not respond. For brevity I omit other NUMA nodes, their NICs, each with its queues which may co-exist. Once you
+understand how this example works, generalizing follows trivially: each NIC in whatever NUMA node it runs in, works the
+same way and independently of the other NICs.
 
 Even with those omissions many important aspects shine through. First, **lcore here refers to a pthread** which has
 been pinned to a physical core (aka vCPU). DPDK `lcore` tends to draw the reader's focus solely on a CPU core
@@ -84,23 +76,24 @@ DPDK jargon **lcore** is short hand for an application created pthread pinned to
 Second, the existence of queues arise out of the old story in which CPU frequencies plateaued. CPU vendors, by way
 of compromise, ship multi-core CPUs. So in order to perform high speed I/O without stalling the NIC --- and thus 
 defeating performance because its H/W buffers are full awaiting CPU handoff --- H/W manufactures created NICs with
-multiple queues. Each queue works, for all intents and purposes, share-nothing. This way each queue can be pinned to
-one core. Now we're back to scalable performance. NIC queues naturally divide into RX queues (RXQ) and TX queues
-(TXQ) flavors.
+multiple TX and RX queues. Each queue works, for all intents and purposes share-nothing. Typically each queue is pinned
+to one CPU core. Now we're back to scalable performance.
 
 Third, modern machines are NUMA (Non Uniform Machine Architecture). Programmers incur severe performance penalties
 if a H/W resource on NUMA node A --- which includes CPU cores, DRAM, NICs among others --- access H/W resources on a
-NUMA node `B<>A`. Therefore one should assume client lcores 11, 12, 13 in the diagram are on NUMA node 0 just like
+NUMA node `B!=A`. Therefore one should assume client lcores 11, 12, 13 in the diagram are on NUMA node 0 just like
 the NIC they serve. Ditto for server lcores 0,1,2.
 
-Next, NICs have a MAC address. NICs can also be assigned a IPv4 address. These identifiers, plus ports are transmitted
-as part of a IPV4 UDP packet. Every client lcore TXQ transmits on its own queue. RSS server side delivers the transmitted
-packets to a specific RXQ server side. And one server side lcore processes incoming packets for its queue.
+Next, NICs have a MAC address. NICs also have an assigned IPv4/6 address. These identifiers, plus port numbers are
+transmitted as part of a IP UDP packet. If NIC RSS (Receive Side Scaling) is enabled on the server (receiver) side,
+the packets are distributed to a specific RXQ by hashing the source/destination MAC, IP address, and ports. If RSS is
+disabled, all packets go to logical RXQ #0. It's important to observe, however, the IP addresses and ports are pseudo
+unlike a traditional UDP TX/RX socket program pair using kernel I/O. See RSS below for more information.
 
 Then, note each NIC has a maximum number of RXQ and TXQs in H/W. The programmer can elect to use as many or as few
 of these queues as desired. But since receiving or transmitting packets on a given NIC/queue requires a lcore to do
 that work, and lcores are by definition pthreads pinned to a CPU core, the programmer must determine which lcore
-handles which RX or TX queue. This is done twice: once on the client for its NIC/queues, and again on the server.
+handles which RX or TX queue.
 
 The considerations here are similar to mathematics where one designates a function `f: X->Y` as injective, surjective,
 or bijective. The focus is less on what `X, Y` are --- in our scenario X is the set of RXQ/TXQs for a single NIC and Y
@@ -108,9 +101,8 @@ is the set of CPU cores on the same machine --- but rather on how `f` maps.
 
 For maximum concurrency, `f` should be injective. That is, each specific RXQ or TXQ should get its own lcore, which is
 what the diagram illustrates: `f` maps client TXQ 10 to lcore 11. `f` maps no other queue to lcore 11. And same on the
-server side. DPDK certainly allows multiple queues to run on the same lcore; programmers just need to accept the
-trade-offs that occur when sharing a CPU core. DPDK methodology uses the `--lcores` argument passed to `rte_eal_init()`
-to create and pin lcores as per the mapping `f` provides.
+server side. DPDK allows multiple queues to run on the same lcore. Programmers must accept the resource trade-offs that
+occur sharing CPU cores.
 
 For example in the AWS `c5n bare metal` case where ENA NICs have 32 RXQs and 32 TXQs, it is not possible to use all RX
 and TX queues with an injective `f`. A `c5n` instance does not have `32+32=64` CPU cores all on the same NUMA node as
@@ -120,48 +112,46 @@ The Reinvent library approach is to specify the number of lcores to be run for R
 own RXQ (TXQ). lcores may share a HW CORE if the allocation policy is `SHARED` or never share a HW core if 'DISTINCT'.
 
 # RSS (Receive Side Scaling)
-RSS is NIC behavior that, based on a packet content hash, determines which RXQ will take delivery of each packet.
-Without this facility packet RX cannot be load balanced across all RXQs and their managing lcores which will eventually
-lead to dropped packets or back pressure on TX queues. 
+At a very high level routing packets between clients (senders) and servers (receivers) occurs in three phases:
 
-Routing packets is, again at very high level of abstraction, occurs in two phases:
+* Switch/router HW connected to the NICs route packets based on the MAC/IPV4 addresss in the packet headers
+* Once the receiving NIC gets the packets, RSS is used to deliver packets to specific RXQs say RXQ `N`
+* The lcore assigned to handle RXQ `N' at the destination reads (deuques) the packets from the NIC HW
 
-* Switches/routers connected to the NICs route packets based on the MAC/IPV4 addresss in the packet headers
-* Once the receiving NIC gets the packets, RSS is used to pick and deliver packets to specific RXQs 
+RSS is NIC H/W behavior that when enabled, performs a computation on the packet's source/destination IP addresses,
+and port numbers to determine which RXQ will take delivery of each packet no matter what TXQ it originated. This
+concept initiates packet routing. At the application level, a client will often have to send packets to a specific 
+receiver.
 
-The AWS ENA NIC supports RSS. It has to be enabled by setting the RXQ mask to 1 (RTE_ETH_MQ_RX_RSS_FLAG). RSS performs
-a hash of packet contents then mods the result to the number of running RXQs. As long as the TX side varies the packet
-contents enough so the hash changes enough, RSS will load balance. Some NICs support programming in a hash which DPDK
-does support. However, AWS ENA NICs do not support this functionality. The default RSS hash can be seen like this:
+For example, in a partitioned KV (key-value) system a client lookup of the key `secret-password` will have to route its
+request to the server lcore pinned to the RXQ handling keys starting with `s'. Doing this correctly and reliably
+requires some pre-knowledge of the hash so the destination RXQ can be computed ahead of time placing the right IP
+address and ports into the destination part of the IP packet. Conversely the server will need to reverse the route so
+it can send the value for `secret-password` back to the client who asked for it.
 
-```
-$ ethtool -x ens6
-RX flow hash indirection table for ens6 with 32 RX ring(s):
-    0:      0     1     2     3     4     5     6     7
-    8:      8     9    10    11    12    13    14    15
-   16:     16    17    18    19    20    21    22    23
-   24:     24    25    26    27    28    29    30    31
-   32:      0     1     2     3     4     5     6     7
-   40:      8     9    10    11    12    13    14    15
-   48:     16    17    18    19    20    21    22    23
-   56:     24    25    26    27    28    29    30    31
-   64:      0     1     2     3     4     5     6     7
-   72:      8     9    10    11    12    13    14    15
-   80:     16    17    18    19    20    21    22    23
-   88:     24    25    26    27    28    29    30    31
-   96:      0     1     2     3     4     5     6     7
-  104:      8     9    10    11    12    13    14    15
-  112:     16    17    18    19    20    21    22    23
-  120:     24    25    26    27    28    29    30    31
-RSS hash key:
-86:e8:45:9a:35:c5:9f:b3:2e:be:89:73:fc:db:ea:29:a6:a5:e8:d5:fe:dd:43:da:2a:89:76:52:ae:b8:65:f7:99:9d:41:22:24:4e:b2:01
-RSS hash function:
-    toeplitz: on
-    xor: off
-    crc32: off
-```
+If you don't care about packet routing, RSS can still be used to spread packets RX side evenly over all the RXQs. In
+those cases assign random ports in the IP packet.
 
-If RTE_ETH_MQ_RX_RSS_FLAG is not set, all packets seem to go to one RXQ.
+In RSS DPDK the ports are pseudo. By construction DPDK I/O works without the Linux kernel. You can't use `ncat` to
+listen (or transmit) on an IP address and port intended for a DPDK controlled NIC. DPDK uses this information as input
+to the hash function only.
+
+Note that if RSS is disabled all packets go to logical RXQ #0 at the destination. I am unaware of a way to tell DPDK
+which RXQ should take delivery of the packet directly. RSS controls this indirectly only.
+
+Enabling RSS in the Reinvent library is a straightforward process. The [example script](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_udp_integration_test)
+demonstrates the settings you need: 
+
+1. You must set RX_MQ_MASK value to include the bit for RTE_ETH_MQ_RX_RSS_FLAG (e.g. value 1)
+2. You must set a 40 byte hashing key in RX_RSS_KEY
+3. You must set a non-zero value in RX_RSS_HF which describes which packet types RSS should be applied over (e.g. 41868
+enables all IP types).
+
+The [source code](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_initaws.h) provides
+additional information here with links to the DPDK API documentation where values can be found. Search for RSS.
+
+As of this writing I was unable to confirm `ethtool -x` or DPDK's `test-pmd` prints out the RSS configurations Reinvent
+sets.
 
 # Packet Memory Mental Picture
 Read this diagram with [DPDK 10.1 diagram](https://doc.dpdk.org/guides/prog_guide/mbuf_lib.html#figure-mbuf1):
