@@ -117,9 +117,9 @@ config `DISTINCT` is given. `SHARED` allows multiple queues to be handled one CP
 # RSS (Receive Side Scaling)
 At a very high level routing packets between clients (senders) and servers (receivers) occurs in three phases:
 
-* Switch/router HW connected to the NICs route packets based on the MAC/IPV4 addresss in the packet headers
-* Once the receiving NIC gets the packets, RSS is used to deliver packets to specific RXQs say RXQ `N`
-* The lcore assigned to handle RXQ `N' at the destination reads (deuques) the packets from the NIC HW
+* Switch/router HW connected to the NICs route packets based on the MAC/IP addresss in the packet headers
+* Once the receiving NIC gets the packets, RSS is used to deliver packets to specific RXQs, say RXQ `N`
+* The lcore assigned to handle RXQ `N` at the destination reads (deuques) the packets from the NIC HW
 
 RSS is NIC H/W behavior that when enabled, performs a computation on the packet's source/destination IP addresses,
 and port numbers to determine which RXQ will take delivery of each packet no matter what TXQ it originated. This
@@ -127,7 +127,7 @@ concept initiates packet routing. At the application level, a client will often 
 receiver.
 
 For example, in a partitioned KV (key-value) system a client lookup of the key `secret-password` will have to route its
-request to the server lcore pinned to the RXQ handling keys starting with `s'. Doing this correctly and reliably
+request to the server lcore pinned to the RXQ handling keys starting with `s`. Doing this correctly and reliably
 requires some pre-knowledge of the hash so the destination RXQ can be computed ahead of time placing the right IP
 address and ports into the destination part of the IP packet. Conversely the server will need to reverse the route so
 it can send the value for `secret-password` back to the client who asked for it.
@@ -148,10 +148,10 @@ demonstrates the settings you need:
 1. You must set RX_MQ_MASK value to include the bit for RTE_ETH_MQ_RX_RSS_FLAG (e.g. value 1)
 2. You must set a 40 byte hashing key in RX_RSS_KEY
 3. You must set a non-zero value in RX_RSS_HF which describes which packet types RSS should be applied over (e.g. 41868
-enables all IP types).
+enables all IP packet types).
 
-The [source code](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_initaws.h) provides
-additional information here with links to the DPDK API documentation where values can be found. Search for RSS.
+[Source code](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_initaws.h) provides
+additional information with links to the DPDK API documentation where values may be found. Search for RSS.
 
 As of this writing I was unable to confirm `ethtool -x` or DPDK's `test-pmd` prints out the RSS configurations Reinvent
 sets.
@@ -476,7 +476,8 @@ The Reinvent library accomplishes this in three ways:
 * A combination of above, for example, [IPV4 addresses in UDPRoute::convertSrcIp](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_udproute.h#L228)
 
 Programmers **do not** need to prepare the application payload in a defined endianess or byte order if it's guaranteed
-that senders and receivers are binary compatible.
+that senders and receivers are binary compatible. Serious consideration of payload encoding might include Protobuf, 
+Cap'n Proto, XML, or JSON.
 
 # Creating a UDP Packet and Transmitting it
 [For a buildable example demonstrating UDP RX/TX see](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_udp/reinvent_dpdk_udp_integration_test.cpp#L102) in the function `clientMainLoop`. 
