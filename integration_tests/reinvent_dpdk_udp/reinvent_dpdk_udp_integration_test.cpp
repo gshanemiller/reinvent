@@ -26,7 +26,7 @@
 //
 unsigned RX_BURST_CAPACITY = 15;
 
-const unsigned REPORT_COUNT = 10000;
+const unsigned REPORT_COUNT = 100000;
 
 //
 // See -P argument
@@ -404,7 +404,7 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
   //
   printf("lcoreId %02d rxqIndex %02d listening for packets\n", id, rxqIndex);
   
-  unsigned count(0);
+  uint32_t count(0);
   uint32_t stalledRx(0);
   std::vector<rte_mbuf*> mbuf(RX_BURST_CAPACITY);
 
@@ -450,7 +450,7 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
       printf("lcoreId: %02d, rxqIndex: %02d: elsapsedNs: %lu, packetsDequeued: %u, packetSizeBytes: %d, payloadSizeBytes: %lu, pps: %lf, nsPerPkt: %lf, bytesPerSec: %lf, mbPerSec: %lf, mbPerSecPayloadOnly: %lf, stalledRx: %u\n", 
         id, rxqIndex, elapsedNs, count, packetSize, sizeof(TxMessage), pps, rateNsPerPacket, bytesPerSecond, mbPerSecond, payloadMbPerSecond, stalledRx);
     
-      count = 0;
+      count = stalledRx = 0;
 
       clock_gettime(CLOCK_REALTIME, &start);
     }
