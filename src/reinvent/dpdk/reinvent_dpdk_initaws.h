@@ -292,6 +292,23 @@
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{device}_TX_DEFAULT_FLOW           | [*] | rte_ether.h RTE_ETHER_TYPE_* defines e.g. 0x800 is IPV4      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
+// | {prefix}_{device}_RX_RSS_KEY                | [*] | 40 byte sequence to help assign a RXQ for an incoming packet |
+// |                                             |     | in format 'xx:xx:...:xx:' where each 'xx' is a hex byte value|
+// |                                             |     | for a total length of 120=(40*3) chars. If RSS is disabled   |
+// |                                             |     | this value should be omitted. Refer to the DPDK documentation|
+// |                                             |     | http://doc.dpdk.org/api/structrte__eth__rss__conf.html and   |
+// |                                             |     | https://www.ndsl.kaist.edu/~kyoungsoo/papers/TR-symRSS.pdf on|
+// |                                             |     | selecting a value. See RX_RSS_HF for additional details.     |
+// +---------------------------------------------+-----+--------------------------------------------------------------+
+// | {prefix}_{device}_RX_RSS_HF                 | [*] | A integer value that describes which packet/flow types are   |
+// |                                             |     | subject to RSS .e.g. 41868 means all IP packets. Refer to    |
+// |                                             |     | http://doc.dpdk.org/api/structrte__eth__rss__conf.html and   |
+// |                                             |     | http://doc.dpdk.org/api/rte__ethdev_8h_source.html near line |
+// |                                             |     | 734 where macros define RTE_ETH_RSS_IP, RTE_ETH_RSS_UDP etc..|
+// |                                             |     | For RSS to work this value must be non-zero, a valid RSS key |
+// |                                             |     | must be defined (above), and RX_MQ_MASK (see above) must at  |
+// |                                             |     | least enable the RTE_ETH_MQ_RX_RSS bit.                      |
+// +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{device}_TX_DEFAULT_ROUTE_SRC_MAC  | [*] | String list 1 mac address per TXQ                            |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{device}_TX_DEFAULT_ROUTE_DST_MAC  | [*] | String list 1 mac address per TXQ                            |
