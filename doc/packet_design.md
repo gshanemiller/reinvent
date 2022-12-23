@@ -159,8 +159,9 @@ transmitted and routed `A` to `B` see:
 * [Microsoft RSS Paper](https://www.ndsl.kaist.edu/~kyoungsoo/papers/TR-symRSS.pdf)
 * [Technical Article](https://medium.com/@anubhavchoudhary/introduction-to-receive-side-scaling-rss-7cd97307d220)  
 
-As of this writing I was unable to confirm `ethtool -x` or DPDK's `test-pmd` prints out the RSS configurations Reinvent
-sets.
+# Flow Control (RSS Alternate)
+DPDK also provides [Flow Control](https://doc.dpdk.org/guides/prog_guide/rte_flow.html), which is a rules based method
+to deal with packet handling including RXQ assignment.
 
 # Packet Memory Mental Picture
 Read this diagram with [DPDK 10.1 diagram](https://doc.dpdk.org/guides/prog_guide/mbuf_lib.html#figure-mbuf1):
