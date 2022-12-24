@@ -226,16 +226,16 @@ pairs one per RXQ assignment.
   for (unsigned rxq = 0; rxq < RXQ_RULES; ++rxq) {
     // Matching packets must be incoming. Note memset also initializes group,
     // and priority to 0
-	  struct rte_flow_attr attr;
-	  memset(&attr, 0, sizeof(struct rte_flow_attr));
-	  attr.ingress = 1;
+    struct rte_flow_attr attr;
+    memset(&attr, 0, sizeof(struct rte_flow_attr));
+    attr.ingress = 1;
 
     // Matching packets must be UDP then IPV4 ordered inside-out:
-	  struct rte_flow_item pattern[3];
-	  memset(pattern, 0, sizeof(pattern));
-	  pattern[0].type = RTE_FLOW_ITEM_TYPE_UDP;
-	  pattern[1].type = RTE_FLOW_ITEM_TYPE_IPV4;
-	  pattern[2].type = RTE_FLOW_ITEM_TYPE_END;
+    struct rte_flow_item pattern[3];
+    memset(pattern, 0, sizeof(pattern));
+    pattern[0].type = RTE_FLOW_ITEM_TYPE_UDP;
+    pattern[1].type = RTE_FLOW_ITEM_TYPE_IPV4;
+    pattern[2].type = RTE_FLOW_ITEM_TYPE_END;
 
     // Now set the UDP port matching spec, last, mask for UDP pattern[0].
     // Matching packets must satisfy UDP port check. This rule is almost
@@ -243,16 +243,16 @@ pairs one per RXQ assignment.
     // port will be be matched. So provided incoming UDP packets have a
     // non-zero destination port, each packet will be assigned a good RXQ
     // by one of the flow rule pattern-action sets
-	  struct rte_flow_item_udp portSpec;
-	  struct rte_flow_item_udp portMask;
-	  memset(&portMask, 0, sizeof(struct rte_flow_item_udp));
-	  memset(&portSpec, 0, sizeof(struct rte_flow_item_udp));
+    struct rte_flow_item_udp portSpec;
+    struct rte_flow_item_udp portMask;
+    memset(&portMask, 0, sizeof(struct rte_flow_item_udp));
+    memset(&portSpec, 0, sizeof(struct rte_flow_item_udp));
     portMask.hdr.src_port = 0;        // don't care; mask it to 0 always
     portMask.hdr.dst_port = (1<<rxq); // bit#rxq ON all other bits OFF
     portSpec.hdr.src_port = 0;        // match anything
     portSpec.hdr.dst_port = (1<<rxq); // match anything with bit#rxq ON
-	  pattern[0].mask = &portMask;
-	  pattern[0].spec = &portSpec;
+    pattern[0].mask = &portMask;
+    pattern[0].spec = &portSpec;
 
     // Setup the RXQ queue we want to assign
     struct rte_flow_action_queue queue;
@@ -260,18 +260,18 @@ pairs one per RXQ assignment.
     queue.index = rxq; // this is the queue we're assigning
 
     // Setup the action and associate the queue assignment to it
-	  struct rte_flow_action action[2];
-	  memset(action, 0, sizeof(action));
-	  action[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;
-	  action[0].conf = &queue;
-	  action[1].type = RTE_FLOW_ACTION_TYPE_END;
+    struct rte_flow_action action[2];
+    memset(action, 0, sizeof(action));
+    action[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;
+    action[0].conf = &queue;
+    action[1].type = RTE_FLOW_ACTION_TYPE_END;
 
     // Validate the rule on port 0 and create it
     struct rte_flow_error *error = 0;
     struct rte_flow *flow = 0;
     int rc = rte_flow_validate(0, &attr, pattern, action, error);
     if (0==rc) {
-		  flow = rte_flow_create(0, &attr, pattern, action, error);
+      flow = rte_flow_create(0, &attr, pattern, action, error);
     } else {
       printf("FATAL: rule flow creation for rxq=%u failed\n", rxq);
     }
