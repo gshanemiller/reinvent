@@ -122,25 +122,13 @@ At a very high level routing packets between clients (senders) and servers (rece
 * The lcore assigned to handle RXQ `N` at the destination reads (deuques) the packets from the NIC HW
 
 RSS is NIC H/W behavior that when enabled, performs a computation on the packet's source/destination IP addresses,
-and port numbers to determine which RXQ will take delivery of each packet no matter what TXQ it originated. This
-concept initiates packet routing. At the application level, a client will often have to send packets to a specific 
-receiver.
+and port numbers to determine which RXQ will take delivery of each packet no matter what TXQ it originated.
 
-For example, in a partitioned KV (key-value) system a client lookup of the key `secret-password` will have to route its
-request to the server lcore pinned to the RXQ handling keys starting with `s`. Doing this correctly and reliably
-requires some pre-knowledge of the hash so the destination RXQ can be computed ahead of time placing the right IP
-address and ports into the destination part of the IP packet. Conversely the server will need to reverse the route so
-it can send the value for `secret-password` back to the client who asked for it.
-
-If you don't care about packet routing, RSS can still be used to spread packets RX side evenly over all the RXQs. In
-those cases assign random ports in the IP packet.
-
-In RSS DPDK the ports are pseudo. By construction DPDK I/O works without the Linux kernel. You can't use `ncat` to
-listen (or transmit) on an IP address and port intended for a DPDK controlled NIC. DPDK uses this information as input
+In DPDK the ports are pseudo. By construction DPDK I/O works without the Linux kernel. You can't use `ncat` to listen
+(or transmit) on an IP address and port intended for a DPDK controlled NIC. DPDK uses this information as input
 to the hash function only.
 
-Note that if RSS is disabled all packets go to logical RXQ #0 at the destination. I am unaware of a way to tell DPDK
-which RXQ should take delivery of the packet directly. RSS controls this indirectly only.
+Note that if RSS is disabled all packets go to logical RXQ #0 at the destination. 
 
 Enabling RSS in the Reinvent library is a straightforward process. The [example script](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_udp_integration_test)
 demonstrates the settings you need: 
@@ -153,15 +141,146 @@ enables all IP packet types).
 [Source code](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_initaws.h) provides
 additional information with links to the DPDK API documentation where values may be found. Search for RSS.
 
-To get symmetrical RSS assignment meaning the reverse route `B` to `A` goes back to the same source lcore that originally
+To get symmetrical RSS assignment meaning the reverse route `B` to `A` goes back to the same lcore that originally
 transmitted and routed `A` to `B` see:
 
 * [Microsoft RSS Paper](https://www.ndsl.kaist.edu/~kyoungsoo/papers/TR-symRSS.pdf)
 * [Technical Article](https://medium.com/@anubhavchoudhary/introduction-to-receive-side-scaling-rss-7cd97307d220)  
 
 # Flow Control (RSS Alternate)
-DPDK also provides [Flow Control](https://doc.dpdk.org/guides/prog_guide/rte_flow.html), which is a rules based method
-to deal with packet handling including RXQ assignment.
+DPDK also provides [Flow Control](https://doc.dpdk.org/guides/prog_guide/rte_flow.html). This API set programs the NIC
+to "**configure hardware to match specific traffic, alter its fate and query related counters according to any number
+of user-defined rules.**"
+
+Now, unlike RSS where all packets eventually map to some RXQ, DPDK flow control rules might not. Whether that's a
+feature (you exclude data on purpose), or an bug (dropped data has now gone missing) depends on your goal. Your rule
+sets must know their data domain and insure enabled data is matched by a rule somewhere. Also note RSS by construction
+works only for RXQs. Flow control can be used for data ingress and egress.
+
+Finally, rules are subject to grouping and priority ordering if multi-match is possible. See DPDK docs for more
+information. To insure rules are evaluated in HW correctly across all supported  NICs, DPDK gives these guidelines:
+
+* In order to remain as hardware-agnostic as possible, by default all rules are considered to have the same priority,
+which means that the order between overlapping rules (when a packet is matched by several filters) is undefined.
+* PMDs may refuse to create overlapping rules at a given priority level when they can be detected (e.g. if a pattern
+matches an existing filter).
+* Thus predictable results for a given priority level can only be achieved with non-overlapping rules, using perfect
+matching on all protocol layers.
+
+To help explicate flow control, this section considers static routing. For example, in a partitioned KV (key-value)
+system a client lookup of `key='secret-password'` will have to route its request to the server lcore pinned to the RXQ
+handling keys starting with `s`. Assume there's a service or function that accepts a key and returns the server IP
+address, and port for the key. The objective, then, is to ensure the server at the input IP address routes all key
+work having the same port to the same RXQ.
+
+This happens in two parts. First, the packet(s) are delivered to the right NIC by router/switch HW based on the
+destination MAC and/or IP address. Then flow control in the server NIC delivers the packet to the right RXQ. The
+delivery of the response with the the key value (or `nil` if it does not exist) occurs in reverse typically by
+exchanging the source/destination of the IP addresses and ports in the outgoing packet(s). Of course, this means
+client NIC must also program flow control.
+
+This section is based on [DPDK example code](https://github.com/DPDK/dpdk/tree/main/examples/flow_filtering). Here
+we use flow control to transform the destination port to a RXQ number through rules. Assume eight queues RXQs.
+The mapping is as follows. Recall that once the server NIC reads the packet off the wire, it's already on the right
+server box. What remains is assigning the packet to a RXQ within the DPDK controlled server NIC:
+
+```
++-----------------------+-----------+-----------------+----------+
+| Destination Port Mask | Condition | Destination RXQ | Action # |
++-----------------------+-----------+-----------------+----------+
+| 1   (1<<0)            | Bit ON    | 0               | 0        |
++-----------------------+-----------+-----------------+----------+
+| 2   (1<<1)            | Bit ON    | 1               | 1        |
++-----------------------+-----------+-----------------+----------+
+| 4   (1<<2)            | Bit ON    | 2               | 2        |
++-----------------------+-----------+-----------------+----------+
+| 8   (1<<3)            | Bit ON    | 3               | 3        |
++-----------------------+-----------+-----------------+----------+
+| 16  (1<<5)            | Bit ON    | 4               | 4        |
++-----------------------+-----------+-----------------+----------+
+| 32  (1<<5)            | Bit ON    | 5               | 5        |
++-----------------------+-----------+-----------------+----------+
+| 64  (1<<6)            | Bit ON    | 6               | 6        |
++-----------------------+-----------+-----------------+----------+
+| 128 (1<<7)            | Bit ON    | 7               | 7        |
++-----------------------+-----------+-----------------+----------+
+```
+
+Given the immense number of possible matching criteria in general IP flow, the API employs [C-like praxis](http://doc.dpdk.org/api/structrte__flow__item.html)
+where the matching spec is given by an enumerated type plus a triple of untyped pointers. The pointers (when cast
+correctly) point to a data structures appropriate for the enumerated value. One pointer (`spec`) holds data that must
+ultimately be matched for the rule to run. The second pointer (`last`), if provided, works with `spec` to give a match
+range. The third pointer (`mask`) is a bit mask. `last, mask` may be the zero pointer. See DPDK for details. The actual
+data is first bit-masked then checked for equality to `spec`, or range inclusion `[spec, last]` if both pointers are
+non-zero.
+
+There are approximately 40 `rte_flow_item` structure variations depending on what you need to check, and 50 actions
+you can take on match. For the static routing scenario, RXQ assignment is based on UDP port desitination inspection.
+
+One match pattern set has one action set. Since we're assuming 8 RXQs in this example, we must program 8 pattern-action
+pairs one per RXQ assignment.
+
+```
+  const unsigned RXQ_RULES = 8;
+
+  for (unsigned rxq = 0; rxq < RXQ_RULES; ++rxq) {
+    // Matching packets must be incoming. Note memset also initializes group,
+    // and priority to 0
+	  struct rte_flow_attr attr;
+	  memset(&attr, 0, sizeof(struct rte_flow_attr));
+	  attr.ingress = 1;
+
+    // Matching packets must be UDP then IPV4 ordered inside-out:
+	  struct rte_flow_item pattern[3];
+	  memset(pattern, 0, sizeof(pattern));
+	  pattern[0].type = RTE_FLOW_ITEM_TYPE_UDP;
+	  pattern[1].type = RTE_FLOW_ITEM_TYPE_IPV4;
+	  pattern[2].type = RTE_FLOW_ITEM_TYPE_END;
+
+    // Now set the UDP port matching spec, last, mask for UDP pattern[0].
+    // Matching packets must satisfy UDP port check. This rule is almost
+    // complete: any UDP packet except those containing 0 in the destination
+    // port will be be matched. So provided incoming UDP packets have a
+    // non-zero destination port, each packet will be assigned a good RXQ
+    // by one of the flow rule pattern-action sets
+	  struct rte_flow_item_udp portSpec;
+	  struct rte_flow_item_udp portMask;
+	  memset(&portMask, 0, sizeof(struct rte_flow_item_udp));
+	  memset(&portSpec, 0, sizeof(struct rte_flow_item_udp));
+    portMask.hdr.src_port = 0;        // don't care; mask it to 0 always
+    portMask.hdr.dst_port = (1<<rxq); // bit#rxq ON all other bits OFF
+    portSpec.hdr.src_port = 0;        // match anything
+    portSpec.hdr.dst_port = (1<<rxq); // match anything with bit#rxq ON
+	  pattern[0].mask = &portMask;
+	  pattern[0].spec = &portSpec;
+
+    // Setup the RXQ queue we want to assign
+    struct rte_flow_action_queue queue;
+    memset(&queue, 0, sizeof(rte_flow_action_queue));
+    queue.index = rxq; // this is the queue we're assigning
+
+    // Setup the action and associate the queue assignment to it
+	  struct rte_flow_action action[2];
+	  memset(action, 0, sizeof(action));
+	  action[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;
+	  action[0].conf = &queue;
+	  action[1].type = RTE_FLOW_ACTION_TYPE_END;
+
+    // Validate the rule on port 0 and create it
+    struct rte_flow_error *error = 0;
+    struct rte_flow *flow = 0;
+    int rc = rte_flow_validate(0, &attr, pattern, action, error);
+    if (0==rc) {
+		  flow = rte_flow_create(0, &attr, pattern, action, error);
+    } else {
+      printf("FATAL: rule flow creation for rxq=%u failed\n", rxq);
+    }
+  
+    // Note the flow has to be deinitialized later with `rte_flow_destroy()`
+    // not shown.
+  }
+```
+
 
 # Packet Memory Mental Picture
 Read this diagram with [DPDK 10.1 diagram](https://doc.dpdk.org/guides/prog_guide/mbuf_lib.html#figure-mbuf1):
