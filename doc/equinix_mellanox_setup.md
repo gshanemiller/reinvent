@@ -473,9 +473,9 @@ tx_pp_sync_lost                 : 0
 # Benchmark Output #2
 
 In this example run, we'll modify the server to run only 1 RXQ leaving the client the same. Using `vi` edit 
-`./reinvent_dpdk_udp_integration_test` on the server box completing the following changes. The lines below
-show what should appear in the file **after edit**. All other lines should remain absolutely unchanged. 
-Note you comment out (shown) or remove entirely the RSS lines: 
+`./reinvent_dpdk_udp_integration_test` on the server box completing the following changes. Do not change the
+client. The lines below show what should appear in the file **after edit**. All other lines should remain
+absolutely unchanged. Note you may comment out (shown) or remove entirely the RSS config lines: 
 
 ```
 export TEST_SERVER_DPDK_NIC_DEVICE_MEMPOOL_RXQ_SIZE="2048"
