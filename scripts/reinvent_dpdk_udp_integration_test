@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ARGS="-P"
+ARGS="-P -f"
 TASK="../build/reinvent_dpdk_udp_integration_test.tsk"
 
 if [[ "$1" == "client" ]]
@@ -18,7 +18,7 @@ fi
 
 if [[ "$2" == "perf" ]]
 then
-  ARGS="-P"
+  ARGS="-P -f"
   TASK="../build/reinvent_dpdk_udp_opt_integration_test.tsk"
 fi
 
@@ -165,15 +165,15 @@ export TEST_SERVER_DPDK_NIC_DEVICE_TXQ_THREAD_COUNT="0"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_VCPU_POLICY="DISTINCT"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_VCPU_MASK="ALL"
 export TEST_SERVER_DPDK_NIC_DEVICE_RX_QUEUE_SIZE="8"
-export TEST_SERVER_DPDK_NIC_DEVICE_RX_MQ_MASK="1"
+export TEST_SERVER_DPDK_NIC_DEVICE_RX_MQ_MASK="0"
 export TEST_SERVER_DPDK_NIC_DEVICE_RX_OFFLOAD_MASK="0"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_RING_SIZE="1024"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_THREAD_COUNT="8"
 
 # https://www.ndsl.kaist.edu/~kyoungsoo/papers/TR-symRSS.pdf
 # https://medium.com/@anubhavchoudhary/introduction-to-receive-side-scaling-rss-7cd97307d220
-export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_KEY="6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:"
-export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_HF="41868"
+# export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_KEY="6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:"
+# export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_HF="41868"
 
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_PTHRESH="8"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_HTHRESH="8"
@@ -237,6 +237,6 @@ then
   $TASK -m $MODE -p $PREFIX $ARGS
 else
   echo $TASK -m $MODE -p $PREFIX $ARGS
-  # gdb --args $TASK -m $MODE -p $PREFIX $ARGS
-  $TASK -m $MODE -p $PREFIX $ARGS
+  gdb --args $TASK -m $MODE -p $PREFIX $ARGS
+  # $TASK -m $MODE -p $PREFIX $ARGS
 fi
