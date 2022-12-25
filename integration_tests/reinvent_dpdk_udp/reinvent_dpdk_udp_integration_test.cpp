@@ -69,7 +69,19 @@ static void handle_sig(int sig) {
   }
 }
 
-int disableFlowControl();
+int disableFlowControl() {
+  struct rte_flow_error error;
+  const uint16_t deviceId = 0;
+  for (unsigned rxq = 0; rxq<RXQ_RULES; ++rxq) {
+    if (flow[rxq]) {
+      rte_flow_destroy(deviceId, flow[rxq], &error);
+      REINVENT_UTIL_LOG_DEBUG_VARGS("flowControl for rxqIndex %u destroyed\n", rxq);
+      flow[rxq] = 0;
+    }
+  }
+  return 0;
+}
+
 
 uint64_t timeDifference(timespec start, timespec end) {
   uint64_t diff = static_cast<uint64_t>(end.tv_sec)*static_cast<uint64_t>(1000000000)+static_cast<uint64_t>(end.tv_nsec);
@@ -78,12 +90,12 @@ uint64_t timeDifference(timespec start, timespec end) {
 }
 
 void internalExit(const Reinvent::Dpdk::AWSEnaConfig& config) {
-  if (Reinvent::Dpdk::UnInitAWS::device(config)!=0) {
-    REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize AWS ENA device\n");
-  }
-
   if (flowControl) {
     disableFlowControl();
+  }
+
+  if (Reinvent::Dpdk::UnInitAWS::device(config)!=0) {
+    REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize AWS ENA device\n");
   }
 
   if (Reinvent::Dpdk::UnInitAWS::ena()!=0) {
@@ -217,17 +229,6 @@ void parseCommandLine(int argc, char **argv, bool *isServer, std::string *prefix
   }
 }
 
-int disableFlowControl() {
-  struct rte_flow_error error;
-  const uint16_t deviceId = 0;
-  for (unsigned i = 0; i<RXQ_RULES; ++i) {
-    if (flow[i]) {
-      rte_flow_destroy(deviceId, flow[i], &error);
-    }
-  }
-  return 0;
-}
-
 int enableFlowControl() {
 
   for (unsigned rxq = 0; rxq < RXQ_RULES; ++rxq) {
@@ -237,14 +238,15 @@ int enableFlowControl() {
     memset(&attr, 0, sizeof(struct rte_flow_attr));
     attr.ingress = 1;
 
-    // Matching packets must be UDP then IPV4 ordered inside-out:
-    struct rte_flow_item pattern[3];
+    // Matching packets must be IP UDP
+    struct rte_flow_item pattern[4];
     memset(pattern, 0, sizeof(pattern));
-    pattern[0].type = RTE_FLOW_ITEM_TYPE_UDP;
+    pattern[0].type = RTE_FLOW_ITEM_TYPE_ETH;
     pattern[1].type = RTE_FLOW_ITEM_TYPE_IPV4;
-    pattern[2].type = RTE_FLOW_ITEM_TYPE_END;
+    pattern[2].type = RTE_FLOW_ITEM_TYPE_UDP;
+    pattern[3].type = RTE_FLOW_ITEM_TYPE_END;
 
-    // Now set the UDP port matching spec, last, mask for UDP pattern[0].
+    // Set UDP port matching spec, last, mask for UDP pattern[0].
     // Matching packets must satisfy UDP port check. This rule is almost
     // complete: any UDP packet except those containing 0 in the destination
     // port will be be matched. So provided incoming UDP packets have a
@@ -258,8 +260,8 @@ int enableFlowControl() {
     portMask.hdr.dst_port = (1<<rxq); // bit#rxq ON all other bits OFF
     portSpec.hdr.src_port = 0;        // match anything
     portSpec.hdr.dst_port = (1<<rxq); // match anything with bit#rxq ON
-    pattern[0].mask = &portMask;
-    pattern[0].spec = &portSpec;
+    pattern[2].mask = &portMask;
+    pattern[2].spec = &portSpec;
 
     // Setup the RXQ queue we want to assign
     struct rte_flow_action_queue queue;
@@ -279,9 +281,9 @@ int enableFlowControl() {
     int rc = rte_flow_validate(deviceId, &attr, pattern, action, &error);
     if (0==rc) {
       flow[rxq] = rte_flow_create(0, &attr, pattern, action, &error);
-      printf("rxq %u programmed\n", rxq);
+      REINVENT_UTIL_LOG_DEBUG_VARGS("flowControl for rxqIndex %u created\n", rxq);
     } else {
-      printf("FATAL: rule flow creation for rxq=%u failed\n", rxq);
+      REINVENT_UTIL_LOG_ERROR_VARGS("flowControl for rxqIndex %u failed: %s\n", rxq, error.message);
       return -1;
     }
   }
@@ -576,83 +578,10 @@ int clientEntryPoint(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config)
 int serverEntryPoint(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
   assert(config);
 
-  const unsigned RXQ_RULES = 8;
-  struct rte_flow *flow[RXQ_RULES] = {0};
-
-  if (flowControl) {
-    for (unsigned rxq = 0; rxq < RXQ_RULES; ++rxq) {
-      // Matching packets must be incoming. Note memset also initializes group,
-      // and priority to 0
-      struct rte_flow_attr attr;
-      memset(&attr, 0, sizeof(struct rte_flow_attr));
-      attr.ingress = 1;
-
-      // Matching packets must be UDP then IPV4 ordered inside-out:
-      struct rte_flow_item pattern[3];
-      memset(pattern, 0, sizeof(pattern));
-      pattern[0].type = RTE_FLOW_ITEM_TYPE_UDP;
-      pattern[1].type = RTE_FLOW_ITEM_TYPE_IPV4;
-      pattern[2].type = RTE_FLOW_ITEM_TYPE_END;
-
-      // Now set the UDP port matching spec, last, mask for UDP pattern[0].
-      // Matching packets must satisfy UDP port check. This rule is almost
-      // complete: any UDP packet except those containing 0 in the destination
-      // port will be be matched. So provided incoming UDP packets have a
-      // non-zero destination port, each packet will be assigned a good RXQ
-      // by one of the flow rule pattern-action sets
-      struct rte_flow_item_udp portSpec;
-      struct rte_flow_item_udp portMask;
-      memset(&portMask, 0, sizeof(struct rte_flow_item_udp));
-      memset(&portSpec, 0, sizeof(struct rte_flow_item_udp));
-      portMask.hdr.src_port = 0;        // don't care; mask it to 0 always
-      portMask.hdr.dst_port = (1<<rxq); // bit#rxq ON all other bits OFF
-      portSpec.hdr.src_port = 0;        // match anything
-      portSpec.hdr.dst_port = (1<<rxq); // match anything with bit#rxq ON
-      pattern[0].mask = &portMask;
-      pattern[0].spec = &portSpec;
-
-      // Setup the RXQ queue we want to assign
-      struct rte_flow_action_queue queue;
-      memset(&queue, 0, sizeof(rte_flow_action_queue));
-      queue.index = rxq; // this is the queue we're assigning
-
-      // Setup the action and associate the queue assignment to it
-      struct rte_flow_action action[2];
-      memset(action, 0, sizeof(action));
-      action[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;
-      action[0].conf = &queue;
-      action[1].type = RTE_FLOW_ACTION_TYPE_END;
-
-      // Validate the rule on port 0 and create it
-      struct rte_flow_error error;
-      const uint16_t deviceId = static_cast<uint16_t>(config->awsEnaConfig().deviceId()); 
-      int rc = rte_flow_validate(deviceId, &attr, pattern, action, &error);
-      if (0==rc) {
-        flow[rxq] = rte_flow_create(0, &attr, pattern, action, &error);
-        printf("rxq %u programmed\n", rxq);
-      } else {
-        printf("FATAL: rule flow creation for rxq=%u failed\n", rxq);
-        return -1;
-      }
-    }
-  }
-
   //
   // Run main receiving loop
   //
-  int rc = serverMainLoop(id, rxqIndex, config);
-
-  if (flowControl) {
-    struct rte_flow_error error;
-    const uint16_t deviceId = static_cast<uint16_t>(config->awsEnaConfig().deviceId()); 
-    for (unsigned i = 0; i<RXQ_RULES; ++i) {
-      if (flow[i]) {
-        rte_flow_destroy(deviceId, flow[i], &error);
-      }
-    }
-  }
-
-  return rc;
+  return serverMainLoop(id, rxqIndex, config);
 }
 
 int entryPoint(void *arg) {
