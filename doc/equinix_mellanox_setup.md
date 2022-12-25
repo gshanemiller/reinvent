@@ -206,7 +206,7 @@ $ ifconfig enp1s0f1
 enp1s0f1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
         inet 192.168.0.2  netmask 255.255.255.240  broadcast 192.168.0.15
         inet6 fe80::e42:a1ff:fe97:faa5  prefixlen 64  scopeid 0x20<link>
-        ether 0c:42:a1:97:fa:a5  txqueuelen 1000  (Ethernet)
+        ether 0c:42:a1:97:fa:a5  txqueuelen 1000  (Ethernet)                  <---- MAC address here
         RX packets 7809  bytes 960533 (960.5 KB)
         RX errors 0  dropped 0  overruns 0  frame 0
         TX packets 1165  bytes 143598 (143.5 KB)
@@ -230,8 +230,9 @@ enp1s0f1 device.
 12. On your server machine run command: `./reinvent_dpdk_udp_integration_test server perf`. You should see this output:
 
 ```
+root@server:~/Dev/reinvent/scripts# ./reinvent_dpdk_udp_integration_test server perf
 ../build/reinvent_dpdk_udp_opt_integration_test.tsk -m server -p TEST_SERVER -P
-EAL: Detected CPU lcores: 16
+EAL: Detected CPU lcores: 8
 EAL: Detected NUMA nodes: 1
 EAL: Detected shared linkage of DPDK
 EAL: Selected IOVA mode 'VA'
@@ -240,95 +241,234 @@ EAL: VFIO support initialized
 EAL: Probe PCI driver: mlx5_pci (15b3:1015) device: 0000:01:00.1 (socket 0)
 mlx5_net: No available register for sampler.
 TELEMETRY: No legacy callbacks, legacy socket not created
+lcoreId 01 rxqIndex 01 listening for packets
+lcoreId 02 rxqIndex 02 listening for packets
+lcoreId 03 rxqIndex 03 listening for packets
+lcoreId 04 rxqIndex 04 listening for packets
+lcoreId 05 rxqIndex 05 listening for packets
+lcoreId 06 rxqIndex 06 listening for packets
+lcoreId 07 rxqIndex 07 listening for packets
 lcoreId 00 rxqIndex 00 listening for packets
 ```
-
-Cores reads 16 not 8 because CPU hyper threads are enabled. In fact, this is often disabled for production work loads.
 
 13. On your client machine run command: `./reinvent_dpdk_udp_integration_test client perf`
 14. The client will exit to the shell when done; to terminate the server press CTRL-C at any time.
 
-# Brief Discussion of Benchmark Output
+See next section for discussion of ouput.
 
-For every 100,000 packets received the server will print the current receive rate two ways: pps (packets per second)
-and the inverse (nanoseconds per packet). The client will send serveral bursts of packets UDP. Each packet is 74 bytes
-with 32 bytes of payload. The difference is IP headers. It'll also display transmission rates for example:
+# RSS Benchmark Output #1
 
-```
-lcoreId: 00, txqIndex: 00: elsapsedNs: 368201, packetsQueued: 2000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 5431815.774536, nsPerPkt: 184.100500, bytesPerSec: 401954367.315678, mbPerSec: 383.333556, mbPerSecPayloadOnly: 165.765862 stalledTx 0
-```
-
-Not only is this performance far superior to kernel based I/O (see the aws setup document in this directory), it's better
-than AWS virtual NICs running the exact same code which usually requires at least 550ns/packet. AWS ENA NICs have other
-smaller problems too.
-
-The client sends all packets on one TXQ and all packets are received on one RX queue. RSS is disabled. Except when the PCI
-bus or DRAM bandwidth is saturated, these numbers will basically scale linearly as more and more Mellanox queues are used.
-The client uses one thread pinned to one core, as does the server in this demonstration. This Mellanox NIC supports up to
-1024 RXQ and 1024 TXQs, which are located in the NIC itself. You can confirm this as follows:
+The default configuration runs 1 TXQ at client and 8 RXQs with RSS on the server. The client output will resemble the following:
 
 ```
-$ cd /root/Dev/reinvent/scripts
-$ ./runpmd # run DPDK's helper program
-testpmd> show port info 0
-********************* Infos for port 0  *********************
-MAC address: 0C:42:A1:97:FA:A5
-Device name: 01:00.1
-Driver name: mlx5_pci
-Firmware-version: 14.27.1016
-Devargs: class=eth
-Connect to socket: 0
-memory allocation on the socket: 0
-Link status: up
-Link speed: 10 Gbps
-Link duplex: full-duplex
-Autoneg status: On
-MTU: 1500
-Promiscuous mode: enabled
-Allmulticast mode: disabled
-Maximum number of MAC addresses: 128
-Maximum number of MAC addresses of hash filtering: 0
-VLAN offload: 
-  strip off, filter off, extend off, qinq strip off
-Hash key size in bytes: 40
-Redirection table size: 1
-Supported RSS offload flow types:
-  ipv4
-  ipv4-frag
-  ipv4-tcp
-  ipv4-udp
-  ipv4-other
-  ipv6
-  ipv6-frag
-  ipv6-tcp
-  ipv6-udp
-  ipv6-other
-  ipv6-ex
-  ipv6-tcp-ex
-  ipv6-udp-ex
-  user defined 60
-  user defined 61
-  user defined 62
-  user defined 63
-Minimum size of RX buffer: 32
-Maximum configurable length of RX packet: 65536
-Maximum configurable size of LRO aggregated packet: 65280
-Current number of RX queues: 1
-Max possible RX queues: 1024
-Max possible number of RXDs per queue: 65535
-Min possible number of RXDs per queue: 0
-RXDs number alignment: 1
-Current number of TX queues: 1
-Max possible TX queues: 1024
-Max possible number of TXDs per queue: 65535
-Min possible number of TXDs per queue: 0
-TXDs number alignment: 1
-Max segment number per packet: 40
-Max segment number per MTU/TSO: 40
-Device capabilities: 0x10( FLOW_SHARED_OBJECT_KEEP )
-Switch name: 01:00.1
-Switch domain Id: 0
-Switch Port Id: 65535
+# ./reinvent_dpdk_udp_integration_test client perf
+../build/reinvent_dpdk_udp_opt_integration_test.tsk -m client -p TEST_CLIENT -P
+EAL: Detected CPU lcores: 8
+EAL: Detected NUMA nodes: 1
+EAL: Detected shared linkage of DPDK
+EAL: Selected IOVA mode 'VA'
+EAL: No free 2048 kB hugepages reported on node 0
+EAL: VFIO support initialized
+EAL: Probe PCI driver: mlx5_pci (15b3:1015) device: 0000:01:00.1 (socket 0)
+mlx5_net: No available register for sampler.
+TELEMETRY: No legacy callbacks, legacy socket not created
+lcoreId: 00, txqIndex: 00: elsapsedNs: 557813876, packetsQueued: 5000000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 8963563.323046, nsPerPkt: 111.562775, bytesPerSec: 663303685.905440, mbPerSec: 632.575689, mbPerSecPayloadOnly: 273.546244 stalledTx 0
+linkRate value: 10000
+in  packets : 0
+out packets : 5000000
+in  bytes   : 0
+out bytes   : 370000000
+missed pkts : 0
+in err pkts : 0
+out err pkts: 0
+rx allc errs: 0
+rx_good_packets                 : 0
+tx_good_packets                 : 5000000
+rx_good_bytes                   : 0
+tx_good_bytes                   : 370000000
+rx_missed_errors                : 0
+rx_errors                       : 0
+tx_errors                       : 0
+rx_mbuf_allocation_errors       : 0
+tx_q0_packets                   : 5000000
+tx_q0_bytes                     : 370000000
+rx_wqe_errors                   : 0
+rx_unicast_packets              : 0
+rx_unicast_bytes                : 0
+tx_unicast_packets              : 5000000
+tx_unicast_bytes                : 370000000
+rx_multicast_packets            : 0
+rx_multicast_bytes              : 0
+tx_multicast_packets            : 0
+tx_multicast_bytes              : 0
+rx_broadcast_packets            : 0
+rx_broadcast_bytes              : 0
+tx_broadcast_packets            : 0
+tx_broadcast_bytes              : 0
+tx_phy_packets                  : 5000000
+rx_phy_packets                  : 0
+rx_phy_crc_errors               : 0
+tx_phy_bytes                    : 390000000
+rx_phy_bytes                    : 0
+rx_phy_in_range_len_errors      : 0
+rx_phy_symbol_errors            : 0
+rx_phy_discard_packets          : 0
+tx_phy_discard_packets          : 0
+tx_phy_errors                   : 0
+rx_out_of_buffer                : 0
+tx_pp_missed_interrupt_errors   : 0
+tx_pp_rearm_queue_errors        : 0
+tx_pp_clock_queue_errors        : 0
+tx_pp_timestamp_past_errors     : 0
+tx_pp_timestamp_future_errors   : 0
+tx_pp_jitter                    : 0
+tx_pp_wander                    : 0
+tx_pp_sync_lost                 : 0
+```
+The bottom half pretty-prints statistics DPDK keeps on the NIC printed at exit. Our focus is this key metric:
+
+```
+lcoreId: 00, txqIndex: 00: elsapsedNs: 557813876, packetsQueued: 5000000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 8963563.323046, nsPerPkt: 111.562775, bytesPerSec: 663303685.905440, mbPerSec: 632.575689, mbPerSecPayloadOnly: 273.546244 stalledTx 0
 ```
 
-Enter CTRL-D to exit.
+5,000,000 packets 74 bytes/each (32 bytes/ea payload) where queued and sent needing 557813876 nanoseconds. That works out to some 8,963,563 packets per second or 111.6 ns/packet. The last metric `stalledTx` is the number of times an attempt to enqueue and send a packet failed because HW resources were full or busy. 0 means this never happened.
+
+On the server (receiver side) we see the following output:
+
+```
+# ./reinvent_dpdk_udp_integration_test server perf
+../build/reinvent_dpdk_udp_opt_integration_test.tsk -m server -p TEST_SERVER -P
+EAL: Detected CPU lcores: 8
+EAL: Detected NUMA nodes: 1
+EAL: Detected shared linkage of DPDK
+EAL: Selected IOVA mode 'VA'
+EAL: No free 2048 kB hugepages reported on node 0
+EAL: VFIO support initialized
+EAL: Probe PCI driver: mlx5_pci (15b3:1015) device: 0000:01:00.1 (socket 0)
+mlx5_net: No available register for sampler.
+TELEMETRY: No legacy callbacks, legacy socket not created
+lcoreId 01 rxqIndex 01 listening for packets
+lcoreId 02 rxqIndex 02 listening for packets
+lcoreId 03 rxqIndex 03 listening for packets
+lcoreId 04 rxqIndex 04 listening for packets
+lcoreId 05 rxqIndex 05 listening for packets
+lcoreId 06 rxqIndex 06 listening for packets
+lcoreId 07 rxqIndex 07 listening for packets
+lcoreId 00 rxqIndex 00 listening for packets
+lcoreId: 02, rxqIndex: 02: elsapsedNs: 7905058420, packetsDequeued: 100002, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 12650.380894, nsPerPkt: 79049.003220, bytesPerSec: 936128.186134, mbPerSec: 0.892761, mbPerSecPayloadOnly: 0.386059, stalledRx: 251154981
+.
+ .
+  .
+lcoreId: 00, rxqIndex: 00: elsapsedNs: 83092236, packetsDequeued: 100001, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 1203493.910069, nsPerPkt: 830.914051, bytesPerSec: 89058549.345092, mbPerSec: 84.932851, mbPerSecPayloadOnly: 36.727719, stalledRx: 2183622
+
+lcoreId: 01, rxqIndex: 01: elsapsedNs: 83201758, packetsDequeued: 100002, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 1201921.719010, nsPerPkt: 832.000940, bytesPerSec: 88942207.206728, mbPerSec: 84.821899, mbPerSecPayloadOnly: 36.679740, stalledRx: 2149252
+
+lcoreId: 02, rxqIndex: 02: elsapsedNs: 83117863, packetsDequeued: 100000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 1203110.816263, nsPerPkt: 831.178630, bytesPerSec: 89030200.403492, mbPerSec: 84.905816, mbPerSecPayloadOnly: 36.716028, stalledRx: 2150613
+
+lcoreId: 03, rxqIndex: 03: elsapsedNs: 83174204, packetsDequeued: 100001, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 1202307.869397, nsPerPkt: 831.733723, bytesPerSec: 88970782.335350, mbPerSec: 84.849150, mbPerSecPayloadOnly: 36.691524, stalledRx: 2149664
+
+lcoreId: 04, rxqIndex: 04: elsapsedNs: 83216152, packetsDequeued: 100001, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 1201701.804236, nsPerPkt: 832.153198, bytesPerSec: 88925933.513484, mbPerSec: 84.806379, mbPerSecPayloadOnly: 36.673029, stalledRx: 2151479
+
+lcoreId: 05, rxqIndex: 05: elsapsedNs: 83021039, packetsDequeued: 100001, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 1204525.999729, nsPerPkt: 830.202088, bytesPerSec: 89134923.979932, mbPerSec: 85.005688, mbPerSecPayloadOnly: 36.759216, stalledRx: 2154651
+
+lcoreId: 06, rxqIndex: 06: elsapsedNs: 82933965, packetsDequeued: 100001, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 1205790.655252, nsPerPkt: 829.331357, bytesPerSec: 89228508.488651, mbPerSec: 85.094937, mbPerSecPayloadOnly: 36.797811, stalledRx: 2152868
+
+lcoreId: 07, rxqIndex: 07: elsapsedNs: 83232336, packetsDequeued: 100000, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 1201456.126379, nsPerPkt: 832.323360, bytesPerSec: 88907753.352015, mbPerSec: 84.789041, mbPerSecPayloadOnly: 36.665531, stalledRx: 2144852
+```
+
+Every 100000 (approximately) packets each RXQ receives, it dumps a performance line. RSS spreads the 5,000,0000 packets 
+sent by the client over the 8 RXQs here. Therefore each RXQ lcore will provide several output lines. Especially if there's
+a sizeable delay between when you ran the server then started the client, you should ignore the first set of reports. The
+elapsed time per queue will include that delay. Instead look at the bottom or last set, which I've provide above only
+sorted by lcore and printed for readability.
+
+Consider the last entry `lcoreId 07`: it took 83232336 to receive the last round of 100,000 packets e.g. the elapsed
+time from the 1st packet to the 100,000th packet. This works out to approximately 1,201,456 packets/sec or 832 ns/packet.
+However, each RXQ does about the same work over the same interval. Aggregating we get: `8*1201456.126379 = ~9,611,649`
+packets/sec aggregate receive rate. The `stalledRx` metric counts the number of times the RXQ lcore tried to read a
+packet but none was available. These numbers average around 2.1 million per 100,000 packets received. That issue is
+further discussed below. See CPU usage.
+
+Note these rates are far higher than what the kernel can do. A [CloudFare Technical Article (2015)](https://blog.cloudflare.com/how-to-receive-a-million-packets/) shows Linux can only do some 1,200,000 pps using more CPU resources. DPDK is faster and efficient.
+
+Once you press CTRL-C at the server, the program will again dump DPDK collected NIC statistics. Here you'll clearly see
+the per RXQ work done. Note your output will differ; I ran the client several times with different configs:
+
+```
+^ClinkRate value: 10000
+in  packets : 8999864
+out packets : 0
+in  bytes   : 665989936
+out bytes   : 0
+missed pkts : 0
+in err pkts : 0
+out err pkts: 0
+rx allc errs: 0
+rx_good_packets                 : 8999864
+tx_good_packets                 : 0
+rx_good_bytes                   : 665989936
+tx_good_bytes                   : 0
+rx_missed_errors                : 0
+rx_errors                       : 0
+tx_errors                       : 0
+rx_mbuf_allocation_errors       : 0
+rx_q0_packets                   : 1124976
+rx_q0_bytes                     : 83248224
+rx_q0_errors                    : 0
+rx_q1_packets                   : 1124989
+rx_q1_bytes                     : 83249186
+rx_q1_errors                    : 0
+rx_q2_packets                   : 1124989
+rx_q2_bytes                     : 83249186
+rx_q2_errors                    : 0
+rx_q3_packets                   : 1124981
+rx_q3_bytes                     : 83248594
+rx_q3_errors                    : 0
+rx_q4_packets                   : 1124988
+rx_q4_bytes                     : 83249112
+rx_q4_errors                    : 0
+rx_q5_packets                   : 1124976
+rx_q5_bytes                     : 83248224
+rx_q5_errors                    : 0
+rx_q6_packets                   : 1124976
+rx_q6_bytes                     : 83248224
+rx_q6_errors                    : 0
+rx_q7_packets                   : 1124989
+rx_q7_bytes                     : 83249186
+rx_q7_errors                    : 0
+rx_wqe_errors                   : 0
+rx_unicast_packets              : 8999864
+rx_unicast_bytes                : 665989936
+tx_unicast_packets              : 0
+tx_unicast_bytes                : 0
+rx_multicast_packets            : 33
+rx_multicast_bytes              : 3927
+tx_multicast_packets            : 0
+tx_multicast_bytes              : 0
+rx_broadcast_packets            : 0
+rx_broadcast_bytes              : 0
+tx_broadcast_packets            : 0
+tx_broadcast_bytes              : 0
+tx_phy_packets                  : 0
+rx_phy_packets                  : 9000033
+rx_phy_crc_errors               : 0
+tx_phy_bytes                    : 0
+rx_phy_bytes                    : 702004059
+rx_phy_in_range_len_errors      : 0
+rx_phy_symbol_errors            : 0
+rx_phy_discard_packets          : 0
+tx_phy_discard_packets          : 0
+tx_phy_errors                   : 0
+rx_out_of_buffer                : 0
+tx_pp_missed_interrupt_errors   : 0
+tx_pp_rearm_queue_errors        : 0
+tx_pp_clock_queue_errors        : 0
+tx_pp_timestamp_past_errors     : 0
+tx_pp_timestamp_future_errors   : 0
+tx_pp_jitter                    : 0
+tx_pp_wander                    : 0
+tx_pp_sync_lost                 : 0
+```
+
+# Benchmark Output #2
+
