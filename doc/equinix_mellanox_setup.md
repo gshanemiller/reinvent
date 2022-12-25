@@ -472,3 +472,30 @@ tx_pp_sync_lost                 : 0
 
 # Benchmark Output #2
 
+In this example run, we'll modify the server to run only 1 RXQ leaving the client the same. Using `vi` edit 
+`./reinvent_dpdk_udp_integration_test` on the server box completing the following changes. The lines below
+show what should appear in the file **after edit**. All other lines should remain absolutely unchanged. 
+Note you comment out (shown) or remove entirely the RSS lines: 
+
+```
+export TEST_SERVER_DPDK_NIC_DEVICE_MEMPOOL_RXQ_SIZE="2048"
+export TEST_SERVER_DPDK_NIC_DEVICE_MEMPOOL_RXQ_CACHE_SIZE="0"
+export TEST_SERVER_DPDK_NIC_DEVICE_MEMPOOL_RXQ_PRIV_SIZE="0"
+export TEST_SERVER_DPDK_NIC_DEVICE_MEMPOOL_RXQ_DATA_ROOM_SIZE="2048"
+export TEST_SERVER_DPDK_NIC_DEVICE_RX_QUEUE_SIZE="1"
+export TEST_SERVER_DPDK_NIC_DEVICE_RX_MQ_MASK="0"
+export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_THREAD_COUNT="1"
+# export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_KEY="6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:"
+# export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_HF="41868"
+```
+
+Rerunning the same procedure the server only runs one RXQ. In my session here's the last line output:
+
+```
+lcoreId: 00, rxqIndex: 00: elsapsedNs: 10386902, packetsDequeued: 100002, packetSizeBytes: 74, payloadSizeBytes: 32, pps: 9627702.273498, nsPerPkt: 103.866943, bytesPerSec: 712449968.238845, mbPerSec: 679.445236, mbPerSecPayloadOnly: 293.814156, stalledRx: 283155
+```
+
+This output is pretty much 1:1 with the client. Note also the pps is much higher compared to the RSS case. This isn't because RSS is slow; 
+it's done in HW. This is an artifact of a single queue receive side. More packets per unit time arrive at RXQ0 so it takes less time to get 
+100,000 packets needed for the reporting interval. The rapid receipt of packets is also why the `statlledRx` figure is about 10x less. 
+Nonetheless, the aggregate RSS receive rates matches single queue receive rate.
