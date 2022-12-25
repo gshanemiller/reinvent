@@ -33,7 +33,7 @@ export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig:${PKG_CONFIG_PATH}
 #
 apt update
 apt install --yes make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlib* ncat unzip zip gdb gdb-doc infiniband-diags libmnl-dev pkgconf*
-pip3 install --user meson pyelftools ninja
+pip3 install --user meson pyelftools ninja gdown
 # apt upgrade --yes
 # where meson/ninja are installed
 export PATH=/root/.local/bin:${PATH}
@@ -139,7 +139,6 @@ export PATH=/root/.local/bin:${PATH}
 #
 # $ flint -d /dev/mst/mt4117_pciconf0   -i fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin
 # $ flint -d /dev/mst/mt4117_pciconf0.1 -i fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin
-
 #
 # CURRENT AS OF NOV 2022 for ConnectX-4 Lx EN, 25GbE dual-port SFP28, PCIe3.0 x8, MCX4121A-ACAT:
 #
@@ -155,15 +154,17 @@ MFT="mft-4.22.0-96-x86_64-deb.tgz"
 MLNX_FW="https://www.mellanox.com/downloads/firmware/fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin.zip"
 
 echo
-echo "Mellanox/Nvida MLNX_OFED_LINUX driver set cannot be obtained by curl/wget. You'll need to obtain it by hand"
-echo "at https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/ after accepting the EUA. Then scp it"
-echo "into this machine into the /tmp directory:"
+echo "Mellanox/Nvida MLNX_OFED_LINUX driver set cannot be obtained by curl/wget from Nvidia's website."
+echo "Nvidia makes you accept their EUL first so the download process cannot be automated. The original"
+echo "URL is https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed. To work around this"
+echo "limitation this install script will download a copy from a Google Drive with the same checksum:"
+echo "which is 178bb61815930dc1700c317c8bac182f4e9b24f0de93a4615048f5fcf294ccd8 per Nvidia:"
 echo
-echo "example command: scp -i <ssh-key/pem-file> ${MLNX} root@<ip-address>:/tmp"
-echo
-read -p "scp .tgz file in by hand to /tmp then press ENTER: "
+cd /tmp
+rm -f ./${MLNX}
+gdown 1-AC5of5owm62uK16jYaxNMK5hzis1-pN
+sha256sum  ./${MLNX}
 cd ${H}/tmp
-# copy the file so after reboot it's still on machine. /tmp is erased on reboot
 cp /tmp/MLNX*tgz ~
 tar zxf /tmp/MLNX*tgz
 cd MLNX*
