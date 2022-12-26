@@ -1,7 +1,12 @@
 # Equinix Bare Metal https://console.equinix.com/
 
-For general DPDK or NIC I/O development, Equinix provides arguably better hardware
-and half the price compared to AWS. A c3.small.x86 server,
+The purpose of this article to explain how to set up a pair of Equinix c3.small.x86 servers for 
+reinvent development and testing. This procedure makes use of one of the available Mellanox NICs
+for DPDK use. While it explains how to setup 2 boxes, the procedure is trivially extendedable to
+N boxes if needed. Ulimately all boxes are connected on a private VLAN.
+
+For general DPDK or NIC I/O development, Equinix provides arguably better hardware and half the price
+compared to AWS. A c3.small.x86 server,
 
 * 1x Xeon E-2278G 3.40Ghz 8-cores
 * 2x 480Gb SSD
@@ -15,10 +20,18 @@ one AWS c5n. Now, to be fair, AWS was never going to be fully baremetal and c5n
 CPUs are larger and more powerful. It has more memory. But for development purposes
 I find Equinix a far better bang for the buck.
 
-The purpose of this article to explain how to set up a pair of c3.small.x86 servers
-for reinvent development and testing. In particular, this procedure makes one of the
-available Mellanox NICs available for DPDK use.
+Some internet providers will close your connection (to help them not you) if there's
+no activity. Since you'll talk to your machines over ssh you can enable keep alive
+by adding this config to your `~/.ssh/config` file. This config sends a NULL packet
+across the connection every 30 seconds giving up and closing the connection if not
+successful after two retries since it's probably dead anyways:
 
+```
+# ~/.ssh/config
+Host *
+    ServerAliveInterval 30
+    ServerAliveCountMax 2
+```
 # Expected Outcome
 
 When the procedure below is followed each machine will be configured as follows:
@@ -38,19 +51,6 @@ this is not in scope here.
 At any point in time go to https://console.equinix.com/ and delete/remove your machines
 to terminate billing. You'll lose your work; AWS AMI like capability I believe is
 possible in Equinix, but is not discussed in this document.
-
-Some internet providers will close your connection (to help them not you) if there's
-no activity. Since you'll talk to your machines over ssh you can enable keep alive
-by adding this config to your `~/.ssh/config` file. This config sends a NULL packet
-across the connection every 30 seconds giving up and closing the connection if not
-successful after two retries since it's probably dead anyways:
-
-```
-# ~/.ssh/config
-Host *
-    ServerAliveInterval 30
-    ServerAliveCountMax 2
-```
 
 # Procedure Part 1 of 3
 This will take approximately 30 mins per machine most of it building DPDK.
