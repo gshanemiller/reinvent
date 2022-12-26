@@ -39,6 +39,19 @@ At any point in time go to https://console.equinix.com/ and delete/remove your m
 to terminate billing. You'll lose your work; AWS AMI like capability I believe is
 possible in Equinix, but is not discussed in this document.
 
+Some internet providers will close your connection (to help them not you) if there's
+no activity. Since you'll talk to your machines over ssh you can enable keep alive
+by adding this config to your `~/.ssh/config` file. This config sends a NULL packet
+across the connection every 30 seconds giving up and closing the connection if not
+successful after two retries since it's probably dead anyways:
+
+```
+# ~/.ssh/config
+Host *
+    ServerAliveInterval 30
+    ServerAliveCountMax 2
+```
+
 # Procedure Part 1 of 3
 This will take approximately 30 mins per machine most of it building DPDK and
 uploading one file.
