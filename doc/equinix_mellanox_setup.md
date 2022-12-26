@@ -72,7 +72,7 @@ $ lspci | grep Ether
 04:00.0 Ethernet controller: Intel Corporation I210 Gigabit Network Connection (rev 03)
 ```
 
-Instructions 10-26 must repeated once for each machine:
+Instructions 10-19 must repeated once for each machine:
 
 10. [In your browser surf to the install script](https://github.com/rodgarrison/reinvent/blob/ubuntu/scripts/install)
 11. Copy the script by clicking on github's copy button.
@@ -80,38 +80,10 @@ Instructions 10-26 must repeated once for each machine:
 13. Run command: `chmod 755 install`
 14. Run command: `./install`
 
-At this point the script installs development requirements for DPDK, compiler. After
-about one minute the script will stop reading:
-
-```
-Mellanox/Nvida MLNX_OFED_LINUX driver set cannot be obtained by curl/wget. You'll need to obtain it by hand
-at https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/ after accepting the EUA. Then scp it
-into this machine into the /tmp directory:
-
-example command: scp -i <ssh-key/pem-file> MLNX_OFED_LINUX-5.5-1.0.3.2-ubuntu20.04-x86_64.tgz root@<ip-address>:/tmp
-
-scp .tgz file in by hand to /tmp then press ENTER:
-```
-
-Because of the EUA (end user agreement) Nvidia makes you accept you can't get to the `.tgz` file directly. Therefore
-[you will have to surf to the MLNX download page](https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/)
-and download the required file to your local box. You'll `scp` it onto the Equinix machine yourself.
-
-15. In your browser [go to Mellanox's OFED download page](https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/)
-16. At page bottom click on `Download`
-17. Choose `Ubuntu` then then `Ubuntu 20.04` then `x86_64`
-18. Click on and download the `.tgz` file. Do not choose the `iso` file. As of this writing the file is called
-`MLNX_OFED_LINUX-5.5-1.0.3.2-ubuntu21.10-x86_64.tgz`.
-19. Accept the EUA and download it.
-20. After it's downloaded copy it from your local machine running the browser to the Equinix machine in step 9. The command
-you'll use is: `scp -i <ssh-key/pem-file> MLNX_OFED_LINUX-5.5-1.0.3.2-ubuntu20.04-x86_64.tgz root@<public-ip-address>:/tmp`.
-This will require 1-10 mins depending on your link speed. Note **it must be copied** to '/tmp'.
-21. Once this is done return to the Equinix CLI and press ENTER. The script will complete Mellanox driver setup
-
-Once step (21) is done, the script will download DPDK from githib. It'll then run `vi` on the main build-setup file. At
-the top of the file there's a variable declaration for `apps` listing all the applications to be built in addition to
-the library. For most purposes only one of these applications is needed. Building all applications will double DPDK 
-build time because DPDK uses LTO. It's recommended to keep only `test-pmd` so the variable declaration reads:
+After about 10 mins the script runs `vi` on the primary DPDK configuration. At the top of the file there's a
+variable declaration for `apps` listing all the applications to be built in addition to the library. For most purposes
+only `test-pmd` is needed. Building everything quadruple time because DPDK uses LTO. It's recommended to keep only
+`test-pmd` so the variable declaration reads:
 
 ```
 apps = [
@@ -119,15 +91,15 @@ apps = [
 ]
 ```
 
-22. Inside the VI editor on `app/meson.build` either immediately quit and exit with vi command `:wq` or change the `apps`
+15. Inside the VI editor on `app/meson.build` either immediately quit and exit with vi command `:wq` or change the `apps`
 array to include only `test-pmd` then write the changes and quit with `:wq`. Once done the script will build and install
 DPDK.
-23. After about 10 minutes the script will prompt `you need to enable IOMMU`. Press ENTER to continue. VI is run on the
+17. After about 10 minutes the script will prompt `you need to enable IOMMU`. Press ENTER to continue. VI is run on the
 grub boot file.
-24. In the editor change the `GRUB_CMDLINE_LINUX` line appending a space plus `iommu=1 intel_iommu=on'` so that it reads
+18. In the editor change the `GRUB_CMDLINE_LINUX` line appending a space plus `iommu=1 intel_iommu=on'` so that it reads
 `export GRUB_CMDLINE_LINUX='... iommu=1 intel_iommu=on'`
-25. Save and exit by escaping and entering `:wq`
-26. Installation part 1 is done. Press ENTER to reboot. The Mellanox kernel driver set needs to initialize and run.
+19. Save and exit by escaping and entering `:wq`
+20. Installation part 1 is done. Press ENTER to reboot. The Mellanox kernel driver set needs to initialize and run.
 
 # Procedure Part 2 of 3
 By default Equinix configures both Mellanox cards into a single bonded device. The purpose of this procedure is to break
