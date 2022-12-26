@@ -207,14 +207,14 @@ enp1s0f1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
 2. Login to your server machine and run `ifconfig enp1s0f1`.
 3. In your client machine run command: `cd /root/Dev/reinvent/scripts`
 4. In your client machine run command: `vi reinvent_dpdk_udp_integration_test`
-5. Near line 83 change `TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_SRC_MAC` to hold the ethernet address from your client's
+5. Near line 83 change `TEST_CLIENT_DPDK_NIC_DEVICE_DEFAULT_ROUTE_SRC_MAC` to hold the ethernet address from your client's
 enp1s0f1 device ex. `0c:42:a1:97:fa:a5`.
-6. Near line 84 change `TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_DST_MAC` to hold the ethernet address from your server's
+6. Near line 84 change `TEST_CLIENT_DPDK_NIC_DEVICE_DEFAULT_ROUTE_DST_MAC` to hold the ethernet address from your server's
 enp1s0f1 device.
-7. Near line 85 change `TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_SRC_IP` to hold the IPV4 address from your client's
+7. Near line 85 change `TEST_CLIENT_DPDK_NIC_DEVICE_DEFAULT_ROUTE_SRC_IPV4` to hold the IPV4 address from your client's
 enp1s0f1 device ex. `192.168.0.2`
-8. Near line 86 change `TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_DST_IP` to hold the IPV4 address from your server's
-enp1s0f1 device.
+8. Near line 86 change `TEST_CLIENT_DPDK_NIC_DEVICE_DEFAULT_ROUTE_DST_IPV4` to hold the IPV4 address from your server's
+enp1s0f1 device ex. `192.168.0.3`
 9. Save and exit.
 10. In the current working directory (still on client machine) run: `./setup`. This will configure huge pages.
 11. On your server machine run command: `cd /root/Dev/reinvent/scripts` and then run `./setup`
