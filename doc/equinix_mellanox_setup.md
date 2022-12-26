@@ -13,7 +13,7 @@ runs only $0.75/hr. Not only are Mellanox NICs more powerful than AWS virtual
 NICs, they are plugged directly into the PCI bus. Two instances cost the same as
 one AWS c5n. Now, to be fair, AWS was never going to be fully baremetal and c5n
 CPUs are larger and more powerful. It has more memory. But for development purposes
-I find Equinix a better bang for the buck.
+I find Equinix a far better bang for the buck.
 
 The purpose of this article to explain how to set up a pair of c3.small.x86 servers
 for reinvent development and testing. In particular, this procedure makes one of the
