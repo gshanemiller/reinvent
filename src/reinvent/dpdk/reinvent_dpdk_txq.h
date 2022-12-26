@@ -5,10 +5,6 @@
 // Classes:
 //  Dpdk::TXQ: Holds configuration for a DPDK TXQ primarily mempool with links to its VCPU, lcore.
 //
-// See Also:                                                                                                            
-//  Dpdk::InitAWS                                                                                                       
-//  Dpdk::AWSEnaConfig 
-//  
 // Thread Safety: Not MT thread-safe.
 //                                                                                                                      
 // Exception Policy: No exceptions                                                                                      
@@ -34,9 +30,7 @@
 // | mempoolPolicy         | std::string   | empty      | One of PER_QUEUE|SHARED. This is a hint on how the TXQ's    |
 // |                       |               |            | mempool was created.                                        |
 // +-----------------------+---------------+------------+-------------------------------------------------------------+
-// | defaultFlow           | int           | 0          | Default flow; see Dpdk::InitAWS                             |
-// +-----------------------+---------------+------------+-------------------------------------------------------------+
-// | defaultRoute          | UDPRoute  | Default ctr| Default route; see Dpdk::InitAWS                            |
+// | defaultFlow           | int           | 0          | Default flow; see Dpdk::Init                                |
 // +-----------------------+---------------+------------+-------------------------------------------------------------+
 
 #include <iostream>
@@ -52,8 +46,6 @@
 #include <rte_mempool.h>                                                                                                
 #pragma GCC diagnostic pop 
 
-#include <dpdk/reinvent_dpdk_udproute.h>
-
 namespace Reinvent {
 namespace Dpdk {
 
@@ -67,12 +59,11 @@ class TXQ {
   int                 d_ringSize;
   std::string         d_mempoolPolicy;
   int                 d_defaultFlow;
-  UDPRoute            d_defaultRoute;
 
 public:
   // CREATORS
   TXQ(int id, int vcpuId, int lcoreId, const rte_memzone *memzone, rte_mempool *mempool, int ringSize,
-    const std::string& mempoolPolicy, int defaultFlow, const UDPRoute& defaultRoute);
+    const std::string& mempoolPolicy, int defaultFlow);
     // Create a object with specified parameters. The behavior is defined provided integer arguments are greater than
     // or equal, and ringSize>0
   
@@ -115,9 +106,6 @@ public:
   int defaultFlow() const;
     // Return defaultFlow attribute
  
-  const UDPRoute& defaultRoute() const;
-    // Return non-modifiable reference to default route attribute
-
   // MANIPULATORS
   TXQ& operator=(const TXQ& rhs) = delete;
     // Assignment operator not provided
@@ -137,9 +125,6 @@ public:
   void setDefaultFlow(int value);
     // Assign the specified 'value' to the defaultFlow attribute
 
-  void setDefaultRoute(const UDPRoute& value);
-    // Assign the specified 'value' to the defaultRoute attribute
-
   // ASPECTS
   std::ostream& print(std::ostream& stream) const;
     // Print into specified 'stream' human readable dump of this object returning 'stream'
@@ -152,7 +137,7 @@ std::ostream& operator<<(std::ostream& stream, const TXQ& object);
 // INLINE FUNCTION DEFINITIONS
 inline
 TXQ::TXQ(int id, int vcpuId, int lcoreId, const rte_memzone *memzone, rte_mempool *mempool, int ringSize,
-  const std::string& mempoolPolicy, int defaultFlow, const UDPRoute& defaultRoute)
+  const std::string& mempoolPolicy, int defaultFlow)
 : d_id(id)
 , d_vcpuId(vcpuId)
 , d_lcoreId(lcoreId)
@@ -161,7 +146,6 @@ TXQ::TXQ(int id, int vcpuId, int lcoreId, const rte_memzone *memzone, rte_mempoo
 , d_ringSize(ringSize)
 , d_mempoolPolicy(mempoolPolicy)
 , d_defaultFlow(defaultFlow)
-, d_defaultRoute(defaultRoute)
 {
   assert(d_id>=0);
   assert(d_vcpuId>=0);
@@ -170,7 +154,6 @@ TXQ::TXQ(int id, int vcpuId, int lcoreId, const rte_memzone *memzone, rte_mempoo
   assert(d_mempool);
   assert(d_ringSize>0);
   assert(!d_mempoolPolicy.empty());
-  assert(d_defaultFlow>=0);
 }
 
 inline                                                                                                                  
@@ -201,7 +184,6 @@ TXQ::TXQ()
 , d_memzone(0)
 , d_mempool(0)
 , d_ringSize(0)
-, d_defaultFlow(0)
 {
 }
 
@@ -215,7 +197,6 @@ TXQ::TXQ(const TXQ& object)
 , d_ringSize(object.d_ringSize)
 , d_mempoolPolicy(object.d_mempoolPolicy)
 , d_defaultFlow(object.d_defaultFlow)
-, d_defaultRoute(object.d_defaultRoute)
 {                                                                                                                       
 } 
 
@@ -260,11 +241,6 @@ int TXQ::defaultFlow() const {
   return d_defaultFlow;
 }
 
-inline
-const UDPRoute& TXQ::defaultRoute() const {
-  return d_defaultRoute;
-}
-
 // MANIPULATORS
 inline
 void TXQ::setMemzone(const rte_memzone *value) {
@@ -293,11 +269,6 @@ inline
 void TXQ::setDefaultFlow(int value) {
   assert(value>=0);
   d_defaultFlow = value;
-}
-
-inline
-void TXQ::setDefaultRoute(const UDPRoute& value) {
-  d_defaultRoute = value;
 }
 
 // ASPECTS

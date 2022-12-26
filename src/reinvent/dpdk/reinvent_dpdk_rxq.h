@@ -5,10 +5,6 @@
 // Classes:
 //  Dpdk::RXQ: Holds configuration for a DPDK RXQ primarily mempool with links to its VCPU, lcore.
 //
-// See Also:                                                                                                            
-//  Dpdk::InitAWS                                                                                                       
-//  Dpdk::AWSEnaConfig 
-//  
 // Thread Safety: Not MT thread-safe.
 //                                                                                                                      
 // Exception Policy: No exceptions                                                                                      

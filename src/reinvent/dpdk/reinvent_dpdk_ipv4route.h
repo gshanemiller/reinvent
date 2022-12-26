@@ -1,17 +1,10 @@
 #pragma once
 
-// Purpose: UDP route
+// Purpose: IPV4 route
 //
 // Classes:
-//  Dpdk::UDPRoute: Value semantic object holding combined L2 ether src/dst, L3 src/dst IP addresses, and L4 (UDP)
-//                  src/dst ports
+//  Dpdk::IPV4Route: Value semantic object holding IPV4 (UDP or TCP like) route src/dst ports
 //
-// See Also:
-//  Dpdk::InitAWS
-//  Dpdk::AWSEnaConfig
-//  integration_tests/reinvent_dpdk_udp minimal-complete client/server example
-//  Packet routing documentation in doc/aws_ena_packet_design.md
-//  
 // Thread Safety: MT thread-safe.
 //                                                                                                                      
 // Exception Policy: No exceptions                                                                                      
@@ -20,7 +13,7 @@
 // pair of 3-tuples src=(macAddress, IP address, port) and dst=(macAddress, IP address, port). Principally a TX
 // concern, TX side work will construct a route backwards from how RSS on RX side will deliver packets to RX queues.
 //
-// This class is called 'UDPRoute' but in fact it holds data placed into an ether header (L2), IP header (L3), and
+// This class is called 'IPV4Route' but in fact it holds data placed into an ether header (L2), IP header (L3), and
 // L4 UDP header.
 //
 // Helper methods are provided to converted MAC, IP addresses from string format to DPDK binary format.
@@ -69,7 +62,7 @@
 namespace Reinvent {
 namespace Dpdk {
 
-class UDPRoute {
+class IPV4Route {
   // DATA
   std::string   d_srcMac;
   std::string   d_dstMac;
@@ -80,20 +73,20 @@ class UDPRoute {
 
 public:
   // CREATORS
-  UDPRoute(const std::string& srcMac, const std::string& dstMac, const std::string& srcIp,
+  IPV4Route(const std::string& srcMac, const std::string& dstMac, const std::string& srcIp,
     const std::string& dstIp, int srcPort, int dstPort);
     // Create a object with specified arguments. The behavior is defined provided the MAC, IP arguments are validly
     // formatted strings, and ports are greater than zero. See https://doc.dpdk.org/api/rte__ether_8h.html method
     // 'rte_ether_unformat_addr' for details on MAC addresses as string. Valid IP addresses are "<d>.<d>.<d>.<d>' 
     // where each '0<=d<=255'.
 
-  UDPRoute();
-    // Create UDPRoute object with default values.
+  IPV4Route();
+    // Create IPV4Route object with default values.
 
-  UDPRoute(const UDPRoute& object) = default;
-    // Create UDPRoute object such *this==object
+  IPV4Route(const IPV4Route& object) = default;
+    // Create IPV4Route object such *this==object
 
-  ~UDPRoute() = default;
+  ~IPV4Route() = default;
     // Destroy this object
 
   // ACCESSORS
@@ -132,7 +125,7 @@ public:
     // and non-zero otherwise. Note this routine puts the bytes into the correct order for packet construction.
 
   // MANIPULATORS
-  UDPRoute& operator=(const UDPRoute& rhs) = default;
+  IPV4Route& operator=(const IPV4Route& rhs) = default;
     // Create and return an object semantically equal to specified 'rhs'
 
   // ASPECTS
@@ -141,15 +134,15 @@ public:
 };
 
 // FREE OPERATORS
-std::ostream& operator<<(std::ostream& stream, const UDPRoute& object);
+std::ostream& operator<<(std::ostream& stream, const IPV4Route& object);
   // Print into specified 'stream' human readable dump of 'object' returning 'stream'
 
-bool operator==(const UDPRoute& lhs, const UDPRoute& rhs);
+bool operator==(const IPV4Route& lhs, const IPV4Route& rhs);
   // Return true if 'lhs, rhs' are semantically equal and false otherwise  
 
 // INLINE FUNCTION DEFINITIONS
 inline
-UDPRoute::UDPRoute(const std::string& srcMac, const std::string& dstMac, const std::string& srcIp,                          
+IPV4Route::IPV4Route(const std::string& srcMac, const std::string& dstMac, const std::string& srcIp,                          
     const std::string& dstIp, int srcPort, int dstPort)
 : d_srcMac(srcMac)
 , d_dstMac(dstMac)
@@ -167,7 +160,7 @@ UDPRoute::UDPRoute(const std::string& srcMac, const std::string& dstMac, const s
 }
 
 inline
-UDPRoute::UDPRoute()
+IPV4Route::IPV4Route()
 : d_srcPort(0)
 , d_dstPort(0)
 {
@@ -175,37 +168,37 @@ UDPRoute::UDPRoute()
 
 // ACCESSORS
 inline
-const std::string& UDPRoute::srcMac() const {
+const std::string& IPV4Route::srcMac() const {
   return d_srcMac;
 }
 
 inline
-const std::string& UDPRoute::dstMac() const {
+const std::string& IPV4Route::dstMac() const {
   return d_srcMac;
 }
 
 inline
-const std::string& UDPRoute::srcIp() const {
+const std::string& IPV4Route::srcIp() const {
   return d_srcIp;
 }
 
 inline
-const std::string& UDPRoute::dstIp() const {
+const std::string& IPV4Route::dstIp() const {
   return d_dstIp;
 }
 
 inline
-int UDPRoute::srcPort() const {
+int IPV4Route::srcPort() const {
   return d_srcPort;
 }
 
 inline
-int UDPRoute::dstPort() const {
+int IPV4Route::dstPort() const {
   return d_dstPort;
 }
 
 inline
-int UDPRoute::convertSrcMac(rte_ether_addr *value) const {
+int IPV4Route::convertSrcMac(rte_ether_addr *value) const {
   assert(value);
   int rc;
   if ((rc = rte_ether_unformat_addr(d_srcMac.c_str(), value))!=0) {
@@ -215,7 +208,7 @@ int UDPRoute::convertSrcMac(rte_ether_addr *value) const {
 }
 
 inline
-int UDPRoute::convertDstMac(rte_ether_addr *value) const {
+int IPV4Route::convertDstMac(rte_ether_addr *value) const {
   assert(value);
   int rc;
   if ((rc = rte_ether_unformat_addr(d_dstMac.c_str(), value))!=0) {
@@ -225,7 +218,7 @@ int UDPRoute::convertDstMac(rte_ether_addr *value) const {
 }
 
 inline
-int UDPRoute::convertSrcIp(uint32_t *value) const {
+int IPV4Route::convertSrcIp(uint32_t *value) const {
   assert(value);
   unsigned char addr[4];
 	int rc = sscanf(d_srcIp.c_str(), "%hhu.%hhu.%hhu.%hhu",addr+0,addr+1,addr+2,addr+3);
@@ -247,7 +240,7 @@ int UDPRoute::convertSrcIp(uint32_t *value) const {
 }
 
 inline
-int UDPRoute::convertDstIp(uint32_t *value) const {
+int IPV4Route::convertDstIp(uint32_t *value) const {
   assert(value);
   unsigned char addr[4];
 	int rc = sscanf(d_dstIp.c_str(), "%hhu.%hhu.%hhu.%hhu",addr+0,addr+1,addr+2,addr+3);
@@ -270,12 +263,12 @@ int UDPRoute::convertDstIp(uint32_t *value) const {
 
 // ASPECTS
 inline
-std::ostream& operator<<(std::ostream& stream, const UDPRoute& object) {
+std::ostream& operator<<(std::ostream& stream, const IPV4Route& object) {
   return object.print(stream);
 }
 
 inline
-bool operator==(const UDPRoute& lhs, const UDPRoute& rhs) {
+bool operator==(const IPV4Route& lhs, const IPV4Route& rhs) {
   return  ( lhs.srcMac()==rhs.srcMac()   &&
             lhs.dstMac()==rhs.dstMac()   && 
             lhs.srcIp()==rhs.srcIp()     &&

@@ -1,8 +1,8 @@
-#include <dpdk/reinvent_dpdk_udproute.h>
+#include <dpdk/reinvent_dpdk_ipv4route.h>
 
 namespace Reinvent {
 
-std::ostream& Dpdk::UDPRoute::print(std::ostream& stream) const {
+std::ostream& Dpdk::IPV4Route::print(std::ostream& stream) const {
   stream << "{ "
          << "\"sourceMac\":\""            << d_srcMac << "\""
          << ", \"destinationMac\":\""     << d_dstMac << "\""

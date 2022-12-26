@@ -12,7 +12,6 @@ std::ostream& Dpdk::TXQ::print(std::ostream& stream) const {
          << ", \"mempoolPolicy\":\""  << d_mempoolPolicy  << "\""
          << ", \"ringSize\":"         << d_ringSize                                                                     
          << ", \"defaultFlow\":"      << d_defaultFlow
-         << ", \"defaultRoute\":"     << d_defaultRoute
          << "}";
   return stream;
 }

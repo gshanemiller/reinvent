@@ -68,13 +68,3 @@ if(INTEGRATION_TEST)
 else()
   message(STATUS "Integration tests disabled")
 endif()
-
-#
-# Add performance tests if enabled
-#
-if(PERFORMANCE_TEST)
-  message(STATUS "Performance tests enabled")
-  add_subdirectory(performance_tests)
-else()
-  message(STATUS "Performance tests disabled")
-endif()

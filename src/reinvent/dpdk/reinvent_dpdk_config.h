@@ -1,21 +1,21 @@
 #pragma once
 
-// Purpose: AWS ENA DPDK Configuration
+// Purpose: DPDK (ENA) Configuration
 //
 // Classes:
-//  Dpdk::AWSEnaConfig: None-copyable AWS ENA DPDK Configuration for one DPDK Port/Device
+//  Dpdk::Config: Non-copyable DPDK Configuration for one DPDK Port/Device
 //  
 // Thread Safety: Not MT thread-safe.
 //                                                                                                                      
 // Exception Policy: No exceptions                                                                                      
 //
-// AWSEnaConfig is a non-copyable value semantic type holding the all the configuration state for one AWS ENA DPAK
+// Config is a non-copyable value semantic type holding the all the configuration state for one ENA DPDK
 // NIC/Device with a zero-based 'deviceId'. In practice application programmers do not construct this object; it is
-// initialized by one of the 'Dpdk::InitAWS' helper routines. To that end and towards eliminating substantial
+// initialized by one of the 'Dpdk::Init' helper routines. To that end and towards eliminating substantial
 // duplication between attributes here and UNIX environment variables read there, readers are referred to the extensive
-// documentation under 'Dpdk::InitAWS'.
+// documentation under 'Dpdk::Init'.
 //
-// 'AWSEnaConfig' is meant to be a semi-organized collection of configuration attributes. The number of DPDK
+// 'Config' is meant to be a semi-organized collection of configuration attributes. The number of DPDK
 // applications and HW is legion. Thus the purpose of this class is impose some structure mainly on lcores, VCPUs, and
 // RXQ/TXQs leaving the rest of attributes lose. You will not find many helper classes to hold UDP, crypto, and other
 // speciality data. So long as every variable is clear and easily accessible, application programmers can extract
@@ -32,6 +32,7 @@
 #include <dpdk/reinvent_dpdk_vcpu.h>
 #include <dpdk/reinvent_dpdk_lcore.h>
 #include <dpdk/reinvent_dpdk_names.h>
+#include <dpdk/reinvent_dpdk_ipv4route.h>
 
 //                                                                                                                      
 // Tell GCC to not enforce '-Wpendantic' for DPDK headers                                                               
@@ -46,7 +47,7 @@
 namespace Reinvent {
 namespace Dpdk {
 
-class AWSEnaConfig {
+class Config {
 public:
   // ENUM
   enum {
@@ -113,6 +114,8 @@ private:
   int                       d_rxqWriteBackThresh;
   int                       d_rxqFreeThresh;
 
+  std::vector<IPV4Route>    d_defaultRoute;
+
   // DPDK structures initialized
   struct rte_eth_conf       d_ethDeviceConf;
   struct rte_eth_dev_info   d_ethDeviceInfo;
@@ -120,15 +123,15 @@ private:
 
 public:
   // CREATORS
-  AWSEnaConfig();
-    // Create a AWSEnaConfig object with default values. Note this configuration cannot be used to initialize a NIC.
-    // It's only provided so callers can subsequently run set methods culminating in 'isValid()' after which AWS ENA
-    // NIC initialization can start.
+  Config();
+    // Create a Config object with default values. Note this configuration cannot be used to initialize a NIC.
+    // It's only provided so callers can subsequently run set methods culminating in 'isValid()' after which
+    // DPDK NIC initialization can start.
 
-  AWSEnaConfig(const AWSEnaConfig& object) = delete;
+  Config(const Config& object) = delete;
     // Copy constructor not provided
 
-  virtual ~AWSEnaConfig() = default;
+  virtual ~Config() = default;
     // Destory this object
 
   // ACCESSORS
@@ -258,6 +261,9 @@ public:
 
   int rxqFreeThresh() const;
     // Return value of 'rxqFreeThresh' attribute
+
+  const std::vector<IPV4Route>& defaultRoute() const;
+    // Return unmodifiable reference to 'defaultRoute' attribute
   
   // MANIPULATORS
   void setIsValid(int value);
@@ -398,18 +404,21 @@ public:
   void setRxqFreeThresh(int value);
     // Assign value to the 'rxqFreeThresh` attribute
 
+  void setDefaultRoute(std::vector<IPV4Route>& value);
+    // Assign value to the 'defaultRoute' attribute by swapping vectors
+
   // ASPECTS
   std::ostream& print(std::ostream& stream) const;
     // Print into specified 'stream' a human readable dump of 'this' returning 'stream'
 };
 
 // FREE OPERATORS
-std::ostream& operator<<(std::ostream& stream, const AWSEnaConfig& object);
+std::ostream& operator<<(std::ostream& stream, const Config& object);
     // Print into specified 'stream' a human readable dump of 'object' returning 'stream'
 
 // INLINE DEFINITIONS
 inline
-AWSEnaConfig::AWSEnaConfig()
+Config::Config()
 : d_isValid(1)
 , d_deviceId(0)
 , d_numaNode(0)
@@ -446,378 +455,383 @@ AWSEnaConfig::AWSEnaConfig()
 
 // ACCESSORS
 inline
-int AWSEnaConfig::isValid() const {
+int Config::isValid() const {
   return d_isValid;
 }
 
 inline
-const std::vector<std::string>& AWSEnaConfig::dpdkArgs() const {
+const std::vector<std::string>& Config::dpdkArgs() const {
   return d_dpdkArgs;
 }
 
 inline
-int AWSEnaConfig::memoryChannelCount() const {
+int Config::memoryChannelCount() const {
   return d_memoryChannelCount;
 }
   
 inline
-const std::vector<VCPU>& AWSEnaConfig::vcpu() const {
+const std::vector<VCPU>& Config::vcpu() const {
   return d_vcpu;
 }
 
 inline
-int AWSEnaConfig::deviceId() const {
+int Config::deviceId() const {
   return d_deviceId;
 }
 
 inline
-const std::string& AWSEnaConfig::pciId() const {
+const std::string& Config::pciId() const {
   return d_pciId;
 }
 
 inline
-int AWSEnaConfig::numaNode() const {
+int Config::numaNode() const {
   return d_numaNode;
 }
 
 inline
-int AWSEnaConfig::rxqCount() const {
+int Config::rxqCount() const {
   return d_rxqCount;
 }
 
 inline
-int AWSEnaConfig::txqCount() const {
+int Config::txqCount() const {
   return d_txqCount;
 }
 
 inline
-int AWSEnaConfig::rxqThreadCount() const {
+int Config::rxqThreadCount() const {
   return d_rxqThreadCount;
 }
 
 inline
-int AWSEnaConfig::txqThreadCount() const {
+int Config::txqThreadCount() const {
   return d_txqThreadCount;
 }
 
 inline
-const std::string& AWSEnaConfig::rxqPolicy() const {
+const std::string& Config::rxqPolicy() const {
   return d_rxqPolicy;
 }
 
 inline
-const std::string& AWSEnaConfig::txqPolicy() const {
+const std::string& Config::txqPolicy() const {
   return d_txqPolicy;
 }
 
 inline
-const std::vector<int>& AWSEnaConfig::rxqCandidateVcpuList() const {
+const std::vector<int>& Config::rxqCandidateVcpuList() const {
   return d_rxqCandidateVcpuList;
 }
 
 inline
-const std::vector<int>& AWSEnaConfig::txqCandidateVcpuList() const {
+const std::vector<int>& Config::txqCandidateVcpuList() const {
   return d_txqCandidateVcpuList;
 }
 
 inline
-int AWSEnaConfig::mtu() const {
+int Config::mtu() const {
   return d_mtu;
 }
 
 inline
-int AWSEnaConfig::memzoneMask() const {
+int Config::memzoneMask() const {
   return d_memzoneMask;
 }
 
 inline
-int AWSEnaConfig::memzoneReserveKb() const {
+int Config::memzoneReserveKb() const {
   return d_memzoneReserveKb;
 }
 
 inline
-const std::string& AWSEnaConfig::memzoneName() const {
+const std::string& Config::memzoneName() const {
   return d_memzoneName;
 }
 
 inline
-const struct rte_memzone *AWSEnaConfig::memzone() const {
+const struct rte_memzone *Config::memzone() const {
   return d_memzone;
 }
 
 inline
-const std::string& AWSEnaConfig::mempoolPolicy() const {
+const std::string& Config::mempoolPolicy() const {
   return d_mempoolPolicy;
 }
 
 inline
-const std::vector<RXQ>& AWSEnaConfig::rxq() const {
+const std::vector<RXQ>& Config::rxq() const {
   return d_rxq;
 }
 
 inline
-const std::vector<TXQ>& AWSEnaConfig::txq() const {
+const std::vector<TXQ>& Config::txq() const {
   return d_txq;
 }
 
 inline
-const std::vector<LCORE>& AWSEnaConfig::lcore() const {
+const std::vector<LCORE>& Config::lcore() const {
   return d_lcore;
 }
 
 inline
-int AWSEnaConfig::linkSpeed() const {
+int Config::linkSpeed() const {
   return d_linkSpeed;
 }
 
 inline
-int AWSEnaConfig::rxMqMask() const {
+int Config::rxMqMask() const {
   return d_rxMqMask;
 }
 
 inline
-int AWSEnaConfig::txMqMask() const {
+int Config::txMqMask() const {
   return d_txMqMask;
 }
 
 inline
-int AWSEnaConfig::rxOffloadMask() const {
+int Config::rxOffloadMask() const {
   return d_rxOffloadMask;
 }
 
 inline
-int AWSEnaConfig::txOffloadMask() const {
+int Config::txOffloadMask() const {
   return d_txOffloadMask;
 }
 
 inline
-int AWSEnaConfig::defaultTxFlow() const {
+int Config::defaultTxFlow() const {
   return d_defaultTxFlow;
 }
 
 inline
-const uint8_t *AWSEnaConfig::rxRssKey() const {
+const uint8_t *Config::rxRssKey() const {
   return d_rxRssKey;
 }
 
 inline
-int AWSEnaConfig::rxRssKeySize() const {
+int Config::rxRssKeySize() const {
   return d_rxRssKeySize;
 }
 
 inline
-int AWSEnaConfig::rxRssHf() const {
+int Config::rxRssHf() const {
   return d_rxRssHf;
 }
 
 inline
-int AWSEnaConfig::txqPrefetchThresh() const {
+int Config::txqPrefetchThresh() const {
   return d_txqPrefetchThresh;
 }
 
 inline
-int AWSEnaConfig::txqHostThresh() const {
+int Config::txqHostThresh() const {
   return d_txqHostThresh;
 }
 
 inline
-int AWSEnaConfig::txqWriteBackThresh() const {
+int Config::txqWriteBackThresh() const {
   return d_txqWriteBackThresh;
 }
 
 inline
-int AWSEnaConfig::txqRsThresh() const {
+int Config::txqRsThresh() const {
   return d_txqRsThresh;
 }
 
 inline
-int AWSEnaConfig::txqFreeThresh() const {
+int Config::txqFreeThresh() const {
   return d_txqFreeThresh;
 }
 
 inline
-int AWSEnaConfig::rxqPrefetchThresh() const {
+int Config::rxqPrefetchThresh() const {
   return d_rxqPrefetchThresh;
 }
 
 inline
-int AWSEnaConfig::rxqHostThresh() const {
+int Config::rxqHostThresh() const {
   return d_rxqHostThresh;
 }
 
 inline
-int AWSEnaConfig::rxqWriteBackThresh() const {
+int Config::rxqWriteBackThresh() const {
   return d_rxqWriteBackThresh;
 }
 
 inline
-int AWSEnaConfig::rxqFreeThresh() const {
+int Config::rxqFreeThresh() const {
   return d_rxqFreeThresh;
+}
+
+inline
+const std::vector<IPV4Route>& Config::defaultRoute() const {
+  return d_defaultRoute;
 }
 
 // MANIPULATORS
 inline
-void AWSEnaConfig::setIsValid(int value) {
+void Config::setIsValid(int value) {
   d_isValid = value;
 }
 
 inline
-void AWSEnaConfig::setDpdkArgs(std::vector<std::string>& value) {
+void Config::setDpdkArgs(std::vector<std::string>& value) {
   d_dpdkArgs.swap(value);
 }
 
 inline
-std::vector<std::string>& AWSEnaConfig::dpdkArgs(void) {
+std::vector<std::string>& Config::dpdkArgs(void) {
   return d_dpdkArgs;
 }
 
 inline
-void AWSEnaConfig::setMemoryChannelCount(int value) {
+void Config::setMemoryChannelCount(int value) {
   d_memoryChannelCount = value;
 }
  
 inline
-void AWSEnaConfig::setVcpu(std::vector<VCPU>& value) {
+void Config::setVcpu(std::vector<VCPU>& value) {
   d_vcpu.swap(value);
 }
 
 inline
-void AWSEnaConfig::setDeviceId(int value) {
+void Config::setDeviceId(int value) {
   d_deviceId = value;
 }
 
 inline
-void AWSEnaConfig::setPciId(const std::string& value) {
+void Config::setPciId(const std::string& value) {
   d_pciId = value;
 }
 
 inline
-void AWSEnaConfig::setNumaNode(int value) {
+void Config::setNumaNode(int value) {
   d_numaNode = value;
 }
 
 inline
-void AWSEnaConfig::setRxqCount(int value) {
+void Config::setRxqCount(int value) {
   d_rxqCount = value;
 }
 
 inline
-void AWSEnaConfig::setTxqCount(int value) {
+void Config::setTxqCount(int value) {
   d_txqCount = value;
 }
 
 inline
-void AWSEnaConfig::setRxqThreadCount(int value) {
+void Config::setRxqThreadCount(int value) {
   d_rxqThreadCount = value;
 }
 
 inline
-void AWSEnaConfig::setTxqThreadCount(int value) {
+void Config::setTxqThreadCount(int value) {
   d_txqThreadCount = value;
 }
 
 inline
-void AWSEnaConfig::setRxqPolicy(const std::string& value) {
+void Config::setRxqPolicy(const std::string& value) {
   d_rxqPolicy = value;
 }
 
 inline
-void AWSEnaConfig::setTxqPolicy(const std::string& value) {
+void Config::setTxqPolicy(const std::string& value) {
   d_txqPolicy = value;
 }
 
 inline
-void AWSEnaConfig::setRxqCandidateVcpuList(std::vector<int>& value) {
+void Config::setRxqCandidateVcpuList(std::vector<int>& value) {
   d_rxqCandidateVcpuList.swap(value);
 }
 
 inline
-void AWSEnaConfig::setTxqCandidateVcpuList(std::vector<int>& value) {
+void Config::setTxqCandidateVcpuList(std::vector<int>& value) {
   d_txqCandidateVcpuList.swap(value);
 }
 
 inline
-void AWSEnaConfig::setMtu(int value) {
+void Config::setMtu(int value) {
   d_mtu = value;
 }
 
 inline
-void AWSEnaConfig::setMemzoneMask(int value) {
+void Config::setMemzoneMask(int value) {
   d_memzoneMask = value;
 }
 
 inline
-void AWSEnaConfig::setMemzoneReserveKb(int value) {
+void Config::setMemzoneReserveKb(int value) {
   d_memzoneReserveKb = value;
 }
  
 inline
-void AWSEnaConfig::setMemzoneName(const std::string& value) {
+void Config::setMemzoneName(const std::string& value) {
   d_memzoneName = value;
 }
 
 inline
-void AWSEnaConfig::setMempoolPolicy(const std::string& value) {
+void Config::setMempoolPolicy(const std::string& value) {
   d_mempoolPolicy = value;
 }
 
 inline
-void AWSEnaConfig::setLinkSpeed(int value) {
+void Config::setLinkSpeed(int value) {
   d_linkSpeed = value;
 }
 
 inline
-void AWSEnaConfig::setRxq(std::vector<RXQ>& value) {
+void Config::setRxq(std::vector<RXQ>& value) {
   d_rxq.swap(value);
 }
 
 inline
-void AWSEnaConfig::setTxq(std::vector<TXQ>& value) {
+void Config::setTxq(std::vector<TXQ>& value) {
   d_txq.swap(value);
 }
 
 inline
-std::vector<RXQ>& AWSEnaConfig::rxq() {
+std::vector<RXQ>& Config::rxq() {
   return d_rxq;
 }
 
 inline
-std::vector<TXQ>& AWSEnaConfig::txq() {
+std::vector<TXQ>& Config::txq() {
   return d_txq;
 }
 
 inline
-void AWSEnaConfig::setLcore(std::vector<LCORE>& value) {
+void Config::setLcore(std::vector<LCORE>& value) {
   d_lcore.swap(value);
 }
 
 inline
-void AWSEnaConfig::setRxMqMask(int value) {
+void Config::setRxMqMask(int value) {
   d_rxMqMask = value;
 }
 
 inline
-void AWSEnaConfig::setTxMqMask(int value) {
+void Config::setTxMqMask(int value) {
   d_txMqMask = value;
 }
 
 inline
-void AWSEnaConfig::setRxOffloadMask(int value) {
+void Config::setRxOffloadMask(int value) {
   d_rxOffloadMask = value;
 }
 
 inline
-void AWSEnaConfig::setTxOffloadMask(int value) {
+void Config::setTxOffloadMask(int value) {
   d_txOffloadMask = value;
 }
 
 inline
-void AWSEnaConfig::setDefaultTxFlow(int value) {
+void Config::setDefaultTxFlow(int value) {
   d_defaultTxFlow = value;
 }
 
 inline
-void AWSEnaConfig::setRxRss(const uint8_t *key, int keySize, int hf) {
+void Config::setRxRss(const uint8_t *key, int keySize, int hf) {
   assert(key!=0);
   assert(keySize==RSS_HASH_KEY_SIZE);
   assert(hf>0);
@@ -827,68 +841,73 @@ void AWSEnaConfig::setRxRss(const uint8_t *key, int keySize, int hf) {
 }
 
 inline
-rte_eth_conf *AWSEnaConfig::ethDeviceConf() {
+rte_eth_conf *Config::ethDeviceConf() {
   return &d_ethDeviceConf;
 }
 
 inline
-rte_eth_dev_info *AWSEnaConfig::ethDeviceInfo() {
+rte_eth_dev_info *Config::ethDeviceInfo() {
   return &d_ethDeviceInfo;
 }
 
 inline
-void AWSEnaConfig::setMemzone(const struct rte_memzone *value) {
+void Config::setMemzone(const struct rte_memzone *value) {
   d_memzone = value;
 }
 
 inline
-void AWSEnaConfig::setTxqPrefetchThresh(int value) {
+void Config::setTxqPrefetchThresh(int value) {
   d_txqPrefetchThresh = value;
 }
 
 inline
-void AWSEnaConfig::setTxqHostThresh(int value) {
+void Config::setTxqHostThresh(int value) {
   d_txqHostThresh = value;
 }
 
 inline
-void AWSEnaConfig::setTxqWriteBackThresh(int value) {
+void Config::setTxqWriteBackThresh(int value) {
   d_txqWriteBackThresh = value;
 }
 
 inline
-void AWSEnaConfig::setTxqRsThresh(int value) {
+void Config::setTxqRsThresh(int value) {
   d_txqRsThresh = value;
 }
 
 inline
-void AWSEnaConfig::setTxqFreeThresh(int value) {
+void Config::setTxqFreeThresh(int value) {
   d_txqFreeThresh = value;
 }
 
 inline
-void AWSEnaConfig::setRxqPrefetchThresh(int value) {
+void Config::setRxqPrefetchThresh(int value) {
   d_rxqPrefetchThresh = value;
 }
 
 inline
-void AWSEnaConfig::setRxqHostThresh(int value) {
+void Config::setRxqHostThresh(int value) {
   d_rxqHostThresh = value;
 }
 
 inline
-void AWSEnaConfig::setRxqWriteBackThresh(int value) {
+void Config::setRxqWriteBackThresh(int value) {
   d_rxqWriteBackThresh = value;
 }
 
 inline
-void AWSEnaConfig::setRxqFreeThresh(int value) {
+void Config::setRxqFreeThresh(int value) {
   d_rxqFreeThresh = value;
+}
+
+inline
+void Config::setDefaultRoute(std::vector<IPV4Route>& value) {
+  d_defaultRoute.swap(value);
 }
 
 // FREE OPERATORS
 inline
-std::ostream& operator<<(std::ostream& stream, const AWSEnaConfig& object) {
+std::ostream& operator<<(std::ostream& stream, const Config& object) {
   object.print(stream);
   return stream;
 }

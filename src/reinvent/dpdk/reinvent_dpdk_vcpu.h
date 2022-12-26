@@ -5,10 +5,6 @@
 // Classes:
 //  Dpdk::VCPU: Identifies CPU H/W core relating it to parent CPU, NUMA node
 //
-// See Also:
-//  Dpdk::InitAWS
-//  Dpdk::AWSEnaConfig
-//  
 // Thread Safety: MT thread-safe.
 //                                                                                                                      
 // Exception Policy: No exceptions                                                                                      
@@ -23,7 +19,7 @@
 // to other IDs unique; it only records a HW report. 'softEnabled' has no reference or meaning for actual HW either.
 // This attribute is best understood in context. For example, by DPDK/NIC initialization uses this value soft-disabled
 // VCPUs fromDPDK RX/TX queue assignment thereby leaving cores for other purposes. Callers usually insure the object's
-// values are correct, for example, Dpdk::AWSEnaConfig.
+// values are correct, for example, Dpdk::Config.
 //
 // +------------+-------------+----------------+------------------------------+
 // | Field      |  Type       | Default        | Comment                      |

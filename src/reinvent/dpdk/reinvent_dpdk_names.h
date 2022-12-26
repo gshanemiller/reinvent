@@ -74,14 +74,12 @@ struct Names {
   static const char *SHARED_MEMPOOL_PRIVATE;
   static const char *SHARED_MEMPOOL_FLAGS;
 
-  static const char *TXQ_DEFAULT_ROUTE;
-  static const char *TXQ_DEFAULT_ROUTE_COUNT;
-  static const char *TXQ_DEFAULT_SRC_MAC;
-  static const char *TXQ_DEFAULT_DST_MAC;
-  static const char *TXQ_DEFAULT_SRC_IP;
-  static const char *TXQ_DEFAULT_DST_IP;
-  static const char *TXQ_DEFAULT_SRC_PORT;
-  static const char *TXQ_DEFAULT_DST_PORT;
+  static const char *DEFAULT_ROUTE_SRC_MAC;
+  static const char *DEFAULT_ROUTE_DST_MAC;
+  static const char *DEFAULT_ROUTE_SRC_IPV4;
+  static const char *DEFAULT_ROUTE_DST_IPV4;
+  static const char *DEFAULT_ROUTE_SRC_PORT;
+  static const char *DEFAULT_ROUTE_DST_PORT;
 
   // STATIC METHODS
   static void make(std::string *name, const char *format, ...);

@@ -1,4 +1,4 @@
-#include <dpdk/reinvent_dpdk_initaws.h>
+#include <dpdk/reinvent_dpdk_init.h>
 #include <dpdk/reinvent_dpdk_stream.h>
 #include <util/reinvent_util_errno.h>
 
@@ -19,157 +19,116 @@
 
 namespace Reinvent {
 
-int Dpdk::InitAWS::configTxRouting(const std::string& prefix, Util::Environment *env, AWSEnaConfig *config,                
-  std::vector<int>& defaultTxSrcPort, std::vector<int>& defaultTxDstPort, std::string& defaultTxSrcMac,  
-  std::vector<std::string>& defaultTxDstMac, std::string& defaultTxSrcIp, std::vector<std::string>& defaultTxDstIp,
-  std::vector<UDPRoute>& defaultTxRoute) {
+int Dpdk::Init::configDefaultRouting(const std::string& prefix, Util::Environment *env,
+  std::vector<IPV4Route>* defaultTxRoute) {
 
   assert(env);
-  assert(config);
+  assert(defaultTxRoute);
 
-  int rc, sz;
-  bool valid;
-  int count;
-  std::string value;
+  defaultTxRoute->clear();
+
+  int rc;
   std::string variable;
 
-  //
-  // Get expected number of default routes
-  //
-  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_ROUTE_COUNT);
-  if ((rc = env->valueAsInteger(variable, &count))!=0) {
-    return rc;
-  }
-  if (count == 0) {
-    // Nothin' to do
-    return 0;
-  }
+  std::vector<std::string> defaultTxSrcMac;
+  std::vector<std::string> defaultTxDstMac;
+  std::vector<std::string> defaultTxSrcIp;
+  std::vector<std::string> defaultTxDstIp;
+  std::vector<int> defaultTxSrcPort;
+  std::vector<int> defaultTxDstPort;
 
-
-const char *Dpdk::Names::TXQ_DEFAULT_ROUTE          = "TXQ_DEFAULT_ROUTE";                                              
-const char *Dpdk::Names::TXQ_DEFAULT_ROUTE_COUNT    = "TXQ_DEFAULT_ROUTE_COUNT";                                        
-const char *Dpdk::Names::TXQ_DEFAULT_SRC_MAC        = "SRC_MAC";                                                        
-const char *Dpdk::Names::TXQ_DEFAULT_DST_MAC        = "DST_MAC";                                                        
-const char *Dpdk::Names::TXQ_DEFAULT_SRC_IP         = "SRC_IP";                                                         
-const char *Dpdk::Names::TXQ_DEFAULT_DST_IP         = "DST_IP";                                                         
-const char *Dpdk::Names::TXQ_DEFAULT_SRC_PORT       = "SRC_PORT";                                                       
-const char *Dpdk::Names::TXQ_DEFAULT_DST_PORT       = "DST_PORT"; 
-
-
-
-  //
-  // Get TX src mac addresses
-  //
-  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_SRC_MAC);
-  if ((rc = env->valueAsString(variable, &defaultTxSrcMac))!=0) {
+  // Get SRC MAC addresses
+  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_SRC_MAC);
+  if ((rc = env->valueAsStringList(variable, &defaultTxSrcMac))!=0) {
     return rc;
   }
 
-  //
-  // Get TX dst mac addresses
-  //
-  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_DST_MAC);
+  // Get DST MAC addresses
+  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_DST_MAC);
   if ((rc = env->valueAsStringList(variable, &defaultTxDstMac))!=0) {
     return rc;
   }
-  sz = static_cast<int>(defaultTxDstMac.size());                                                                      
-  valid = sz==config->txqThreadCount();
-  if (!valid) {                                                                                                       
-    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),                                 
-      variable.c_str(), config->txqThreadCount(), sz, "values were provided: must be equal");                         
-  } 
 
-  //
-  // Get TX src IP addresses
-  //
-  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_SRC_IP);
-  if ((rc = env->valueAsString(variable, &defaultTxSrcIp))!=0) {
+  // Get SRC IPV4 addresses
+  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_SRC_IPV4);
+  if ((rc = env->valueAsStringList(variable, &defaultTxSrcIp))!=0) {
     return rc;
   }
 
-  //
-  // Get TX dst IP addresses
-  //
-  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_DST_IP);
+  // Get DST IPV4 addresses
+  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_DST_IPV4);
   if ((rc = env->valueAsStringList(variable, &defaultTxDstIp))!=0) {
     return rc;
   }
-  sz = static_cast<int>(defaultTxDstIp.size());                                                                      
-  valid = sz==config->txqThreadCount();
-  if (!valid) {                                                                                                       
-    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),                                 
-      variable.c_str(), config->txqThreadCount(), sz, "values were provided: must be equal");                         
-  }
 
-  //
-  // Get TX src port numbers
-  //
-  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_SRC_PORT);
+  // Get SRC ports
+  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_SRC_PORT);
   if ((rc = env->valueAsIntList(variable, &defaultTxSrcPort))!=0) {
     return rc;
   }
-  sz = static_cast<int>(defaultTxSrcPort.size());                                                                      
-  valid = sz==config->txqThreadCount();
-  if (!valid) {                                                                                                       
-    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),                                 
-      variable.c_str(), config->txqThreadCount(), sz, "values were provided: must be equal");                         
-  } 
 
-  //
-  // Get TX dst port numbers
-  //
-  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_DST_PORT);
+  // Get DST ports
+  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_DST_PORT);
   if ((rc = env->valueAsIntList(variable, &defaultTxDstPort))!=0) {
     return rc;
   }
-  sz = static_cast<int>(defaultTxDstPort.size());                                                                      
-  valid = sz==config->txqThreadCount();
-  if (!valid) {                                                                                                       
-    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (valid),                                 
-      variable.c_str(), config->txqThreadCount(), sz, "values were provided: must be equal");                         
-  } 
+
+  // Make sure all lists same size
+  const unsigned size = defaultTxSrcMac.size();
+  bool valid = (size==defaultTxDstMac.size()  &&
+                size==defaultTxSrcIp.size()   &&
+                size==defaultTxDstIp.size()   &&
+                size==defaultTxSrcPort.size() &&
+                size==defaultTxDstPort.size());
+  if (!valid) {
+    std::string value;
+    Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_SRC_MAC);
+    env->valueAsString(variable, &value);
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, valid,
+        variable.c_str(), value.c_str(), "entry count not matched in dstMac, src/dst IPV4, or src/dst ports");
+  }
 
   //
   // Make and verify default TX routes
   // 
-  for (unsigned i=0; i<defaultTxDstMac.size(); ++i) {
-    UDPRoute route(defaultTxSrcMac, defaultTxDstMac[i], defaultTxSrcIp, defaultTxDstIp[i],
+  for (unsigned i=0; i<size; ++i) {
+    IPV4Route route(defaultTxSrcMac[i], defaultTxDstMac[i], defaultTxSrcIp[i], defaultTxDstIp[i],
         defaultTxSrcPort[i], defaultTxDstPort[i]);
 
     uint32_t ipAddr;
     rte_ether_addr binMac;
 
     if ((rc = route.convertSrcMac(&binMac))!=0) {
-      Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_SRC_MAC);
+      Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_SRC_MAC);
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, (rc==0),
-        variable.c_str(), defaultTxSrcMac.c_str(), "is not a valid MAC address");
+        variable.c_str(), defaultTxSrcMac[i].c_str(), "is not a valid MAC address");
     }
 
     if ((rc = route.convertDstMac(&binMac))!=0) {
-      Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_DST_MAC);
+      Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_DST_MAC);
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, (rc==0),
         variable.c_str(), defaultTxDstMac[i].c_str(), "is not a valid MAC address");
     }
 
     if ((rc = route.convertSrcIp(&ipAddr))!=0) {
-      Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_SRC_IP);
+      Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_SRC_IPV4);
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, (rc==0),
-        variable.c_str(), defaultTxSrcIp.c_str(), "is not a valid IPV4 address");
+        variable.c_str(), defaultTxSrcIp[i].c_str(), "is not a valid IPV4 address");
     }
 
     if ((rc = route.convertDstIp(&ipAddr))!=0) {
-      Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_DST_IP);
+      Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_DST_IPV4);
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, (rc==0),
         variable.c_str(), defaultTxDstIp[i].c_str(), "is not a valid IPV4 address");
     }
 
-    defaultTxRoute.push_back(route);
+    defaultTxRoute->push_back(route);
   }
 
   return 0;
 }
 
-int Dpdk::InitAWS::makeDpdkInitParams(const std::string& envPrefix, Util::Environment *env, AWSEnaConfig *config) {
+int Dpdk::Init::makeDpdkInitParams(const std::string& envPrefix, Util::Environment *env, Config *config) {
   assert(env);
   assert(config);
 
@@ -249,7 +208,7 @@ int Dpdk::InitAWS::makeDpdkInitParams(const std::string& envPrefix, Util::Enviro
   return 0;
 }
 
-int Dpdk::InitAWS::makeAssignment(AWSEnaConfig *config, std::vector<RXQ>& rxq, std::vector<TXQ>& txq,
+int Dpdk::Init::makeAssignment(Config *config, std::vector<RXQ>& rxq, std::vector<TXQ>& txq,
   std::vector<LCORE>& lcore) {
   assert(config);
   assert(config->vcpu().size()!=0);
@@ -427,7 +386,7 @@ int Dpdk::InitAWS::makeAssignment(AWSEnaConfig *config, std::vector<RXQ>& rxq, s
   return 0;
 }
 
-int Dpdk::InitAWS::configRings(const std::string& prefix, Util::Environment *env, AWSEnaConfig *config,                       
+int Dpdk::Init::configRings(const std::string& prefix, Util::Environment *env, Config *config,                       
     std::vector<int>& rxqRingSize, std::vector<int>& txqRingSize) {
   assert(env);
   assert(config);
@@ -503,7 +462,7 @@ int Dpdk::InitAWS::configRings(const std::string& prefix, Util::Environment *env
   return 0;
 }
 
-int Dpdk::InitAWS::configPerQueueMempool(const std::string& prefix, Util::Environment *env, AWSEnaConfig *config,
+int Dpdk::Init::configPerQueueMempool(const std::string& prefix, Util::Environment *env, Config *config,
   std::vector<int> *rxqMemPoolSize, std::vector<int> *txqMemPoolSize, std::vector<int> *rxqMemPoolCacheSize,          
   std::vector<int> *txqMemPoolCacheSize, std::vector<int> *rxqMemPoolPrivSize, std::vector<int> *txqMemPoolPrivSize,  
   std::vector<int> *rxqMemPoolDataRoomSize, std::vector<int> *txqMemPoolDataRoomSize) {
@@ -613,7 +572,7 @@ int Dpdk::InitAWS::configPerQueueMempool(const std::string& prefix, Util::Enviro
   return 0;
 }
 
-int Dpdk::InitAWS::configSharedMempool(const std::string& prefix, Util::Environment *env, int *sharedMemPoolSize,
+int Dpdk::Init::configSharedMempool(const std::string& prefix, Util::Environment *env, int *sharedMemPoolSize,
   int *sharedMempoolEltSize, int *sharedMempoolCacheSize, int *sharedMempoolPrivateSize, int *sharedMempoolFlags) {
   assert(env);
   assert(sharedMemPoolSize);
@@ -653,8 +612,8 @@ int Dpdk::InitAWS::configSharedMempool(const std::string& prefix, Util::Environm
   return 0;
 }
 
-int Dpdk::InitAWS::convertRssKey(const std::string& key, uint8_t *keyBytes) {
-  assert(key.length()==AWSEnaConfig::RSS_HASH_KEY_SIZE*3);
+int Dpdk::Init::convertRssKey(const std::string& key, uint8_t *keyBytes) {
+  assert(key.length()==Config::RSS_HASH_KEY_SIZE*3);
   assert(keyBytes!=0);
 
   bool ok      = false;
@@ -674,12 +633,13 @@ int Dpdk::InitAWS::convertRssKey(const std::string& key, uint8_t *keyBytes) {
         ok = true;
       }
     }
-  } while(ok && i<AWSEnaConfig::RSS_HASH_KEY_SIZE);
+  } while(ok && i<Config::RSS_HASH_KEY_SIZE);
 
   return (ok) ? 0 : -1;
 }
 
-int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefix, Util::Environment *env, AWSEnaConfig *config) {
+int Dpdk::Init::startEna(const std::string& device, const std::string& envPrefix, Util::Environment *env,
+  Config *config) {
   assert(!device.empty());
   assert(env);
   assert(config);
@@ -1003,11 +963,11 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   // Get mempool settings
   //
   if (value==Dpdk::Names::PER_QUEUE) {
-    rc = Dpdk::InitAWS::configPerQueueMempool(prefix, env, config, &rxqMemPoolSize, &txqMemPoolSize,
+    rc = Dpdk::Init::configPerQueueMempool(prefix, env, config, &rxqMemPoolSize, &txqMemPoolSize,
       &rxqMemPoolCacheSize, &txqMemPoolCacheSize, &rxqMemPoolPrivSize, &txqMemPoolPrivSize, &rxqMemPoolDataRoomSize,
       &txqMemPoolDataRoomSize);
   } else {
-    rc = Dpdk::InitAWS::configSharedMempool(prefix, env, &sharedMemPoolSize, &sharedMempoolEltSize,
+    rc = Dpdk::Init::configSharedMempool(prefix, env, &sharedMemPoolSize, &sharedMempoolEltSize,
       &sharedMempoolCacheSize, &sharedMempoolPrivateSize, &sharedMempoolFlags);
   }
   if (rc!=0) {
@@ -1017,7 +977,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   //
   // Get RXQ/TXQ ring sizes
   //
-  if ((rc = Dpdk::InitAWS::configRings(prefix, env, config, rxqRingSize, txqRingSize))!=0) {
+  if ((rc = Dpdk::Init::configRings(prefix, env, config, rxqRingSize, txqRingSize))!=0) {
     return rc;
   }
 
@@ -1082,7 +1042,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   if ((rc = env->valueAsString(variable, &value))==0) {
     Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::RX_RSS_HF);
     if ((rc = env->valueAsInt(variable, &intValue))==0) {
-      valid = (value.length()==AWSEnaConfig::RSS_HASH_KEY_SIZE*3 &&
+      valid = (value.length()==Config::RSS_HASH_KEY_SIZE*3 &&
                config->rxMqMask()&RTE_ETH_MQ_RX_RSS_FLAG         &&
                intValue>0);
       if (!valid) {
@@ -1090,31 +1050,23 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
          value.c_str(), "has unexpected value");
       }
       // Convert byte-string to byte-array
-      uint8_t keyBytes[AWSEnaConfig::RSS_HASH_KEY_SIZE];
+      uint8_t keyBytes[Config::RSS_HASH_KEY_SIZE];
       if ((rc = convertRssKey(value, keyBytes))!=0) {
         REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, (valid), variable.c_str(),
          value.c_str(), "has unexpected value");
       }
 
       // Set RSS configuration
-      config->setRxRss(keyBytes, AWSEnaConfig::RSS_HASH_KEY_SIZE, intValue);                                                               
+      config->setRxRss(keyBytes, Config::RSS_HASH_KEY_SIZE, intValue);                                                               
     }
   }
 
-  std::vector<int> defaultTxSrcPort;
-  std::vector<int> defaultTxDstPort;
-  std::string defaultTxSrcMac;
-  std::vector<std::string> defaultTxDstMac;
-  std::string defaultTxSrcIp;
-  std::vector<std::string> defaultTxDstIp;
-  std::vector<UDPRoute> defaultTxRoute;
-
   //
-  // Get default routes for TXQ
+  // Get default routes
   //
+  std::vector<IPV4Route> defaultRoute;
   if (config->txqPolicy() != Dpdk::Names::OFF) {
-    if ((rc = configTxRouting(prefix, env, config, defaultTxSrcPort, defaultTxDstPort, defaultTxSrcMac,
-      defaultTxDstMac, defaultTxSrcIp, defaultTxDstIp, defaultTxRoute))!=0) {
+    if ((rc = configDefaultRouting(prefix, env, &defaultRoute))!=0) {
         return rc;
     }
   }
@@ -1195,7 +1147,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   std::vector<Dpdk::RXQ> rxq;
   std::vector<Dpdk::TXQ> txq;
   std::vector<Dpdk::LCORE> lcore;
-  if ((rc = Dpdk::InitAWS::makeAssignment(config, rxq, txq, lcore))!=0) {
+  if ((rc = Dpdk::Init::makeAssignment(config, rxq, txq, lcore))!=0) {
     return rc;
   }
   config->setRxq(rxq);
@@ -1206,7 +1158,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   // Call rte_eal_init(): no DPDK calls will succeed prior to this call
   // We have to play around with command line args along to the way
   //
-  if ((rc = Dpdk::InitAWS::makeDpdkInitParams(envPrefix, env, config))!=0) {
+  if ((rc = Dpdk::Init::makeDpdkInitParams(envPrefix, env, config))!=0) {
     return rc;
   } 
   std::vector<const char *> argv;
@@ -1313,8 +1265,8 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   deviceConfig->txmode.mq_mode    = static_cast<rte_eth_tx_mq_mode>(config->txMqMask());
   deviceConfig->txmode.offloads   = config->txOffloadMask();
 
-  // Enable RSS if configure
-  if (config->rxMqMask()&&RTE_ETH_MQ_RX_RSS_FLAG && config->rxRssKeySize()==AWSEnaConfig::RSS_HASH_KEY_SIZE &&
+  // Enable RSS if configured
+  if (config->rxMqMask()&&RTE_ETH_MQ_RX_RSS_FLAG && config->rxRssKeySize()==Config::RSS_HASH_KEY_SIZE &&
     config->rxRssHf()>0) {
     deviceConfig->rx_adv_conf.rss_conf.rss_key     = const_cast<uint8_t*>(config->rxRssKey());
     deviceConfig->rx_adv_conf.rss_conf.rss_hf      = config->rxRssHf();
@@ -1327,12 +1279,12 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   }
 
   if ((rc = rte_eth_dev_configure(config->deviceId(), config->rxqThreadCount(), config->txqThreadCount(), deviceConfig))!=0) {
-    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK AWS ENA device config", rte_strerror(rc), rc);
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK ENA device config", rte_strerror(rc), rc);
   }
 
   uint16_t adjustedRxq, adjustedTxq;
   if ((rc = rte_eth_dev_adjust_nb_rx_tx_desc(config->deviceId(), &adjustedRxq, &adjustedTxq))!=0) {
-    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK AWS ENA device config", rte_strerror(rc), rc);
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK ENA device config", rte_strerror(rc), rc);
   }
 
   //
@@ -1354,7 +1306,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   const rte_memzone *zone = rte_memzone_reserve(config->memzoneName().c_str(), static_cast<std::size_t>(config->memzoneReserveKb()*1024),
     config->numaNode(), config->memzoneMask());
   if (0==zone) {
-    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (zone), "Reserving DPDK AWS ENA zone memory", rte_strerror(rte_errno), rte_errno);
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (zone), "Reserving DPDK ENA zone memory", rte_strerror(rte_errno), rte_errno);
   }
   config->setMemzone(zone);
 
@@ -1372,7 +1324,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
         rxqMemPoolSize[i], rxqMemPoolCacheSize[i], rxqMemPoolPrivSize[i],
         rxqMemPoolDataRoomSize[i], config->numaNode());
       if (0==pool) {
-        REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (zone), "Reserving DPDK AWS ENA RXQ mempool memory", rte_strerror(rte_errno), rte_errno);
+        REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (zone), "Reserving DPDK ENA RXQ mempool memory", rte_strerror(rte_errno), rte_errno);
       }
       config->rxq()[i].setRingSize(rxqRingSize[i]);
       config->rxq()[i].setMemzone(zone);
@@ -1380,7 +1332,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
       config->rxq()[i].setMempoolPolicy(config->mempoolPolicy());
       if (0==pool) {
         REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (pool),
-          "Reserving DPDK AWS ENA RX pool memory", rte_strerror(rte_errno), rte_errno);
+          "Reserving DPDK ENA RX pool memory", rte_strerror(rte_errno), rte_errno);
       }
     }
 
@@ -1394,7 +1346,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
         txqMemPoolSize[i], txqMemPoolCacheSize[i], txqMemPoolPrivSize[i],
         txqMemPoolDataRoomSize[i], config->numaNode());
       if (0==pool) {
-        REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (zone), "Reserving DPDK AWS ENA TXQ mempool memory", rte_strerror(rte_errno), rte_errno);
+        REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (zone), "Reserving DPDK ENA TXQ mempool memory", rte_strerror(rte_errno), rte_errno);
       }
       config->txq()[i].setRingSize(txqRingSize[i]);
       config->txq()[i].setMemzone(zone);
@@ -1402,7 +1354,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
       config->txq()[i].setMempoolPolicy(config->mempoolPolicy());
       if (0==pool) {
         REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (pool),
-          "Reserving DPDK AWS ENA TX pool memory", rte_strerror(rte_errno), rte_errno);
+          "Reserving DPDK ENA TX pool memory", rte_strerror(rte_errno), rte_errno);
       }
     }
   } else {
@@ -1418,7 +1370,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
       static_cast<unsigned>(sharedMempoolFlags));
     if (0==pool) {
       REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (pool),
-        "Reserving DPDK AWS ENA shared pool memory", rte_strerror(rte_errno), rte_errno);
+        "Reserving DPDK ENA shared pool memory", rte_strerror(rte_errno), rte_errno);
     }
 
     //
@@ -1443,11 +1395,10 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   }
 
   //
-  // Install default flow, routes into TXQs
+  // Install default flow
   //
   for (int i=0; i<config->txqThreadCount(); i++) {
     config->txq()[i].setDefaultFlow(config->defaultTxFlow());
-    config->txq()[i].setDefaultRoute(defaultTxRoute[i]);
   }
 
   //
@@ -1463,7 +1414,7 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   for (int i=0; i<config->rxqThreadCount(); ++i) {
     if ((rc = rte_eth_rx_queue_setup(config->deviceId(), i, config->rxq()[i].ringSize(), config->numaNode(), &rxCfg,
       config->rxq()[i].mempool()))!=0) {
-      REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK AWS ENA RXQ", rte_strerror(rc), rc);
+      REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK ENA RXQ", rte_strerror(rc), rc);
     }
   }
 
@@ -1480,22 +1431,132 @@ int Dpdk::InitAWS::enaUdp(const std::string& device, const std::string& envPrefi
   REINVENT_UTIL_LOG_DEBUG("TXQ conf: " << txCfg << std::endl);
   for (int i=0; i<config->txqThreadCount(); ++i) {
     if ((rc = rte_eth_tx_queue_setup(config->deviceId(), i, config->txq()[i].ringSize(), config->numaNode(), &txCfg))!=0) {
-      REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK AWS ENA TXQ", rte_strerror(rc), rc);
+      REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Initialize DPDK ENA TXQ", rte_strerror(rc), rc);
     }
   }
 
+  //
+  // Install default routes
+  //
+  config->setDefaultRoute(defaultRoute);
+
   // =================================================================================
-  // Final step: start-up the NIC device and its quues in DPDK
+  // Final step: start-up the NIC device and its queues in DPDK
   // =================================================================================
 
   //
   // Start device
   //
   if ((rc = rte_eth_dev_start(config->deviceId()))!=0) {
-    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Start DPDK AWS ENA device", rte_strerror(rc), rc);
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Start DPDK ENA device", rte_strerror(rc), rc);
   }
 
   return 0;
+}
+
+int Dpdk::Init::stopEna(const Config& config) {
+  int rc;
+
+  //
+  // Stop TXQs
+  //
+  for (int i=0; i<config.txqCount(); ++i) {
+    rte_eth_tx_done_cleanup(config.deviceId(), i, 0);
+    rte_eth_dev_tx_queue_stop(config.deviceId(), i);
+  }
+
+  //
+  // Stop RXQs
+  //
+  for (int i=0; i<config.rxqCount(); ++i) {
+    rte_eth_dev_rx_queue_stop(config.deviceId(), i);
+  }
+
+  //
+  // Stop device
+  //
+  if ((rc = rte_eth_dev_stop(config.deviceId()))!=0) {
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "DPDK ENA stop device",
+      rte_strerror(rc), rc);
+  }
+
+  if (config.mempoolPolicy()!=Dpdk::Names::SHARED) {
+    //
+    // Free per queue RX mempools
+    //
+    for (unsigned i=0; i<config.rxq().size(); ++i) {
+      rte_mempool *pool = config.rxq()[i].mempool();
+      if (pool) {
+        rte_mempool_free(pool);
+      }
+    }
+
+    //
+    // Free per queue TX mempools
+    //
+    for (unsigned i=0; i<config.txq().size(); ++i) {
+      rte_mempool *pool = config.txq()[i].mempool();
+      if (pool) {
+        rte_mempool_free(pool);
+      }
+    }
+  } else {
+    //
+    // Free mempool shared by all queues
+    //
+    rte_mempool *pool = 0;
+
+    for (unsigned i=0; i<config.rxq().size(); ++i) {
+      rte_mempool *pool = config.rxq()[i].mempool();
+      if (pool) {
+        break;
+      }
+    }
+
+    //
+    // RX may have been turned off so check TX
+    //
+    if (pool==0) {
+      for (unsigned i=0; i<config.rxq().size(); ++i) {
+        rte_mempool *pool = config.txq()[i].mempool();
+        if (pool) {
+          break;
+        }
+      }
+    }
+
+    if (pool) {
+      rte_mempool_free(pool);
+    }
+  }
+
+  //
+  // Free memzone
+  //
+  if (config.memzone()) {
+    if ((rc = rte_memzone_free(config.memzone()))!=0) {
+      REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "DPDK ENA device memzone cleanup",
+        rte_strerror(rc), rc);
+    }
+  }
+
+  //
+  // Close device
+  //
+  rte_eth_dev_close(config.deviceId());
+
+  return rc;
+}                                                                       
+
+int Dpdk::Init::stopDpdk() {
+  int rc;
+
+  if ((rc = rte_eal_cleanup())!=0) {
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "DPDK ENA deinitialization",
+      rte_strerror(rc), rc);
+  }
+
+  return rc;
 }
 
 } // namespace Reinvent

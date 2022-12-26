@@ -2,19 +2,13 @@
 
 // Purpose: Lcore Roles and responsiblities
 //
-// Classes:
-//  Dpdk::LCORE: Value semantic type holding DPDK lcore role assignments with references to VCPU running it
-// See Also:                                                                                                            
-//  Dpdk::InitAWS                                                                                                       
-//  Dpdk::AWSEnaConfig 
-//  
 // Thread Safety: Not MT thread-safe.
 //                                                                                                                      
 // Exception Policy: No exceptions                                                                                      
 //
 // Description: LCORE is a value semantic object holding a caller provider ID, its association to the VCPU running it
 // and, depending on its function, references to information on the lcore's roles and responsibilities. Like VCPU this
-// class makes no attempt to verify accuracy of provided data. That's typically done by caller ex. Dpdk::InitAWS.
+// class makes no attempt to verify accuracy of provided data. That's typically done by caller ex. Dpdk::Init.
 //
 // DPDK jargon 'lcore' has a dotted-line connection to VPCU. They are not the same thing, however, if one creates a
 // pthread pinned to a particular core, say VCPU-5 (aka NUMA node 1, socket 1, CPU core 13) we can loosely construe
@@ -53,8 +47,8 @@
 // | queue                 | vector<int>   | empty      | If there is a linking queue ID for role[i], it is given by  |
 // |                       |               |            | queue[i] or k_LCORE_UNDEF if unknown. For example, if       | 
 // |                       |               |            | role[0]&e_LCORE_RXQ then the value queue[0] will give the   |
-// |                       |               |            | RXQ it's assigned. See AWSEnaConfig where most of           |
-// |                       |               |            | this reference data is kept.                                |
+// |                       |               |            | RXQ it's assigned. See Config where most of this reference  |
+// |                       |               |            | data is kept.                                               |
 // +-----------------------+---------------+------------+-------------------------------------------------------------+
 
 #include <vector>

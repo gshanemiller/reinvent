@@ -7,15 +7,14 @@ cmake_minimum_required(VERSION 3.16)
 #
 
 set(SOURCES                                                                                                             
-  ../../src/reinvent/dpdk/reinvent_dpdk_awsconfig.cpp
-  ../../src/reinvent/dpdk/reinvent_dpdk_awsworker.cpp
-  ../../src/reinvent/dpdk/reinvent_dpdk_initaws.cpp
+  ../../src/reinvent/dpdk/reinvent_dpdk_config.cpp
+  ../../src/reinvent/dpdk/reinvent_dpdk_worker.cpp
+  ../../src/reinvent/dpdk/reinvent_dpdk_init.cpp
   ../../src/reinvent/dpdk/reinvent_dpdk_lcore.cpp
   ../../src/reinvent/dpdk/reinvent_dpdk_names.cpp
   ../../src/reinvent/dpdk/reinvent_dpdk_rxq.cpp
-  ../../src/reinvent/dpdk/reinvent_dpdk_udproute.cpp
+  ../../src/reinvent/dpdk/reinvent_dpdk_ipv4route.cpp
   ../../src/reinvent/dpdk/reinvent_dpdk_txq.cpp
-  ../../src/reinvent/dpdk/reinvent_dpdk_uninitaws.cpp
   ../../src/reinvent/dpdk/reinvent_dpdk_vcpu.cpp
   ../../src/reinvent/dpdk/reinvent_dpdk_stream.cpp
   ../../src/reinvent/dpdk/reinvent_dpdk_util.cpp

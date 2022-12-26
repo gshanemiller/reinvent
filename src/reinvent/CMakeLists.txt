@@ -10,15 +10,12 @@ set(SOURCES
   dpdk/reinvent_dpdk_vcpu.cpp
   dpdk/reinvent_dpdk_rxq.cpp
   dpdk/reinvent_dpdk_txq.cpp
-  dpdk/reinvent_dpdk_udproute.cpp
-  dpdk/reinvent_dpdk_awsconfig.cpp
-  dpdk/reinvent_dpdk_initaws.cpp
-  dpdk/reinvent_dpdk_uninitaws.cpp
-  dpdk/reinvent_dpdk_awsworker.cpp
+  dpdk/reinvent_dpdk_ipv4route.cpp
+  dpdk/reinvent_dpdk_config.cpp
+  dpdk/reinvent_dpdk_init.cpp
+  dpdk/reinvent_dpdk_worker.cpp
   dpdk/reinvent_dpdk_stream.cpp
   dpdk/reinvent_dpdk_util.cpp
-
-  perf/reinvent_perf_rdpmc.cpp
 )
 
 #

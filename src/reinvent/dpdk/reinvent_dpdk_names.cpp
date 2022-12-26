@@ -68,14 +68,12 @@ const char *Dpdk::Names::SHARED_MEMPOOL_CACHE_SIZE  = "SHARED_MEMPOOL_CACHE_SIZE
 const char *Dpdk::Names::SHARED_MEMPOOL_PRIVATE     = "SHARED_MEMPOOL_PRIVATE";
 const char *Dpdk::Names::SHARED_MEMPOOL_FLAGS       = "SHARED_MEMPOOL_FLAGS";
 
-const char *Dpdk::Names::TXQ_DEFAULT_ROUTE          = "TXQ_DEFAULT_ROUTE";
-const char *Dpdk::Names::TXQ_DEFAULT_ROUTE_COUNT    = "TXQ_DEFAULT_ROUTE_COUNT";
-const char *Dpdk::Names::TXQ_DEFAULT_SRC_MAC        = "SRC_MAC";
-const char *Dpdk::Names::TXQ_DEFAULT_DST_MAC        = "DST_MAC";
-const char *Dpdk::Names::TXQ_DEFAULT_SRC_IP         = "SRC_IP";
-const char *Dpdk::Names::TXQ_DEFAULT_DST_IP         = "DST_IP";
-const char *Dpdk::Names::TXQ_DEFAULT_SRC_PORT       = "SRC_PORT";
-const char *Dpdk::Names::TXQ_DEFAULT_DST_PORT       = "DST_PORT";
+const char *Dpdk::Names::DEFAULT_ROUTE_SRC_MAC      = "DEFAULT_ROUTE_SRC_MAC";
+const char *Dpdk::Names::DEFAULT_ROUTE_DST_MAC      = "DEFAULT_ROUTE_DST_MAC";
+const char *Dpdk::Names::DEFAULT_ROUTE_SRC_IPV4     = "DEFAULT_ROUTE_SRC_IPV4";
+const char *Dpdk::Names::DEFAULT_ROUTE_DST_IPV4     = "DEFAULT_ROUTE_DST_IPV4";
+const char *Dpdk::Names::DEFAULT_ROUTE_SRC_PORT     = "DEFAULT_ROUTE_SRC_PORT";
+const char *Dpdk::Names::DEFAULT_ROUTE_DST_PORT     = "DEFAULT_ROUTE_DST_PORT"; 
 
 void Dpdk::Names::make(std::string *name, const char *format, ...) {                                  
   assert(name);                                                                                                         

@@ -3,13 +3,13 @@
 // Purpose: Application state for code run on DPDK prepared VCPUs (lcores)
 // 
 // Classes:
-//   Dpdk::AWSEnaWorker: Base class providing minimal application runtime support for RXQ/TXQ work
+//   Dpdk::Worker: Base class providing minimal application runtime support for RXQ/TXQ work
 //
 // Thread Safety: thread-safe.
 //
 // Exception Policy: No exceptions
 //
-// Once an AWS ENA device is DPDK initialized the next logical step is telling DPDK what code to run on each VCPU
+// Once an DPDK ENA device is initialized the next logical step is telling DPDK what code to run on each VCPU
 // (lcore) it prepared. That setup comes in two major pieces: RX work, and TX work. The canonical way is running the
 // API method 'rte_eal_mp_remote_launch', which accepts a function pointer and 'void*' argument pointer. This method
 // instructs DPDK to run the specified function pointer inside/on each lcore. On entry to that function, one can use
@@ -30,9 +30,9 @@
 // * 'rte_eal_mp_remote_launch' provides a function pointer, and void * argument pointer so that, when the
 //   each thread is made, application code can run on the lcore
 //
-// A pointer to a 'AWSEnaWorker' object is intended for the 'void*' argument in the call to 'rte_eal_mp_remote_launch'.
-// This class holds the AWS ENA configuration, and a pointer to 'Reinvent::Util::Environment', which was used by the
-// application to prepare the AWS ENA config. Together these objects hold the majority of data that can used to elicit
+// A pointer to a 'Worker' object is intended for the 'void*' argument in the call to 'rte_eal_mp_remote_launch'.
+// This class holds the ENA configuration, and a pointer to 'Reinvent::Util::Environment', which was used by the
+// application to prepare the DPDK ENA config. Together these objects hold the majority of data that can used to elicit
 // a particular lcore's purpose. Subclasses then can then extend this functionality depending on the application's
 // need.
 //
@@ -40,13 +40,13 @@
 // library code. It is found in the application code itself. The contents of that function pointer almost always works
 // out to the following basic steps:
 //
-// * Discover if the lcore is for RX or TX using AWSEnaWorker::id(...)
+// * Discover if the lcore is for RX or TX using Worker::id(...)
 // * Application specific setup
 // * Entry into the main processing loop for the lcore 
 // * Detection of a termination condition so that the function pointer exits. Without termination the application's
 //   main thread can't stop.
 //
-// AWSEnaWorker is equipped with an 'id' accessor. This 'id' reports the caller's DPDK zero-based lcore index, whether
+// Worker is equipped with an 'id' accessor. This 'id' reports the caller's DPDK zero-based lcore index, whether
 // or not the lcore is for RXQ (TXQ), and the 0-based RXQ (TXQ) number. These identifiers can be then used to access
 // the config's 'lcore, rxq, txq' attributes for relavent information. For example: if a config runs 4 DPDK lcores with
 // 2 RXQs and 2 TXQs 'id' will identify each of the four threads like this:
@@ -63,30 +63,30 @@
 //   | 3                  | No   | Yes  | -1    | 1     |
 //   +--------------------+------+------+-------+-------+
 //
-// The application's state is collected into an 'AWSEnaWorker' object which,
+// The application's state is collected into an 'Worker' object which,
 //
 // * holds a 'Reinvent::Util::Environment' reference in attribute 'env'
-// * holds a 'Reinvent::Dpdk::AWSEnaConfig' reference in attribute 'awsEnaConfig'
+// * holds a 'Reinvent::Dpdk::Config' reference in attribute 'config'
 //
 // Additional state can be done several ways:
 //
 // * Global variables, but note MT-safe challenge
 // * Local variables in the rte_eal_mp_remote_launch called function
-// * Subclassing AWSEnaWorker adding state and MT-safe manipulators
+// * Subclassing Worker adding state and MT-safe manipulators
 // * Adding thread-local storage.
 //
 // Note the 'rte_eal_mp_remote_launch' approach provides only a single function pointer, and a single argument pointer
-// (putatively a 'AWSEnaWorker' object) to all lcores. Since the lcores run concurrently access to the single
-// 'AWSEnaWorker' object is by construction also MT safe. 'AWSEnaWorker' facilitates concurrent MT-safe access by:
+// (putatively a 'Worker' object) to all lcores. Since the lcores run concurrently access to the single
+// 'Worker' object is by construction also MT safe. 'Worker' facilitates concurrent MT-safe access by:
 //
 // * Attribute 'envPrefix' is const
 // * Attribute 'env' is itself MT safe
-// * Attribute 'awsEnaConfig' is const and can't be changed
+// * Attribute 'config' is const and can't be changed
 // * All other manipulators are mutex protected and MT-safe
 //
-// Subclasses may use AWSEnaWorker's mutex manipulator to stay MT-safe
+// Subclasses may use Worker's mutex manipulator to stay MT-safe
 
-#include <dpdk/reinvent_dpdk_initaws.h>
+#include <dpdk/reinvent_dpdk_init.h>
 
 //                                                                                                                      
 // Tell GCC to not enforce '-Wpendantic' for DPDK headers
@@ -102,26 +102,26 @@
 namespace Reinvent {
 namespace Dpdk {
 
-class AWSEnaWorker {
+class Worker {
   // DATA
   const std::string&                    d_envPrefix;
   Reinvent::Util::Environment&          d_env;
-  const Reinvent::Dpdk::AWSEnaConfig&   d_awsEnaConfig;
+  const Reinvent::Dpdk::Config&         d_config;
   std::mutex                            d_mux;
 
 public:
   // CREATORS
-  AWSEnaWorker() = delete;
+  Worker() = delete;
     // Default constructor not provided
  
-  AWSEnaWorker(const std::string& prefix, Reinvent::Util::Environment& env,
-    const Reinvent::Dpdk::AWSEnaConfig& awsEnaConfig);
-    // Create AWSEnaWorker with specified 'envPrefix, env, awsEnaConfig'. 'txqMempool' has size zero on return.
+  Worker(const std::string& prefix, Reinvent::Util::Environment& env,
+    const Reinvent::Dpdk::Config& config);
+    // Create Worker with specified 'envPrefix, env, config'. 'txqMempool' has size zero on return.
 
-  AWSEnaWorker(const AWSEnaWorker& other) = delete;
+  Worker(const Worker& other) = delete;
     // Copy constructor not provided
 
-  ~AWSEnaWorker();
+  ~Worker();
     // Destroy this object
 
   // ACCESSORS
@@ -131,8 +131,8 @@ public:
   Reinvent::Util::Environment& env() const;
     // Provide a non-modifiable reference to the 'env' attribute provided at construction time
 
-  const Reinvent::Dpdk::AWSEnaConfig& awsEnaConfig() const;
-    // Provide a non-modifiable reference to the 'awsEnaConfigenv' object provided at construction time
+  const Reinvent::Dpdk::Config& config() const;
+    // Provide a non-modifiable reference to the 'config' object provided at construction time
 
   int id(int *value, bool *isRX, bool *isTX, int *rxqIndex, int *txqIndex);
     // Return 0 and set specified 'value' to the DPDK lcore zero based index of the caller, setting 'isRX' true if 'id'
@@ -142,7 +142,7 @@ public:
     // 'rxq' attribute, and 'txqIndex' on 'txq' attribute. Also note this method uses DPDK API 'rte_lcore_id' so it's
     // important callers invoke this method from a bonafide lcore thread to avoid errors.
 
-  AWSEnaWorker& operator=(const AWSEnaWorker& rhs) = delete;
+  Worker& operator=(const Worker& rhs) = delete;
     // Assignment operator not provided
 };
 
@@ -150,37 +150,37 @@ public:
 
 // CREATORS
 inline
-AWSEnaWorker::AWSEnaWorker(const std::string& envPrefix, Reinvent::Util::Environment& env,
-  const Reinvent::Dpdk::AWSEnaConfig& awsEnaConfig)
+Worker::Worker(const std::string& envPrefix, Reinvent::Util::Environment& env,
+  const Reinvent::Dpdk::Config& config)
 : d_envPrefix(envPrefix)
 , d_env(env)
-, d_awsEnaConfig(awsEnaConfig)
+, d_config(config)
 {
 }
 
 inline
-AWSEnaWorker::~AWSEnaWorker() {
+Worker::~Worker() {
   std::lock_guard<std::mutex> lock(d_mux);
 }
 
 // ACCESSORS
 inline
-const std::string& AWSEnaWorker::envPrefix() const {
+const std::string& Worker::envPrefix() const {
   return d_envPrefix;
 }
 
 inline
-Reinvent::Util::Environment& AWSEnaWorker::env() const {
+Reinvent::Util::Environment& Worker::env() const {
   return d_env;
 }
 
 inline
-const Reinvent::Dpdk::AWSEnaConfig& AWSEnaWorker::awsEnaConfig() const {
-  return d_awsEnaConfig;
+const Reinvent::Dpdk::Config& Worker::config() const {
+  return d_config;
 }
 
 inline
-int AWSEnaWorker::id(int *val, bool *isRX, bool *isTX, int *rxqIndex, int *txqIndex) {
+int Worker::id(int *val, bool *isRX, bool *isTX, int *rxqIndex, int *txqIndex) {
   assert(val);
   assert(isRX);
   assert(isTX);
@@ -209,8 +209,8 @@ int AWSEnaWorker::id(int *val, bool *isRX, bool *isTX, int *rxqIndex, int *txqIn
       "Caller DPDK zero-based lcore index lookup yields", value, static_cast<int>(rte_lcore_count()), "lcores are known to DPDK. Likely called from bad thread");
   }
 
-  if (value<0||n>=d_awsEnaConfig.lcore().size()) {
-    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (value>=0&&n<d_awsEnaConfig.lcore().size()),
+  if (value<0||n>=d_config.lcore().size()) {
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_NO_RESOURCE, (value>=0&&n<d_config.lcore().size()),
       "Caller DPDK zero-based lcore index lookup yields", value, static_cast<int>(rte_lcore_count()), "lcores are known to DPDK. Likely called from bad thread");
   }
 
@@ -223,14 +223,14 @@ int AWSEnaWorker::id(int *val, bool *isRX, bool *isTX, int *rxqIndex, int *txqIn
   // Assign role and queue index
   //
   bool assigned = false;
-  if (d_awsEnaConfig.lcore()[n].role().size()>0) {
-    if (d_awsEnaConfig.lcore()[n].role()[0]==Reinvent::Dpdk::LCORE::e_LCORE_TXQ) {
+  if (d_config.lcore()[n].role().size()>0) {
+    if (d_config.lcore()[n].role()[0]==Reinvent::Dpdk::LCORE::e_LCORE_TXQ) {
       *isTX = true;
-      *txqIndex = d_awsEnaConfig.lcore()[n].queue()[0];
+      *txqIndex = d_config.lcore()[n].queue()[0];
       assigned = true;
-    } else if (d_awsEnaConfig.lcore()[n].role()[0]==Reinvent::Dpdk::LCORE::e_LCORE_RXQ) {
+    } else if (d_config.lcore()[n].role()[0]==Reinvent::Dpdk::LCORE::e_LCORE_RXQ) {
       *isRX = true;
-      *rxqIndex = d_awsEnaConfig.lcore()[n].queue()[0];
+      *rxqIndex = d_config.lcore()[n].queue()[0];
       assigned = true;
     }
   }

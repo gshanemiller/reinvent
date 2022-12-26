@@ -3,10 +3,10 @@
 // Purpose: Initialize DPDK device (aka port) and related RX/TX software objects
 //
 // Classes:
-//  Dpdk::InitAWS: Configure one DPDK AWS ENA capable device culminating with a set of NUMA aligned lcores each
+//  Dpdk::Init     Configure one DPDK capable device culminating with a set of NUMA aligned lcores each
 //                 configured for one RX queue, or one configured TX queue writing the final configuration set into
-//                 caller specified 'Dpdk::AWSConfig'. Post initialization callers should run rte_eal_mp_remote_launch
-//                 to start and run the RX/TX lcores usually with a helper 'Dpdk::AWSEnaWorker' object.
+//                 caller specified 'Dpdk::Config'. Post initialization callers should run rte_eal_mp_remote_launch
+//                 to start and run the RX/TX lcores usually with a helper 'Dpdk::Worker' object.
 //
 // Limitation:     Multi-NICs & distinct HW cores: DPDK generally will not allow different PIDs to use the same DPDK
 //                 device. Typically the host runs one task (pid) per DPDK capable NIC. This code can properly do that.
@@ -22,12 +22,12 @@
 //                 More importantly, not every single config possible in DPDK is covered by this class. There's no
 //                 cyrpto support. Users will find the supported capability here practical but by no means complete.
 //
-// See Also:       Dpdk::AWSConfig
-//                 Dpdk::AWSEnaWorker
+// See Also:       Dpdk::Config
+//                 Dpdk::Worker
 //                 integration_tests/reinvent_dpdk_udp minimal-complete client/server example
 //                 Memory pool sizing documentation in doc/packet_design.md
 //
-// Note: you can always dump a configuration to stdout: 'Dpdk::AWSConfig' supports 'operator<<(ostream&)'
+// Note: you can always dump a configuration to stdout: 'Dpdk::Config' supports 'operator<<(ostream&)'
 //       the dump will show you how the enviroment was converted into an ENA config
 // Note: you can always dump the Environment to stdout: 'Dpdk::Enviroment' supports 'operator<<(ostream)'.
 //       the dump will show you all the ENV variables read with their raw values
@@ -75,70 +75,67 @@
 // variation. The TX situation follows analgously.
 //
 // The last column provides a description. If the ENV variable merely holds a value that's passed on uniterpreted to
-// an attribute in 'Dpdk::AwsConfig', that attribute name is given. If there is no direct relationship, the description
-// references the attribitues in 'Dpdk::AwsConfig' influenced.
+// an attribute in 'Dpdk::Config', that attribute name is given. If there is no direct relationship, the description
+// references the attribitues in 'Dpdk::Config' influenced.
 //
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | Env Variable Name    (DPDK-API related)     | Gen | Comment                                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_DPDK_INITIALIZATION_PARAMETERS     | [*] | Comma separated DPDK initialization arguments. Can be empty. |
-// |                                             |     | Dpdk::InitAws calculates '--lcores, -n' arguments for you.   |
-// |                                             |     | Usually you'll have to provide '--proc-type, --in-memory'    |
-// |                                             |     | plus '--huge-dir'. '--log-level' is optional but typical. See|
-// |                                             |     | integration examples for example configurations. There is no |
-// |                                             |     | {prefix} or {deviceId} in this variable because there can    |
-// |                                             |     | be one set of DPDK initialization parameters for a task. This|
-// |                                             |     | variable deviates from the naming schema of all other values |
-// |                                             |     | because, in this case, DPDK takes these parameters only as a |
-// |                                             |     | string which it parses and consumes internally.              |
+// |                                             |     | Dpdk::Init calculates '--lcores, -n' arguments for you and   |
+// |                                             |     | inserts in into this string. Usually you'll have to provide  |
+// |                                             |     | '--proc-type, --in-memory' plus '--huge-dir'. '--log-level'  |
+// |                                             |     | is optional but typical. See integration examples for example|
+// |                                             |     | configurations. This variable deviates from the naming schema|
+// |                                             |     | of all other values because DPDK takes these parameters ONLY |
+// |                                             |     | as a string which is parses and consumes internally.         |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 //
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | Env Variable Name     (VCPU/DRAM related)   | Gen | Comment                                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_VCPU_MAX                           | [2] | The number of VCPUs machine supports. Individual VCPUs {id}s |
-// |                                             |     | are named in range [0, MAX). Effects AWSConfig::vcpu         |
+// |                                             |     | are named in range [0, MAX). Effects Config::vcpu            |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_VCPU_{id}                          | [2] | One of 'true|false'. 'true' means the VCPU {id} is considerd |
 // |                                             |     | enabled for use at runtime; 'false' is soft-disabled         |
-// |                                             |     | Effects AWSConfig::vcpu                                      |
+// |                                             |     | Effects Config::vcpu                                         |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_VCPU_{id}_IN_CORE                  | [2] | Gives the 0 based core VCPU {id} runs on                     |
-// |                                             |     | Effects AWSConfig::vcpu                                      |
+// |                                             |     | Effects Config::vcpu                                         |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_VCPU_{id}_IN_SOCKET                | [2] | Gives the 0 based socket VCPU {id} runs on                   |
-// |                                             |     | Effects AWSConfig::vcpu                                      |
+// |                                             |     | Effects Config::vcpu                                         |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_VCPU_{id}_ON_NUMA_NODE             | [2] | Gives the 0 based NUMA node VCPU {id} runs on                |
-// |                                             |     | Effects AWSConfig::vcpu                                      |
+// |                                             |     | Effects Config::vcpu                                         |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_MEMORY_CHANNEL_COUNT               | [3] | Number of DRAM channels for host box                         |
-// |                                             |     | Effects AWSConfig::memoryChannelCount. Critical for mempool  |
-// |                                             |     | creation.
+// |                                             |     | Effects Config::memoryChannelCount. Critical for mempool     |
+// |                                             |     | creation.                                                    |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 //
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | Env Variable Name        (NIC related)      | Gen | Comment                                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{deviceId} = {id}                  | [*] | DPDK deviceId n>=0 effects Dpdk::AWSEnaConfig::deviceId.     |
+// | {prefix}_{deviceId} = {id}                  | [*] | DPDK deviceId n>=0 effects Dpdk::Config::deviceId.           |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{deviceId}_PCI_DEVICE_ID           | [1] | e.g. '0000:7f:00.0' for {deviceId}. Effects                  |
-// |                                             |     | 'AWSEnaConfig::pciId                                         |
+// | {prefix}_{deviceId}_PCI_DEVICE_ID           | [1] | e.g. '0000:7f:00.0' for {deviceId}. Effects 'Config::pciId   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_NUMA_NODE               | [1] | The NUMA node to which DPDK device {deviceId} is attached. If|
 //                                               |     | this number disagrees with DPDK's runtime report an error is |
-// |                                             |     | is reported and init stops. Effects 'AWSConfig::numaNode'    |
+// |                                             |     | is reported and init stops. Effects 'Config::numaNode'       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SOFT_ENABLED            | [1] | One of 'true|false'. 'true' means '{deviceId}' is considered |
 // |                                             |     | enabled for use at runtime; 'false' is soft-disabled. Usually|
 // |                                             |     | set 'true', may be set false to soft-disable the H/W.        |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{deviceId}_RX_QUEUE_SIZE           | [1] | The number of queues to run. Effects AWSConfig::rxqCount and |
+// | {prefix}_{deviceId}_RX_QUEUE_SIZE           | [1] | The number of queues to run. Effects Config::rxqCount and    |
 // |                                             |     | txqCount. If this value is higher than the HW max found by   |
 // | {prefix}_{deviceId}_TX_QUEUE_SIZE           |     | DPDK an error reported.                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_RXQ_THREAD_COUNT        | [*] | '1<=N<={prefix}_{deviceId}_RX_QUEUE_SIZE' or 'QUEUE_SIZE'    |
-// |                                             |     | Sets 'AWSEnaConfig::rxqThreadCount'. If set to 'QUEUE_SIZE'  |
+// |                                             |     | Sets 'Config::rxqThreadCount'. If set to 'QUEUE_SIZE'        |
 // | {prefix}_{deviceId}_TXQ_THREAD_COUNT        |     | RXQ thread count is assigned to the number provided by env   |
 // |                                             |     | '{prefix}_{deviceId}_RX_QUEUE_SIZE' and N otherwise.         |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
@@ -148,7 +145,7 @@
 // |                                             |     | by another RXQ or TXQ. MULTI allows two or more lcores to be |
 // |                                             |     | assigned to the same H/W core regardless of purpose RX or TX.|
 // |                                             |     | OFF means no resources for RX will be configured. Effects    |
-// |                                             |     | AWSConfig::rxqPolicy, txqPolicy.                             |
+// |                                             |     | Config::rxqPolicy, txqPolicy.                                |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_RXQ_VCPU_MASK           | [*] | A VCPU core mask which delimits which HW cores or VCPUs      |
 // |                                             |     | can perform RX for device {deviceId}. Valid values is a int  |
@@ -156,11 +153,11 @@
 // |                                             |     | which '{prefix}_{deviceId}' is attached is valid. A list with|
 // |                                             |     | '1,5,10' means only VCPUs 1 or 5 or 10 are valid for RX work |
 // |                                             |     | assignment. Each VCPU given must be on the same NUMA node as |
-// |                                             |     | the NIC itself. Effects AWSConfig::rxqCandidateVcpuList and  |
+// |                                             |     | the NIC itself. Effects Config::rxqCandidateVcpuList and     |
 // |                                             |     | txqCandidateVcpuList. Excluding VCPUs means DPDK resource    |
 // |                                             |     | won't be assigned to it leaving those free for other uses.   |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{deviceId}_{MTU}                   | [*] | Maximum packet size in bytes. Effects AWSConfig::mtu. Packet |
+// | {prefix}_{deviceId}_{MTU}                   | [*] | Maximum packet size in bytes. Effects Config::mtu. Packet    |
 // |                                             |     | design TX side by respect this if RX will run over that data |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 //
@@ -169,18 +166,18 @@
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMZONE_KB              | [*] | Memory reserved for all uses RX and TX in KB for the device  |
 // |                                             |     | '{prefix}_{deviceId}'. Memory is allocated on the same NUMA  |
-// |                                             |     | node the NIC is attached to. Effects AWSConfig attrs         |
-// |                                             |     | AWSConfig::memzoneReserveKb                                  |
+// |                                             |     | node the NIC is attached to. Effects Config attrs            |
+// |                                             |     | Config::memzoneReserveKb                                     |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMZONE_MASK            | [*] | Hugepage mask for '{prefix}_{deviceId}_MEMZONE_KB'. See      |
 // |                                             |     | https://doc.dpdk.org/api/rte__memzone_8h.html#a3ccbea77\     |
 // |                                             |     | ccab608c6e683817a3eb170f and RTE_MEMZONE_xxx flags which help|
 // |                                             |     | choose which TLB pages are used to satisfy request. In this  |
 // |                                             |     | library one task has exactly one memzone for one named device|
-// |                                             |     | Effects AWSConfig::memzoneMask                               |
+// |                                             |     | Effects Config::memzoneMask                                  |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMZONE_NAME            | [*] | Textual/human name '{prefix}_{deviceId}_MEMZONE_KB'          |
-// |                                             |     | Effects AWSConfig::memzoneName                               |
+// |                                             |     | Effects Config::memzoneName                                  |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 //
 // +---------------------------------------------+-----+--------------------------------------------------------------+
@@ -204,49 +201,49 @@
 // |                                             |     | the function pointers in 'rte_mempool_create()' are not      |
 // |                                             |     | supported in this API, but can be leverage post initiaization|
 // |                                             |     | by application code prior to entering main event-loop.       |
-// |                                             |     | Effects contents of AWSConfig::rxq and txq.                  |
+// |                                             |     | Effects contents of Config::rxq and txq.                     |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMPOOL_RXQ_SIZE        | [*] | Integer list of number of elements (mbufs) per RXQ mempool   |
 // |                                             |     | See 'doc/packet_design.md'                                   |
 // | {prefix}_{deviceId}_MEMPOOL_TXQ_SIZE        |     | Entry count must equal  RXQ_THREAD_COUNT/TXQ_THREAD_COUNT    |
-// |                                             |     | Effects AWSConfig::rxq/txq                                   |
+// |                                             |     | Effects Config::rxq/txq                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMPOOL_RXQ_CACHE_SIZE  | [*] | Integer list of cache size in bytes per RXQ. For non-shared  |
 // |                                             |     | 0 bytes/RXQ is typical. See 'doc/packet_design.md'           |
 // | {prefix}_{deviceId}_MEMPOOL_TXQ_CACHE_SIZE  |     | Entry count equal to RXQ_THREAD_COUNT/TXQ_THREAD_COUNT       |
-// |                                             |     | Effects AWSConfig::rxq/txq                                   |
+// |                                             |     | Effects Config::rxq/txq                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMPOOL_RXQ_PRIV_SIZE   | [*] | Integer list of private size in bytes per mbuf per RXQ often |
 // |                                             |     | zero. See 'doc/packet_design.md'                             |
 // |                                             |     |                                                              |
 // | {prefix}_{deviceId}_MEMPOOL_TXQ_PRIV_SIZE   |     | Entry count equal to RXQ_THREAD_COUNT/TXQ_THREAD_COUNT       |
-// |                                             |     | Effects AWSConfig::rxq/txq                                   |
+// |                                             |     | Effects Config::rxq/txq                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_MEMPOOL_RXQ_DATA_ROOM_\ | [*] | Integer list of data room size in bytes per mbuf per RXQ.    |
 // |   SIZE                                      |     | Critical setting. See 'doc/packet_design.md'                 |
 // |                                             |     |                                                              |
 // | {prefix}_{deviceId}_MEMPOOL_TXQ_DATA_ROOM_\ |     | Entry count equal to RXQ_THREAD_COUNT/TXQ_THREAD_COUNT       |
-// |   SIZE                                      |     | Effects AWSConfig::rxq/txq                                   |
+// |   SIZE                                      |     | Effects Config::rxq/txq                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SHARED_MEMPOOL_SIZE     | [*] | Number of mbufs (buffers) in shared mempool for all queues   |
 // |                                             |     | uses. See 'doc/packet_design.md'                             |
-// |                                             |     | Effects AWSconfig::rxq/txq                                   |
+// |                                             |     | Effects Config::rxq/txq                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SHARED_MEMPOOL_ELT_SIZE | [*] | Size of each mbuf (buffer) in bytes in shared mempool.       |
 // |                                             |     | See 'doc/packet_design.md'                                   |
-// |                                             |     | Effects AWSconfig::rxq/txq                                   |
+// |                                             |     | Effects Config::rxq/txq                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SHARED_MEMPOOL_CACHE_\  | [*] | Size of per core cache in bytes for shared mempool.          |
 // |   SIZE                                      |     | See 'doc/packet_design.md'                                   |
-// |                                             |     | Effects AWSconfig::rxq/txq                                   |
+// |                                             |     | Effects Config::rxq/txq                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SHARED_MEMPOOL_PRIVATE\_| [*] | Private data size in bytes of shared mempool.                |
 // |   DATA_SIZE                                 |     | See 'doc/packet_design.md'                                   |
-// |                                             |     | Effects AWSconfig::rxq/txq                                   |
+// |                                             |     | Effects Config::rxq/txq                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_SHARED_MEMPOOL_FLAGS    | [*] | Flags refining behavior of per-core caching                  |
 // |                                             |     | See 'doc/packet_design.md'                                   |
-// |                                             |     | Effects AWSconfig::rxq/txq                                   |
+// |                                             |     | Effects Config::rxq/txq                                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_RXQ_RING_SIZE           | [*] | Number of mbufs (buffers) per RXQ to reserve for NIC to write|
 // |                                             |     | packets into after read off the wire. RXQs need mbufs at     | 
@@ -254,7 +251,7 @@
 // |                                             |     | Either provide a single number in which case every RXQ will  |
 // |                                             |     | use that number of mbufs or an int list giving the per RXQ   |
 // |                                             |     | amount. If int-list should have RXQ_THREAD_COUNT entries     |
-// |                                             |     | Effets AWSConfig::rxq                                        |
+// |                                             |     | Effets Config::rxq                                           |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{deviceId}_TXQ_RING_SIZE           | [*] | Number of mbufs (buffers) per TXQ to reserve for NIC to read |
 // |                                             |     | from which it then writes onto the wire. TX queues do not get|
@@ -264,7 +261,7 @@
 // |                                             |     | Either provide a single number in which case every TXQ will  |
 // |                                             |     | use that number of mbufs or an int list giving the per TXQ.  |
 // |                                             |     | If int-list should have TXQ_THREAD_COUNT entries. Effects    |
-// |                                             |     | AWSConfig::txq.                                              |
+// |                                             |     | Config::txq.                                                 |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 //
 // +---------------------------------------------+-----+--------------------------------------------------------------+
@@ -308,27 +305,32 @@
 // |                                             |     | For RSS to work this value must be non-zero, a valid RSS key |
 // |                                             |     | must be defined (above), and RX_MQ_MASK (see above) must at  |
 // |                                             |     | least enable the RTE_ETH_MQ_RX_RSS bit.                      |
+// |                                             |     | Effects Config::defaultRoute
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TX_DEFAULT_ROUTE_COUNT    | [*] | An integer >=0 giving the number of default TX routes defined|
-// |                                             |     | specified in the following 6 environment variables           |
+// | {prefix}_{device}_DEFAULT_ROUTE_SRC_MAC     | [*] | A list of source MAC addresses where each address is in the  |
+// |                                             |     | format 'xx:xx:xx:xx:xx:xx' where each 'xx' is a valid hex.   |
+// |                                             |     | This list together with the following 5 lists comprise to    |
+// |                                             |     | a set of default routes for transmitting IPV4 packets.       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TX_DEFAULT_ROUTE_N_SRC_MAC| [*] | Source MAC address for the Nth default route                 |
-// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
+// | {prefix}_{device}_DEFAULT_ROUTE_DST_MAC     | [*] | A list of dest MAC addresses where each address is in the    |
+// |                                             |     | format 'xx:xx:xx:xx:xx:xx' where each 'xx' is a valid hex.   |
+// |                                             |     | The number of entries must equal DEFAULT_ROUTE_SRC_MAC       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TX_DEFAULT_ROUTE_N_DST_MAC| [*] | Destination MAC address for the Nth default route            |
-// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
+// | {prefix}_{device}_DEFAULT_ROUTE_SRC_IP      | [*] | A list of source IPV4 addresses where each address is in the |
+// |                                             |     | format 'd.d.d.d' where each 'd' is a valid decimal number.   |
+// |                                             |     | The number of entries must equal DEFAULT_ROUTE_SRC_MAC       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TX_DEFAULT_ROUTE_N_SRC_IP | [*] | Source IP address for the Nth default route                  |
-// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
+// | {prefix}_{device}_DEFAULT_ROUTE_DST_IP      | [*] | A list of dest IPV4 addresses where each address is in the   |
+// |                                             |     | format 'd.d.d.d' where each 'd' is a valid decimal number.   |
+// |                                             |     | The number of entries must equal DEFAULT_ROUTE_SRC_MAC       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TX_DEFAULT_ROUTE_N_DST_IP | [*] | Destination IP address for the Nth default route             |
-// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
+// | {prefix}_{device}_DEFAULT_SRC_PORT          | [*] | A list of source ports typically not including 0 but note    |
+// |                                             |     | these ports are pseudo. See 'packet_design.md' for more info.|
+// |                                             |     | The number of entries must equal DEFAULT_ROUTE_SRC_MAC       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TXQ_DEFAULT_SRC_N_PORT    | [*] | Source IP port for Nth default route                         |
-// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
-// +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TXQ_DEFAULT_DST_N_PORT    | [*] | Destination IP port for the Nth default route                |
-// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
+// | {prefix}_{device}_DEFAULT_DST_PORT          | [*] | A list of dest ports typically not including 0 but note      |
+// |                                             |     | these ports are pseudo. See 'packet_design.md' for more info.|
+// |                                             |     | The number of entries must equal DEFAULT_ROUTE_SRC_MAC       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 //
 // [*] Application supplied config reflecting limits and capabilities in [1,2,3]
@@ -340,46 +342,54 @@
 #include <dpdk/reinvent_dpdk_txq.h>                                                                                     
 #include <dpdk/reinvent_dpdk_vcpu.h>                                                                                     
 #include <dpdk/reinvent_dpdk_lcore.h>                                                                                     
-#include <dpdk/reinvent_dpdk_awsconfig.h>                                                                                     
+#include <dpdk/reinvent_dpdk_config.h>                                                                                     
+#include <dpdk/reinvent_dpdk_ipv4route.h>
 #include <util/reinvent_util_environment.h>                                                                             
 
 namespace Reinvent {
 namespace Dpdk {
 
-class InitAWS {
+class Init {
   // PRIVATE MANIULATORS
   static int convertRssKey(const std::string& key, uint8_t *keyBytes);
 
-  static int configRings(const std::string& prefix, Util::Environment *env, AWSEnaConfig *config,
+  static int configRings(const std::string& prefix, Util::Environment *env, Config *config,
     std::vector<int>& rxqRingSize, std::vector<int>& txqRingSize);
 
   static int configSharedMempool(const std::string& prefix, Util::Environment *env, int *sharedMemPoolSize,
     int *sharedMempoolEltSize, int *sharedMempoolCacheSize, int *sharedMempoolPrivateSize, int *sharedMempoolFlags);
 
-  static int configPerQueueMempool(const std::string& prefix, Util::Environment *env, AWSEnaConfig *config,
+  static int configPerQueueMempool(const std::string& prefix, Util::Environment *env, Config *config,
     std::vector<int> *rxqMemPoolSize, std::vector<int> *txqMemPoolSize, std::vector<int> *rxqMemPoolCacheSize,
     std::vector<int> *txqMemPoolCacheSize, std::vector<int> *rxqMemPoolPrivSize, std::vector<int> *txqMemPoolPrivSize,
     std::vector<int> *rxqMemPoolDataRoomSize, std::vector<int> *txqMemPoolDataRoomSize);
 
-  static int makeAssignment(AWSEnaConfig *config, std::vector<RXQ>& rxq, std::vector<TXQ>& txq,
+  static int makeAssignment(Config *config, std::vector<RXQ>& rxq, std::vector<TXQ>& txq,
     std::vector<LCORE>& lcore);
 
-  static int makeDpdkInitParams(const std::string& envPrefix, Util::Environment *env, AWSEnaConfig *config);
+  static int makeDpdkInitParams(const std::string& envPrefix, Util::Environment *env, Config *config);
 
-  static int configTxRouting(const std::string& prefix, Util::Environment *env, AWSEnaConfig *config,
-    std::vector<int>& defaultTxSrcPort, std::vector<int>& defaultTxDstPort, std::string& defaultTxSrcMac,
-    std::vector<std::string>& defaultTxDstMac, std::string& defaultTxSrcIp, std::vector<std::string>& defaultTxDstIp,
-    std::vector<UDPRoute>& defaultTxRoute);
+  static int configDefaultRouting(const std::string& prefix, Util::Environment *env,
+    std::vector<IPV4Route> *defaultTxRoute);
 
 public:
   // PUBLIC MANIPULATORS
-  static int enaUdp(const std::string& device, const std::string& envPrefix, Util::Environment *env,
-    AWSEnaConfig *config);
-    // Return 0 if a AWS ENA 'device' was initialized ready for UDP RXQ/TXQ work and non-zero otherwise based on a
+  static int startEna(const std::string& device, const std::string& envPrefix, Util::Environment *env,
+    Config *config);
+    // Return 0 if a DPDK ENA 'device' was initialized ready for UDP RXQ/TXQ work and non-zero otherwise based on a
     // configuration set in the UNIX enviroment read through specified 'env', optional non-empty 'envPrefix'. The
     // behavior is defined provided 'deviceId' not empty. If zero is returned, the configuration written into specified
     // 'config' is valid. Upon successful return callers should run 'rte_eal_mp_remote_launch()' to create and run the
     // configured lcores.
+
+  static int stopEna(const Config& config);
+    // Return 0 if the DPDK device in the specified 'config' is stopped, and non-zero otherwise. Note this method       
+    // should be run before 'stopDpdk' below.
+                                                                                                                        
+  static int stopDpdk();
+    // Return 0 if the DPDK ENA subsystem is shutdown, and non-zero otherwise. Call this method once only before exit 
+    // even if 'startEna' returned an error. The behavior of DPDK is undefined once this method returns. Note: run
+    // 'stopEna' before running this method.
 };
 
 } // Dpdk

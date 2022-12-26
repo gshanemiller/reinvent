@@ -1,10 +1,10 @@
-#include <dpdk/reinvent_dpdk_awsconfig.h>
+#include <dpdk/reinvent_dpdk_config.h>
 
 #include <util/reinvent_util_errno.h>
 
 namespace Reinvent {                                                                                                    
 
-std::ostream& Dpdk::AWSEnaConfig::print(std::ostream& stream) const {                                                  
+std::ostream& Dpdk::Config::print(std::ostream& stream) const {                                                  
   stream << "{";
  
   stream << "\"dpdkArgs\" : [";
@@ -105,6 +105,16 @@ std::ostream& Dpdk::AWSEnaConfig::print(std::ostream& stream) const {
   } else {
     strcpy(buf, "[]");
   }
+
+  stream << "\"defaultRoute\":[";
+  for (unsigned i=0; i<d_defaultRoute.size(); i++) {
+    stream << d_defaultRoute[i];
+    if ((i+1)!=d_defaultRoute.size()) {
+      stream << ",";
+    }
+  }
+  stream << "]";
+
   stream << "}";
 
   return stream;
