@@ -3,8 +3,6 @@ Library: DPDK userspace library read/write UDP messages with congestion control
 
 # Status
 * Early-alpha: under heavy development. [Major limitations given here.](https://github.com/rodgarrison/reinvent/issues)
-* See [AWS name issue](https://github.com/rodgarrison/reinvent/issues/23). As discussed there, no code in this library
-depends on or requires AWS. References to AWS in types or class names need to replaced with a generic name. TBD.
 
 # Design Goals
 This library intends to be a rewrite of [eRPC](https://github.com/erpc-io/eRPC) which was the motivation for this work.
@@ -21,8 +19,8 @@ UDP packet loss and flow control. The result is a highly efficient yet general p
 its structures, and working out what the code or config intends to accomplish. There are no magic constants in code
 * Reinvent automatically configures lcores-to-HW-core assignment. Programmers set the desired lcore count in
 environment variables. The library then works out RXQ/TXQ assignments from there.
-* Reinvent provides a helper structure `AWSWorker` to make lcore startup straightforward
-* Reinvent AWSConfig is streamable and is output in JSON format. Pipe into `python3 -m json.tool` to pretty print
+* Reinvent provides a helper structure `Worker` to make lcore startup straightforward
+* Reinvent Config is streamable and is output in JSON format. Pipe into `python3 -m json.tool` to pretty print
 * Reinvent provides a uniform structure to report errors: no ad hoc logging/assertions
 * Unlike almost all DPDK application libraries, examples, or explainers on the web this repository is substantially
 self-contained. The setup script takes a bare machine with nothing on it to being completely configured with DPDK,
@@ -37,7 +35,7 @@ on DPDK concepts and usage.
 
 While `reinvent` does not require x86, Linux, or Mellanox NICs --- DPDK linked applications work over a variety
 of operating systems and hardware --- testing and setup here is confirmed on Equinix DC data center `c3.small.x86`
-instances.
+instances only.
 
 Provided NICs are supported by DPDK the main differences between this setup and an alternate valid setup are
 system administration not code. Ultimately you'll need two or more boxes (sender/clients, and receiver/servers)
