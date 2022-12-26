@@ -480,6 +480,7 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigne
 
     if (likely(!constantPorts)) {
       ++dstPort;
+      ++dstIp;
     }
   }
 
