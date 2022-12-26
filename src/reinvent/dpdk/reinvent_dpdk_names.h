@@ -48,6 +48,7 @@ struct Names {
   static const char *RX_OFFLOAD_MASK;
   static const char *TX_MQ_MASK;
   static const char *TX_OFFLOAD_MASK;
+  static const char *TX_DEFAULT_FLOW;
 
   static const char *RX_RSS_KEY;
   static const char *RX_RSS_HF;
@@ -73,7 +74,8 @@ struct Names {
   static const char *SHARED_MEMPOOL_PRIVATE;
   static const char *SHARED_MEMPOOL_FLAGS;
 
-  static const char *TX_DEFAULT_FLOW;
+  static const char *TXQ_DEFAULT_ROUTE;
+  static const char *TXQ_DEFAULT_ROUTE_COUNT;
   static const char *TXQ_DEFAULT_SRC_MAC;
   static const char *TXQ_DEFAULT_DST_MAC;
   static const char *TXQ_DEFAULT_SRC_IP;

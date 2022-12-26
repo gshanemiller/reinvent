@@ -29,8 +29,33 @@ int Dpdk::InitAWS::configTxRouting(const std::string& prefix, Util::Environment 
 
   int rc, sz;
   bool valid;
+  int count;
   std::string value;
   std::string variable;
+
+  //
+  // Get expected number of default routes
+  //
+  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::TXQ_DEFAULT_ROUTE_COUNT);
+  if ((rc = env->valueAsInteger(variable, &count))!=0) {
+    return rc;
+  }
+  if (count == 0) {
+    // Nothin' to do
+    return 0;
+  }
+
+
+const char *Dpdk::Names::TXQ_DEFAULT_ROUTE          = "TXQ_DEFAULT_ROUTE";                                              
+const char *Dpdk::Names::TXQ_DEFAULT_ROUTE_COUNT    = "TXQ_DEFAULT_ROUTE_COUNT";                                        
+const char *Dpdk::Names::TXQ_DEFAULT_SRC_MAC        = "SRC_MAC";                                                        
+const char *Dpdk::Names::TXQ_DEFAULT_DST_MAC        = "DST_MAC";                                                        
+const char *Dpdk::Names::TXQ_DEFAULT_SRC_IP         = "SRC_IP";                                                         
+const char *Dpdk::Names::TXQ_DEFAULT_DST_IP         = "DST_IP";                                                         
+const char *Dpdk::Names::TXQ_DEFAULT_SRC_PORT       = "SRC_PORT";                                                       
+const char *Dpdk::Names::TXQ_DEFAULT_DST_PORT       = "DST_PORT"; 
+
+
 
   //
   // Get TX src mac addresses

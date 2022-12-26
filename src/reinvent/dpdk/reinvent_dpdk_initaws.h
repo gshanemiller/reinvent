@@ -309,17 +309,26 @@
 // |                                             |     | must be defined (above), and RX_MQ_MASK (see above) must at  |
 // |                                             |     | least enable the RTE_ETH_MQ_RX_RSS bit.                      |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TX_DEFAULT_ROUTE_SRC_MAC  | [*] | String list 1 mac address per TXQ                            |
+// | {prefix}_{device}_TX_DEFAULT_ROUTE_COUNT    | [*] | An integer >=0 giving the number of default TX routes defined|
+// |                                             |     | specified in the following 6 environment variables           |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TX_DEFAULT_ROUTE_DST_MAC  | [*] | String list 1 mac address per TXQ                            |
+// | {prefix}_{device}_TX_DEFAULT_ROUTE_N_SRC_MAC| [*] | Source MAC address for the Nth default route                 |
+// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TX_DEFAULT_ROUTE_SRC_IP   | [*] | String list 1 mac address per TXQ                            |
+// | {prefix}_{device}_TX_DEFAULT_ROUTE_N_DST_MAC| [*] | Destination MAC address for the Nth default route            |
+// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TX_DEFAULT_ROUTE_DST_IP   | [*] | String list 1 mac address per TXQ                            |
+// | {prefix}_{device}_TX_DEFAULT_ROUTE_N_SRC_IP | [*] | Source IP address for the Nth default route                  |
+// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TXQ_DEFAULT_SRC_PORT      | [*] | integer list 1 port per TXQ                                  |
+// | {prefix}_{device}_TX_DEFAULT_ROUTE_N_DST_IP | [*] | Destination IP address for the Nth default route             |
+// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
-// | {prefix}_{device}_TXQ_DEFAULT_DST_PORT      | [*] | integer list 1 port per TXQ                                  |
+// | {prefix}_{device}_TXQ_DEFAULT_SRC_N_PORT    | [*] | Source IP port for Nth default route                         |
+// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
+// +---------------------------------------------+-----+--------------------------------------------------------------+
+// | {prefix}_{device}_TXQ_DEFAULT_DST_N_PORT    | [*] | Destination IP port for the Nth default route                |
+// |                                             |     | where N in [0, TX_DEFAULT_ROUTE_COUNT)                       |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 //
 // [*] Application supplied config reflecting limits and capabilities in [1,2,3]

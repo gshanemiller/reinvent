@@ -40,6 +40,7 @@ const char *Dpdk::Names::RX_MQ_MASK             = "RX_MQ_MASK";
 const char *Dpdk::Names::RX_OFFLOAD_MASK        = "RX_OFFLOAD_MASK";
 const char *Dpdk::Names::TX_MQ_MASK             = "TX_MQ_MASK";
 const char *Dpdk::Names::TX_OFFLOAD_MASK        = "TX_OFFLOAD_MASK";
+const char *Dpdk::Names::TX_DEFAULT_FLOW        = "TX_DEFAULT_FLOW";
 
 const char *Dpdk::Names::RX_RSS_KEY             = "RX_RSS_KEY";
 const char *Dpdk::Names::RX_RSS_HF              = "RX_RSS_HF";
@@ -67,13 +68,14 @@ const char *Dpdk::Names::SHARED_MEMPOOL_CACHE_SIZE  = "SHARED_MEMPOOL_CACHE_SIZE
 const char *Dpdk::Names::SHARED_MEMPOOL_PRIVATE     = "SHARED_MEMPOOL_PRIVATE";
 const char *Dpdk::Names::SHARED_MEMPOOL_FLAGS       = "SHARED_MEMPOOL_FLAGS";
 
-const char *Dpdk::Names::TX_DEFAULT_FLOW            = "TX_DEFAULT_FLOW";
-const char *Dpdk::Names::TXQ_DEFAULT_SRC_MAC        = "TXQ_DEFAULT_SRC_MAC";
-const char *Dpdk::Names::TXQ_DEFAULT_DST_MAC        = "TXQ_DEFAULT_DST_MAC";
-const char *Dpdk::Names::TXQ_DEFAULT_SRC_IP         = "TXQ_DEFAULT_SRC_IP";
-const char *Dpdk::Names::TXQ_DEFAULT_DST_IP         = "TXQ_DEFAULT_DST_IP";
-const char *Dpdk::Names::TXQ_DEFAULT_SRC_PORT       = "TXQ_DEFAULT_SRC_PORT";
-const char *Dpdk::Names::TXQ_DEFAULT_DST_PORT       = "TXQ_DEFAULT_DST_PORT";
+const char *Dpdk::Names::TXQ_DEFAULT_ROUTE          = "TXQ_DEFAULT_ROUTE";
+const char *Dpdk::Names::TXQ_DEFAULT_ROUTE_COUNT    = "TXQ_DEFAULT_ROUTE_COUNT";
+const char *Dpdk::Names::TXQ_DEFAULT_SRC_MAC        = "SRC_MAC";
+const char *Dpdk::Names::TXQ_DEFAULT_DST_MAC        = "DST_MAC";
+const char *Dpdk::Names::TXQ_DEFAULT_SRC_IP         = "SRC_IP";
+const char *Dpdk::Names::TXQ_DEFAULT_DST_IP         = "DST_IP";
+const char *Dpdk::Names::TXQ_DEFAULT_SRC_PORT       = "SRC_PORT";
+const char *Dpdk::Names::TXQ_DEFAULT_DST_PORT       = "DST_PORT";
 
 void Dpdk::Names::make(std::string *name, const char *format, ...) {                                  
   assert(name);                                                                                                         
