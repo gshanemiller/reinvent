@@ -52,7 +52,7 @@ server button. Then click on the on-demand box.
 3. In the next page choose your preferred data center. Locations are in the US,
 Europe, Hong Kong, and others.
 4. Click on the c3.small.x86 box selecting server size.
-5. Choose Ubuntu 20.04 LTS O/S
+5. Choose Ubuntu 22.04 LTS O/S
 6. Select or provision two machines. Name them, for example, 'client, server'.
 7. Click on 'Deploy Now'. All machines will be equipped with all ssh keys you
 provided in step 1.
@@ -74,7 +74,7 @@ $ lspci | grep Ether
 
 Instructions 10-20 must repeated once for each machine:
 
-10. [In your browser surf to the install script](https://github.com/rodgarrison/reinvent/blob/ubuntu/scripts/install)
+10. [In your browser surf to the install script](https://github.com/rodgarrison/reinvent/blob/main/scripts/install)
 11. Copy the script by clicking on github's copy button.
 12. In your ssh login run the command: `cat > install` then paste in the script. Press CTRL-D.
 13. Run command: `chmod 755 install`
@@ -134,6 +134,12 @@ The next step is to connect all of the machines to the same VLAN. In Equinix a V
 the procedure will work. The isolated DPDK Mellanox card will be given on interface `enp1s0f1` instead
 
 Now in the last sub-step you'll fix your NIC interfaces file in each machine.
+
+**IMPORTANT NOTE** 99.9% of the time Equinix servers use `enp1s0f0/enp1s0f1` for the bonded Mellanox NICs you
+just unbonded above. However, once in a while you may find `enp2s0f0/enp2s0f1`. If that's your situation the
+procedure is essentially unchanged. Wherever you read `enp1s0f0` in the instructions replace with `enp2s0f0`
+and ditto `enp2s0f1` for `enp1s0f1`. You'll need to keep this in mind for Part 3 below when you run the DPDK
+code too.
 
 21. ssh login to one of your machines
 22. Run command: `vi /etc/network/interfaces`
