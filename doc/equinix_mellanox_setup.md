@@ -72,13 +72,15 @@ $ lspci | grep Ether
 04:00.0 Ethernet controller: Intel Corporation I210 Gigabit Network Connection (rev 03)
 ```
 
-Instructions 10-19 must repeated once for each machine:
+Instructions 10-20 must repeated once for each machine:
 
 10. [In your browser surf to the install script](https://github.com/rodgarrison/reinvent/blob/ubuntu/scripts/install)
 11. Copy the script by clicking on github's copy button.
 12. In your ssh login run the command: `cat > install` then paste in the script. Press CTRL-D.
 13. Run command: `chmod 755 install`
 14. Run command: `./install`
+15. After `apt` installs required packages you may be prompted to restart services. Select all
+services or none or even cancel. You'll need to reboot anyway later on.
 
 After about 10 mins the script runs `vi` on the primary DPDK configuration. At the top of the file there's a
 variable declaration for `apps` listing all the applications to be built in addition to the library. For most purposes
@@ -91,7 +93,7 @@ apps = [
 ]
 ```
 
-15. Inside the VI editor on `app/meson.build` either immediately quit and exit with vi command `:wq` or change the `apps`
+16. Inside the VI editor on `app/meson.build` either immediately quit and exit with vi command `:wq` or change the `apps`
 array to include only `test-pmd` then write the changes and quit with `:wq`. Once done the script will build and install
 DPDK.
 17. After about 10 minutes the script will prompt `you need to enable IOMMU`. Press ENTER to continue. VI is run on the
