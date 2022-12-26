@@ -82,7 +82,7 @@ Instructions 10-19 must repeated once for each machine:
 
 After about 10 mins the script runs `vi` on the primary DPDK configuration. At the top of the file there's a
 variable declaration for `apps` listing all the applications to be built in addition to the library. For most purposes
-only `test-pmd` is needed. Building everything quadruple time because DPDK uses LTO. It's recommended to keep only
+only `test-pmd` is needed. Building everything will quadruple time. DPDK uses LTO. It's recommended to keep only
 `test-pmd` so the variable declaration reads:
 
 ```
@@ -167,7 +167,7 @@ This will require about 10 minutes.
 There are two small bits of configuration left. You'll need to plug-in the ethenet addresses and IP addresses of the
 DPDK Mellanox cards. And you'll need to run a premade script to setup huge-pages. 
 
-Pick two of your machines. Call it `client`. Call the other machine `server`.
+Pick two of your machines. Call one `client`. Call the other machine `server`.
 
 1. Login to your client machine and run `ifconfig enp1s0f1`. This should record the 192.168.x.x address you configured
 above. For example,
@@ -176,9 +176,9 @@ above. For example,
 # client's enp1s0f1
 $ ifconfig enp1s0f1
 enp1s0f1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-        inet 192.168.0.2  netmask 255.255.255.240  broadcast 192.168.0.15
+        inet 192.168.0.2  netmask 255.255.255.240  broadcast 192.168.0.15.    <---- IP address 192.x.x.x
         inet6 fe80::e42:a1ff:fe97:faa5  prefixlen 64  scopeid 0x20<link>
-        ether 0c:42:a1:97:fa:a5  txqueuelen 1000  (Ethernet)                  <---- MAC address here
+        ether 0c:42:a1:97:fa:a5  txqueuelen 1000  (Ethernet)                  <---- MAC (ether) address here
         RX packets 7809  bytes 960533 (960.5 KB)
         RX errors 0  dropped 0  overruns 0  frame 0
         TX packets 1165  bytes 143598 (143.5 KB)
