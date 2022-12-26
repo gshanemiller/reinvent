@@ -208,8 +208,8 @@ cd $H/reinvent
 rm -rf build
 mkdir build
 cd build
-cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DPERFORMANCE_TEST=ON ..
-make -j 16
+cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON ..
+make -j
 
 #
 # Enable IOMMU passthrough
