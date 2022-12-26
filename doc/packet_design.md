@@ -180,31 +180,29 @@ exchanging the source/destination of the IP addresses and ports in the outgoing 
 client NIC must also program flow control.
 
 This section is based on [DPDK example code](https://github.com/DPDK/dpdk/tree/main/examples/flow_filtering). Here
-we use flow control to transform the destination port to a RXQ number through rules. Assume eight queues RXQs.
-The mapping is as follows. Recall that once the server NIC reads the packet off the wire, it's already on the right
-server box. What remains is assigning the packet to a RXQ within the DPDK controlled server NIC:
+we use flow control to transform the destination port to a RXQ number through rules. Assume eight queues RXQs. To
+select RXQ #<n> for the destintion set bit #n in the UDP destination port. Recall that once the server NIC reads the
+packet off the wire, it's already on the right server box. What remains is assigning the packet to a RXQ within the
+DPDK controlled server NIC:
 
 ```
-+-----------------------+-----------+-----------------+----------+
-| Destination Port Mask | Condition | Destination RXQ | Action # |
-+-----------------------+-----------+-----------------+----------+
-| 1   (1<<0)            | Bit ON    | 0               | 0        |
-+-----------------------+-----------+-----------------+----------+
-| 2   (1<<1)            | Bit ON    | 1               | 1        |
-+-----------------------+-----------+-----------------+----------+
-| 4   (1<<2)            | Bit ON    | 2               | 2        |
-+-----------------------+-----------+-----------------+----------+
-| 8   (1<<3)            | Bit ON    | 3               | 3        |
-+-----------------------+-----------+-----------------+----------+
-| 16  (1<<5)            | Bit ON    | 4               | 4        |
-+-----------------------+-----------+-----------------+----------+
-| 32  (1<<5)            | Bit ON    | 5               | 5        |
-+-----------------------+-----------+-----------------+----------+
-| 64  (1<<6)            | Bit ON    | 6               | 6        |
-+-----------------------+-----------+-----------------+----------+
-| 128 (1<<7)            | Bit ON    | 7               | 7        |
-+-----------------------+-----------+-----------------+----------+
+// +--------+--------------+-----------------------+                                                   
+// | bit #  | RXQ assigned | Example UDP Dest Port |                                                   
+// +--------+--------------+-----------------------+                                                   
+// | 0      | 0            | 1                     |                                                   
+// | 1      | 1            | 2                     |                                                   
+// | 2      | 2            | 4                     |                                                   
+// | .      | .            | .                     |
+// | .      | .            | .                     |
+// | .      | .            | .                     |
+// | 7      | 7            | 128                   |                                                   
+// +--------+------- ------+-----------------------+
 ```
+
+To ensure no packet is dropped because it matches no rule, defined behavior requires:
+
+* UDP destination port is non-zero
+* Exactly one bit 0, 1,2, ... 7 is set
 
 Given the immense number of possible matching criteria in general IP flow, the API employs [C-like praxis](http://doc.dpdk.org/api/structrte__flow__item.html)
 where the matching spec is given by an enumerated type plus a triple of untyped pointers. The pointers (when cast
@@ -230,29 +228,28 @@ pairs one per RXQ assignment.
     memset(&attr, 0, sizeof(struct rte_flow_attr));
     attr.ingress = 1;
 
-    // Matching packets must be UDP then IPV4 ordered inside-out:
-    struct rte_flow_item pattern[3];
-    memset(pattern, 0, sizeof(pattern));
-    pattern[0].type = RTE_FLOW_ITEM_TYPE_UDP;
-    pattern[1].type = RTE_FLOW_ITEM_TYPE_IPV4;
-    pattern[2].type = RTE_FLOW_ITEM_TYPE_END;
+    // Matching packets must be Ethernet IPV4 UDP                                                                                  
+    struct rte_flow_item pattern[4];                                                                                    
+    memset(pattern, 0, sizeof(pattern));                                                                                
+    pattern[0].type = RTE_FLOW_ITEM_TYPE_ETH;                                                                           
+    pattern[1].type = RTE_FLOW_ITEM_TYPE_IPV4;                                                                          
+    pattern[2].type = RTE_FLOW_ITEM_TYPE_UDP;                                                                           
+    pattern[3].type = RTE_FLOW_ITEM_TYPE_END; 
 
-    // Now set the UDP port matching spec, last, mask for UDP pattern[0].
-    // Matching packets must satisfy UDP port check. This rule is almost
-    // complete: any UDP packet except those containing 0 in the destination
-    // port will be be matched. So provided incoming UDP packets have a
-    // non-zero destination port, each packet will be assigned a good RXQ
-    // by one of the flow rule pattern-action sets
-    struct rte_flow_item_udp portSpec;
-    struct rte_flow_item_udp portMask;
-    memset(&portMask, 0, sizeof(struct rte_flow_item_udp));
-    memset(&portSpec, 0, sizeof(struct rte_flow_item_udp));
-    portMask.hdr.src_port = 0;        // don't care; mask it to 0 always
-    portMask.hdr.dst_port = (1<<rxq); // bit#rxq ON all other bits OFF
-    portSpec.hdr.src_port = 0;        // match anything
-    portSpec.hdr.dst_port = (1<<rxq); // match anything with bit#rxq ON
-    pattern[0].mask = &portMask;
-    pattern[0].spec = &portSpec;
+    // Set UDP port matching spec, last, mask for UDP pattern[2]:                                                       
+    struct rte_flow_item_udp portSpec;                                                                                  
+    struct rte_flow_item_udp portMask;                                                                                  
+    memset(&portMask, 0, sizeof(struct rte_flow_item_udp));                                                             
+    memset(&portSpec, 0, sizeof(struct rte_flow_item_udp));                                                             
+    portMask.hdr.src_port = 0;        // don't care; mask it to 0 always                                                
+    portMask.hdr.dst_port = (1<<rxq); // bit#rxq ON all other bits OFF                                                  
+    portSpec.hdr.src_port = 0;        // match anything                                                                 
+    portSpec.hdr.dst_port = (1<<rxq); // match anything with bit#rxq ON                                                 
+    pattern[2].mask = &portMask;                                                                                        
+    pattern[2].spec = &portSpec; 
+
+    // paterns 0 (ETH), 1 (IPV4) do not get a mask/spec                                                                 
+    // Everything is matched by default there and no action taken                                                       
 
     // Setup the RXQ queue we want to assign
     struct rte_flow_action_queue queue;
@@ -280,7 +277,6 @@ pairs one per RXQ assignment.
     // not shown.
   }
 ```
-
 
 # Packet Memory Mental Picture
 Read this diagram with [DPDK 10.1 diagram](https://doc.dpdk.org/guides/prog_guide/mbuf_lib.html#figure-mbuf1):

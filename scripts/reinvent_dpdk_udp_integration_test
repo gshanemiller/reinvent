@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ARGS="-P -f"
+ARGS="-P"
 TASK="../build/reinvent_dpdk_udp_integration_test.tsk"
 
 if [[ "$1" == "client" ]]
@@ -18,7 +18,7 @@ fi
 
 if [[ "$2" == "perf" ]]
 then
-  ARGS="-P -f"
+  ARGS="-P"
   TASK="../build/reinvent_dpdk_udp_opt_integration_test.tsk"
 fi
 
@@ -80,11 +80,12 @@ export TEST_CLIENT_DPDK_NIC_DEVICE_RX_MTU="1500"
 export TEST_CLIENT_DPDK_NIC_DEVICE_LINK_SPEED_MASK="0"
 export TEST_CLIENT_DPDK_NIC_DEVICE_TX_DEFAULT_FLOW="2048"
 
-export TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_SRC_MAC="1c:34:da:42:b8:39"
-export TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_DST_MAC="1c:34:da:42:c9:01"
-export TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_SRC_IP="192.168.0.3"
-export TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_DST_IP="192.168.0.2"
+export TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_SRC_MAC="1c:34:da:42:7d:49"
+export TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_SRC_IP="192.168.0.2"
 export TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_SRC_PORT="10000"
+
+export TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_DST_MAC="b8:59:9f:e1:6a:bb"
+export TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_DST_IP="192.168.0.3"
 export TEST_CLIENT_DPDK_NIC_DEVICE_TXQ_DEFAULT_DST_PORT="20000"
 
 export TEST_CLIENT_DPDK_INITIALIZATION_PARAMETERS="--proc-type,primary,--in-memory,--log-level,7,--allow,${TEST_CLIENT_DPDK_NIC_DEVICE_PCI_DEVICE_ID}"
@@ -128,9 +129,6 @@ export TEST_CLIENT_VCPU_7_IN_CORE="7"
 export TEST_CLIENT_VCPU_7_IN_SOCKET="0"
 export TEST_CLIENT_VCPU_7_ON_NUMA_NODE="0"
 
-
-
-
 # -----------------------------------------------------------
 # SERVER CONFIGS
 # -----------------------------------------------------------
@@ -165,15 +163,13 @@ export TEST_SERVER_DPDK_NIC_DEVICE_TXQ_THREAD_COUNT="0"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_VCPU_POLICY="DISTINCT"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_VCPU_MASK="ALL"
 export TEST_SERVER_DPDK_NIC_DEVICE_RX_QUEUE_SIZE="8"
-export TEST_SERVER_DPDK_NIC_DEVICE_RX_MQ_MASK="0"
+export TEST_SERVER_DPDK_NIC_DEVICE_RX_MQ_MASK="1"
 export TEST_SERVER_DPDK_NIC_DEVICE_RX_OFFLOAD_MASK="0"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_RING_SIZE="1024"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_THREAD_COUNT="8"
 
-# https://www.ndsl.kaist.edu/~kyoungsoo/papers/TR-symRSS.pdf
-# https://medium.com/@anubhavchoudhary/introduction-to-receive-side-scaling-rss-7cd97307d220
-# export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_KEY="6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:"
-# export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_HF="41868"
+export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_KEY="6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:6d:5a:"
+export TEST_SERVER_DPDK_NIC_DEVICE_RX_RSS_HF="41868"
 
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_PTHRESH="8"
 export TEST_SERVER_DPDK_NIC_DEVICE_RXQ_HTHRESH="8"
@@ -233,8 +229,8 @@ export TEST_SERVER_VCPU_7_ON_NUMA_NODE="0"
 if [[ "$MODE" == "client" ]]
 then
   echo $TASK -m $MODE -p $PREFIX $ARGS
-  # gdb --args $TASK -m $MODE -p $PREFIX $ARGS
-  $TASK -m $MODE -p $PREFIX $ARGS
+  gdb --args $TASK -m $MODE -p $PREFIX $ARGS
+  # $TASK -m $MODE -p $PREFIX $ARGS
 else
   echo $TASK -m $MODE -p $PREFIX $ARGS
   # gdb --args $TASK -m $MODE -p $PREFIX $ARGS

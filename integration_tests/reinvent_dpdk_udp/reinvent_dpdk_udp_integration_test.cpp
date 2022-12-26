@@ -82,7 +82,6 @@ int disableFlowControl() {
   return 0;
 }
 
-
 uint64_t timeDifference(timespec start, timespec end) {
   uint64_t diff = static_cast<uint64_t>(end.tv_sec)*static_cast<uint64_t>(1000000000)+static_cast<uint64_t>(end.tv_nsec);
   diff -= (static_cast<uint64_t>(start.tv_sec)*static_cast<uint64_t>(1000000000)+static_cast<uint64_t>(start.tv_nsec));
@@ -246,12 +245,18 @@ int enableFlowControl() {
     pattern[2].type = RTE_FLOW_ITEM_TYPE_UDP;
     pattern[3].type = RTE_FLOW_ITEM_TYPE_END;
 
-    // Set UDP port matching spec, last, mask for UDP pattern[0].
-    // Matching packets must satisfy UDP port check. This rule is almost
-    // complete: any UDP packet except those containing 0 in the destination
-    // port will be be matched. So provided incoming UDP packets have a
-    // non-zero destination port, each packet will be assigned a good RXQ
-    // by one of the flow rule pattern-action sets
+    // Set UDP port matching spec, last, mask for UDP pattern[2]:
+    // Behavior is defined provided the UDP destination port is
+    // non-zero with exactly 1 of the following bits set:
+    // +--------+------------+--------------+-----------------------+
+    // | bit #  | Mask value | RXQ assigned | Example UDP Dest Port |
+    // +--------+------------+--------------+-----------------------+
+    // | 0      | 1  (1<<0)  | 0            | 1                     |
+    // | 1      | 2  (1<<1)  | 1            | 2                     |
+    // | 2      | 4  (1<<2)  | 2            | 4                     |
+    // | ...    | ...        | ...          | ...                   |
+    // | 7      | 128 (1<<7) | 7            | 128                   |
+    // +--------+------------+--------------+-----------------------+
     struct rte_flow_item_udp portSpec;
     struct rte_flow_item_udp portMask;
     memset(&portMask, 0, sizeof(struct rte_flow_item_udp));
@@ -262,6 +267,9 @@ int enableFlowControl() {
     portSpec.hdr.dst_port = (1<<rxq); // match anything with bit#rxq ON
     pattern[2].mask = &portMask;
     pattern[2].spec = &portSpec;
+
+    // paterns 0 (ETH), 1 (IPV4) do not get a mask/spec
+    // Everything is matched by default there and no action taken
 
     // Setup the RXQ queue we want to assign
     struct rte_flow_action_queue queue;
@@ -469,7 +477,6 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, u
 
     if (likely(!constantPorts)) {
       ++dstPort;
-      ++dstIp;
     }
   }
 
