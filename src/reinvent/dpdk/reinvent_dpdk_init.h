@@ -310,7 +310,10 @@
 // | {prefix}_{device}_DEFAULT_ROUTE_SRC_MAC     | [*] | A list of source MAC addresses where each address is in the  |
 // |                                             |     | format 'xx:xx:xx:xx:xx:xx' where each 'xx' is a valid hex.   |
 // |                                             |     | This list together with the following 5 lists comprise to    |
-// |                                             |     | a set of default routes for transmitting IPV4 packets.       |
+// |                                             |     | a set of default routes for transmitting IPV4 packets. There |
+// |                                             |     | be a least one default route, however, it's only used if     |
+// |                                             |     | code references it. Otherwise code can make routes through   |
+// |                                             |     | normal C++ object 'IPV4Route' RII                            |
 // +---------------------------------------------+-----+--------------------------------------------------------------+
 // | {prefix}_{device}_DEFAULT_ROUTE_DST_MAC     | [*] | A list of dest MAC addresses where each address is in the    |
 // |                                             |     | format 'xx:xx:xx:xx:xx:xx' where each 'xx' is a valid hex.   |

@@ -154,11 +154,11 @@ of user-defined rules.**"
 
 Now, unlike RSS where all packets eventually map to some RXQ, DPDK flow control rules might not. Whether that's a
 feature (you exclude data on purpose), or an bug (dropped data has now gone missing) depends on your goal. Your rule
-sets must know their data domain and insure enabled data is matched by a rule somewhere. Also note RSS by construction
+set must know their data domain and insure enabled data is matched by a rule somewhere. Also note RSS by construction
 works only for RXQs. Flow control can be used for data ingress and egress.
 
-Finally, rules are subject to grouping and priority ordering if multi-match is possible. See DPDK docs for more
-information. To insure rules are evaluated in HW correctly across all supported  NICs, DPDK gives these guidelines:
+Rules are subject to grouping and priority order if multi-match is possible. See DPDK docs for more information. To
+insure rules are evaluated in HW correctly across all supported NICs, DPDK gives these guidelines:
 
 * In order to remain as hardware-agnostic as possible, by default all rules are considered to have the same priority,
 which means that the order between overlapping rules (when a packet is matched by several filters) is undefined.
@@ -199,10 +199,11 @@ DPDK controlled server NIC:
 // +--------+------- ------+-----------------------+
 ```
 
-To ensure no packet is dropped because it matches no rule, defined behavior requires:
+To ensure no packet is dropped because matches no rule, defined behavior requires:
 
 * UDP destination port is non-zero
 * Exactly one bit 0, 1,2, ... 7 is set
+* NB: if multiple bits are set it's likely (though not provied) the first matching rule fires
 
 Given the immense number of possible matching criteria in general IP flow, the API employs [C-like praxis](http://doc.dpdk.org/api/structrte__flow__item.html)
 where the matching spec is given by an enumerated type plus a triple of untyped pointers. The pointers (when cast
@@ -248,8 +249,8 @@ pairs one per RXQ assignment.
     pattern[2].mask = &portMask;                                                                                        
     pattern[2].spec = &portSpec; 
 
-    // paterns 0 (ETH), 1 (IPV4) do not get a mask/spec                                                                 
-    // Everything is matched by default there and no action taken                                                       
+    // paterns 0 (ETH), 1 (IPV4) do not get a mask/spec/action
+    // Everything there is pass through
 
     // Setup the RXQ queue we want to assign
     struct rte_flow_action_queue queue;

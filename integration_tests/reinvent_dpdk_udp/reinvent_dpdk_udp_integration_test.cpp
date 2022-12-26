@@ -1,6 +1,5 @@
-#include <dpdk/reinvent_dpdk_initaws.h>
-#include <dpdk/reinvent_dpdk_uninitaws.h>
-#include <dpdk/reinvent_dpdk_awsworker.h>
+#include <dpdk/reinvent_dpdk_init.h>
+#include <dpdk/reinvent_dpdk_worker.h>
 #include <dpdk/reinvent_dpdk_util.h>
 #include <dpdk/reinvent_dpdk_stream.h>
 
@@ -82,154 +81,7 @@ int disableFlowControl() {
   return 0;
 }
 
-uint64_t timeDifference(timespec start, timespec end) {
-  uint64_t diff = static_cast<uint64_t>(end.tv_sec)*static_cast<uint64_t>(1000000000)+static_cast<uint64_t>(end.tv_nsec);
-  diff -= (static_cast<uint64_t>(start.tv_sec)*static_cast<uint64_t>(1000000000)+static_cast<uint64_t>(start.tv_nsec));
-  return diff;
-}
-
-void internalExit(const Reinvent::Dpdk::AWSEnaConfig& config) {
-  if (flowControl) {
-    disableFlowControl();
-  }
-
-  if (Reinvent::Dpdk::UnInitAWS::device(config)!=0) {
-    REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize AWS ENA device\n");
-  }
-
-  if (Reinvent::Dpdk::UnInitAWS::ena()!=0) {
-    REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize DPDK system\n");
-  }
-}
-
-void onExit(const Reinvent::Dpdk::AWSEnaConfig& config) {
-  //
-  // Print the report link speed
-  //
-  rte_eth_link linkStatus;
-  rte_eth_link_get_nowait(config.deviceId(), &linkStatus);
-  printf("linkRate value: %u\n", linkStatus.link_speed);
-
-  //
-  // Get high level stats. Unfortuantely this can only report up
-  // to RTE_ETHDEV_QUEUE_STAT_CNTRS queues which is 16. But
-  // AWS ENA NICs can have up to 32 queues. So for queue stats we
-  // use the xstats API 
-  //
-  rte_eth_stats stats;
-  memset(&stats, 0, sizeof(stats));
-  rte_eth_stats_get(config.deviceId(), &stats);
-
-  //
-  // Dump high level stats
-  //
-  printf("in  packets : %lu\n", stats.ipackets);
-  printf("out packets : %lu\n", stats.opackets);
-  printf("in  bytes   : %lu\n", stats.ibytes);
-  printf("out bytes   : %lu\n", stats.obytes);
-  printf("missed pkts : %lu\n", stats.imissed);
-  printf("in err pkts : %lu\n", stats.ierrors);
-  printf("out err pkts: %lu\n", stats.oerrors);
-  printf("rx allc errs: %lu\n", stats.rx_nombuf);
-
-  rte_eth_xstat *xstats;
-  rte_eth_xstat_name *xstats_names;
-  int len = rte_eth_xstats_get(config.deviceId(), 0, 0);
-  if (len < 0) {
-    printf("warn: cannot get xstats\n");
-    internalExit(config);
-  }
-
-  xstats = static_cast<rte_eth_xstat*>(calloc(len, sizeof(*xstats)));
-  if (xstats == 0) {
-    printf("warn: out of memory\n");
-    internalExit(config);
-  }
-  int ret = rte_eth_xstats_get(config.deviceId(), xstats, len);
-  if (ret<0||ret>len) {
-    free(xstats);
-    printf("warn: rte_eth_xstats_get unexpected result\n");
-    internalExit(config);
-  }
-  xstats_names = static_cast<rte_eth_xstat_name*>(calloc(len, sizeof(*xstats_names)));
-  if (xstats_names == 0) {
-    free(xstats);
-    printf("warn: out of memory\n");
-    internalExit(config);
-  }
-  ret = rte_eth_xstats_get_names(config.deviceId(), xstats_names, len);
-  if (ret<0||ret > len) {
-    free(xstats);
-    free(xstats_names);
-    printf("warn: rte_eth_xstats_get_names unexpected result\n");
-    internalExit(config);
-  }
-  for (int i=0; i<len; i++) {
-    printf("%-32s: %lu\n", xstats_names[i].name, xstats[i].value);
-  }
-
-  free(xstats);
-  free(xstats_names);
-
-  internalExit(config);
-}
-
-void usageAndExit() {
-  printf("reinvent_dpdk_udp_integration_test.tsk -m <client|server> -p <env-var-prefix>\n");
-  printf("   -m <client|server>       optional (default server). mode to run task in.\n");
-  printf("   -p <string>              required: non-empty ENV variable prefx name with config\n");
-  printf("   -r <integer>             optional: per RXQ burst capacity default %d\n", RX_BURST_CAPACITY);
-  printf("   -P                       increment src/dst ports for each TX packet sent\n");
-  printf("   -f                       enable flow control for 8 RXQs\n");
-  printf("                            this option helps RSS use more queues by changing cksum\n");
-  exit(2);
-}
-
-void parseCommandLine(int argc, char **argv, bool *isServer, std::string *prefix) {
-  int c, n;
-
-  *isServer = true;
-  prefix->clear();
-
-  while ((c = getopt (argc, argv, "m:p:r:Pf")) != -1) {
-    switch(c) {
-      case 'm':
-        if (strcmp(optarg, "server")==0) {
-          *isServer = true;
-        } else if (strcmp(optarg, "client")==0) {
-          *isServer = false;
-        } else {
-          usageAndExit();
-        }
-        break;
-      case 'p':
-        *prefix = optarg;
-        break;
-      case 'r':
-        n = atoi(optarg);
-        if (n<=0) {
-          usageAndExit();
-        }
-        RX_BURST_CAPACITY = static_cast<unsigned>(n);
-        break;
-      case 'P':
-        constantPorts=false;
-        break;
-      case 'f':
-        flowControl=true;
-        break;
-      default:
-        usageAndExit();
-    }
-  }
-
-  if (prefix->empty()) {
-    usageAndExit();
-  }
-}
-
 int enableFlowControl() {
-
   for (unsigned rxq = 0; rxq < RXQ_RULES; ++rxq) {
     // Matching packets must be incoming. Note memset also initializes group,
     // and priority to 0
@@ -299,7 +151,154 @@ int enableFlowControl() {
   return 0;
 }
 
-int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, unsigned packetCount) {
+uint64_t timeDifference(timespec start, timespec end) {
+  uint64_t diff = static_cast<uint64_t>(end.tv_sec)*static_cast<uint64_t>(1000000000)+static_cast<uint64_t>(end.tv_nsec);
+  diff -= (static_cast<uint64_t>(start.tv_sec)*static_cast<uint64_t>(1000000000)+static_cast<uint64_t>(start.tv_nsec));
+  return diff;
+}
+
+void internalExit(const Reinvent::Dpdk::Config& config) {
+  if (flowControl) {
+    disableFlowControl();
+  }
+
+  if (Reinvent::Dpdk::Init::stopEna(config)!=0) {
+    REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize DPDK ENA device\n");
+  }
+
+  if (Reinvent::Dpdk::Init::stopDpdk()!=0) {
+    REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize DPDK system\n");
+  }
+}
+
+void onExit(const Reinvent::Dpdk::Config& config) {
+  //
+  // Print the report link speed
+  //
+  rte_eth_link linkStatus;
+  rte_eth_link_get_nowait(config.deviceId(), &linkStatus);
+  printf("linkRate value: %u\n", linkStatus.link_speed);
+
+  //
+  // Get high level stats. Unfortuantely this can only report up
+  // to RTE_ETHDEV_QUEUE_STAT_CNTRS queues which is 16. But
+  // most DPDK NICs can have up to 32 queues or more. So for queue
+  // stats we use the xstats API 
+  //
+  rte_eth_stats stats;
+  memset(&stats, 0, sizeof(stats));
+  rte_eth_stats_get(config.deviceId(), &stats);
+
+  //
+  // Dump high level stats
+  //
+  printf("in  packets : %lu\n", stats.ipackets);
+  printf("out packets : %lu\n", stats.opackets);
+  printf("in  bytes   : %lu\n", stats.ibytes);
+  printf("out bytes   : %lu\n", stats.obytes);
+  printf("missed pkts : %lu\n", stats.imissed);
+  printf("in err pkts : %lu\n", stats.ierrors);
+  printf("out err pkts: %lu\n", stats.oerrors);
+  printf("rx allc errs: %lu\n", stats.rx_nombuf);
+
+  rte_eth_xstat *xstats;
+  rte_eth_xstat_name *xstats_names;
+  int len = rte_eth_xstats_get(config.deviceId(), 0, 0);
+  if (len < 0) {
+    printf("warn: cannot get xstats\n");
+    internalExit(config);
+  }
+
+  xstats = static_cast<rte_eth_xstat*>(calloc(len, sizeof(*xstats)));
+  if (xstats == 0) {
+    printf("warn: out of memory\n");
+    internalExit(config);
+  }
+  int ret = rte_eth_xstats_get(config.deviceId(), xstats, len);
+  if (ret<0||ret>len) {
+    free(xstats);
+    printf("warn: rte_eth_xstats_get unexpected result\n");
+    internalExit(config);
+  }
+  xstats_names = static_cast<rte_eth_xstat_name*>(calloc(len, sizeof(*xstats_names)));
+  if (xstats_names == 0) {
+    free(xstats);
+    printf("warn: out of memory\n");
+    internalExit(config);
+  }
+  ret = rte_eth_xstats_get_names(config.deviceId(), xstats_names, len);
+  if (ret<0||ret > len) {
+    free(xstats);
+    free(xstats_names);
+    printf("warn: rte_eth_xstats_get_names unexpected result\n");
+    internalExit(config);
+  }
+  for (int i=0; i<len; i++) {
+    printf("%-32s: %lu\n", xstats_names[i].name, xstats[i].value);
+  }
+
+  free(xstats);
+  free(xstats_names);
+
+  internalExit(config);
+}
+
+void usageAndExit() {
+  printf("reinvent_dpdk_udp_integration_test.tsk -m <client|server> -p <env-var-prefix>\n");
+  printf("   -m <client|server>       optional (default server). mode to run task in.\n");
+  printf("   -p <string>              required: non-empty ENV variable prefx name with config\n");
+  printf("   -r <integer>             optional: per RXQ burst capacity default %d\n", RX_BURST_CAPACITY);
+  printf("   -P                       increment src/dst ports for each TX packet sent\n");
+  printf("                            this option helps RSS use more queues by changing hash\n");
+  printf("   -f                       enable flow control for 8 RXQs. don't use with RSS. flow\n");
+  printf("                            control config not currently read from environment\n");
+  exit(2);
+}
+
+void parseCommandLine(int argc, char **argv, bool *isServer, std::string *prefix) {
+  int c, n;
+
+  *isServer = true;
+  prefix->clear();
+
+  while ((c = getopt (argc, argv, "m:p:r:Pf")) != -1) {
+    switch(c) {
+      case 'm':
+        if (strcmp(optarg, "server")==0) {
+          *isServer = true;
+        } else if (strcmp(optarg, "client")==0) {
+          *isServer = false;
+        } else {
+          usageAndExit();
+        }
+        break;
+      case 'p':
+        *prefix = optarg;
+        break;
+      case 'r':
+        n = atoi(optarg);
+        if (n<=0) {
+          usageAndExit();
+        }
+        RX_BURST_CAPACITY = static_cast<unsigned>(n);
+        break;
+      case 'P':
+        constantPorts=false;
+        break;
+      case 'f':
+        flowControl=true;
+        break;
+      default:
+        usageAndExit();
+    }
+  }
+
+  if (prefix->empty()) {
+    usageAndExit();
+  }
+}
+
+int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigned packetCount) {
   assert(config);
 
   rte_ether_addr  srcMac __rte_cache_aligned;
@@ -317,47 +316,51 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, u
   uint16_t       *ptr16;
   srcMac = {0};
 
+  // Arbitrarily pick the first default route. ENA Init ensures we have at
+  // least one valid route with good mac, ip, and port identifiers
+  const Reinvent::Dpdk::IPV4Route& defaultRoute(worker->config().defaultRoute()[0]);
+
   //
   // Device Id
   //
-  const uint16_t deviceId = static_cast<uint16_t>(config->awsEnaConfig().deviceId());
+  const uint16_t deviceId = static_cast<uint16_t>(worker->config().deviceId());
 
   //
   // Find the TXQ's mempool
   //
-  rte_mempool *pool = config->awsEnaConfig().txq()[txqIndex].mempool();
+  rte_mempool *pool = worker->config().txq()[txqIndex].mempool();
   assert(pool);
 
   //
   // IPV4 UDP for this demo
   //
-  const uint16_t ethFlow = rte_cpu_to_be_16(static_cast<uint16_t>(config->awsEnaConfig().txq()[txqIndex].defaultFlow()));
+  const uint16_t ethFlow = rte_cpu_to_be_16(static_cast<uint16_t>(worker->config().txq()[txqIndex].defaultFlow()));
 
   //
   // Convert src MAC address from string to binary
   //
-  config->awsEnaConfig().txq()[txqIndex].defaultRoute().convertSrcMac(&srcMac);
+  defaultRoute.convertSrcMac(&srcMac);
 
   //
   // Convert dst MAC address from string to binary
   //
-  config->awsEnaConfig().txq()[txqIndex].defaultRoute().convertDstMac(&dstMac);
+  defaultRoute.convertDstMac(&dstMac);
 
   //
   // Convert src IP address from string to binary
   //
-  config->awsEnaConfig().txq()[txqIndex].defaultRoute().convertSrcIp(&srcIp);
+  defaultRoute.convertSrcIp(&srcIp);
 
   //
   // Convert dst IP address from string to binary
   //
-  config->awsEnaConfig().txq()[txqIndex].defaultRoute().convertDstIp(&dstIp);
+  defaultRoute.convertDstIp(&dstIp);
 
   //
   // UDP pseudo ports
   //
-  srcPort = rte_cpu_to_be_16(static_cast<uint16_t>(config->awsEnaConfig().txq()[txqIndex].defaultRoute().srcPort()));
-  dstPort = rte_cpu_to_be_16(static_cast<uint16_t>(config->awsEnaConfig().txq()[txqIndex].defaultRoute().dstPort()));
+  srcPort = rte_cpu_to_be_16(static_cast<uint16_t>(defaultRoute.srcPort()));
+  dstPort = rte_cpu_to_be_16(static_cast<uint16_t>(defaultRoute.dstPort()));
 
   //
   // Total all-in packet size sent
@@ -499,8 +502,8 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config, u
   return 0;
 }
 
-int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
-  const uint16_t deviceId = static_cast<uint16_t>(config->awsEnaConfig().deviceId());
+int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
+  const uint16_t deviceId = static_cast<uint16_t>(worker->config().deviceId());
 
   //
   // Finally the main point: receiving packets!
@@ -562,7 +565,7 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
   return 0;
 }
 
-int clientEntryPoint(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
+int clientEntryPoint(int id, int txqIndex, Reinvent::Dpdk::Worker *worker) {
   assert(config);
 
   //
@@ -570,8 +573,8 @@ int clientEntryPoint(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config)
   //
   int rc, tmp;
   std::string variable;
-  Reinvent::Dpdk::Names::make(config->envPrefix(), &variable, "%s", "TXQ_PACKET_COUNT");
-  if ((rc = config->env().valueAsInt(variable, &tmp, true, 1, 100000000))!=0) {
+  Reinvent::Dpdk::Names::make(worker->envPrefix(), &variable, "%s", "TXQ_PACKET_COUNT");
+  if ((rc = worker->env().valueAsInt(variable, &tmp, true, 1, 100000000))!=0) {
     return rc;
   }
   unsigned packetCount = static_cast<unsigned>(tmp);
@@ -579,22 +582,22 @@ int clientEntryPoint(int id, int txqIndex, Reinvent::Dpdk::AWSEnaWorker *config)
   //
   // Finally enter the main processing loop passing state collected here
   //
-  return clientMainLoop(id, txqIndex, config, packetCount);
+  return clientMainLoop(id, txqIndex, worker, packetCount);
 }
 
-int serverEntryPoint(int id, int rxqIndex, Reinvent::Dpdk::AWSEnaWorker *config) {
+int serverEntryPoint(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
   assert(config);
 
   //
   // Run main receiving loop
   //
-  return serverMainLoop(id, rxqIndex, config);
+  return serverMainLoop(id, rxqIndex, worker);
 }
 
 int entryPoint(void *arg) {
-  Reinvent::Dpdk::AWSEnaWorker *config = reinterpret_cast<Reinvent::Dpdk::AWSEnaWorker*>(arg);
+  Reinvent::Dpdk::Worker *worker= reinterpret_cast<Reinvent::Dpdk::Worker*>(arg);
 
-  if (0==config) {
+  if (0==worker) {
     REINVENT_UTIL_LOG_ERROR_VARGS("configuration pointer invalid: %p\n", arg);
     return -1;
   }
@@ -606,16 +609,16 @@ int entryPoint(void *arg) {
   //
   // What does this lcore do?
   //
-  if ((rc = config->id(&id, &rx, &tx, &rxqIndex, &txqIndex))!=0) {
+  if ((rc = worker->id(&id, &rx, &tx, &rxqIndex, &txqIndex))!=0) {
     return rc;
   } 
   
   rc = -1;
   if (tx) {
-    rc = clientEntryPoint(id, txqIndex, config);
+    rc = clientEntryPoint(id, txqIndex, worker);
     REINVENT_UTIL_LOG_INFO_VARGS("clientEntryPoint rc=%d\n", rc);
   } else if (rx) {
-    rc = serverEntryPoint(id, rxqIndex, config);
+    rc = serverEntryPoint(id, rxqIndex, worker);
     REINVENT_UTIL_LOG_INFO_VARGS("serverEntryPoint rc=%d\n", rc);
   } else {
     REINVENT_UTIL_LOG_ERROR_VARGS("cannot classify DPDK lcore %d as RX or TX\n", id);
@@ -635,7 +638,7 @@ int main(int argc, char **argv) {
   Reinvent::Util::LogRuntime::setSeverityLimit(REINVENT_UTIL_LOGGING_SEVERITY_TRACE);
 
   Reinvent::Util::Environment env;
-  Reinvent::Dpdk::AWSEnaConfig config;
+  Reinvent::Dpdk::Config config;
 
   //
   // Install signal handlers
@@ -644,14 +647,14 @@ int main(int argc, char **argv) {
   signal(SIGTERM, &handle_sig);
 
   //
-  // Initialize the AWS ENA Nic
+  // Initialize the DPDK ENA Nic
   //
-  int rc = Reinvent::Dpdk::InitAWS::enaUdp(device, prefix, &env, &config);
+  int rc = Reinvent::Dpdk::Init::startEna(device, prefix, &env, &config);
   REINVENT_UTIL_LOG_INFO(config << std::endl);
   if (rc!=0) {
-    REINVENT_UTIL_LOG_FATAL_VARGS("Cannot initialize AWS ENA device rc=%d\n", rc);                                      
-    if (Reinvent::Dpdk::UnInitAWS::device(config)!=0) {
-      REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize AWS ENA device\n");
+    REINVENT_UTIL_LOG_FATAL_VARGS("Cannot initialize DPDK ENA device rc=%d\n", rc);                                      
+    if (Reinvent::Dpdk::Init::stopEna(config)!=0) {
+      REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize DPDK ENA device\n");
     }
     return 1;
   }
@@ -663,14 +666,14 @@ int main(int argc, char **argv) {
   }
 
   //
-  // Setup and run AWSEnaWorkers. Now if the enviromment is setup right, the client
+  // Setup and run Workers. Now if the enviromment is setup right, the client
   // will only configure RXQ work (TX work turned off) and the server will only see
   // the configured RX work (TX work turned off). In turn that means the client only
   // will ever fall into 'txEntryPoint' and 'rxEntryPoint' for server. As such this
   // code file can be used for both modes. It's the enviroment 'prefix' that keeps
   // the code paths separate.
   {
-    Reinvent::Dpdk::AWSEnaWorker worker(prefix, env, config);
+    Reinvent::Dpdk::Worker worker(prefix, env, config);
     REINVENT_UTIL_LOG_INFO_VARGS("launching DPDK worker threads\n");
     if ((rc = rte_eal_mp_remote_launch(entryPoint, static_cast<void*>(&worker), CALL_MAIN))!=0) {
       REINVENT_UTIL_LOG_FATAL_VARGS("Cannot launch DPDK cores rc=%d\n", rc);

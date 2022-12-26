@@ -75,7 +75,8 @@ int Dpdk::Init::configDefaultRouting(const std::string& prefix, Util::Environmen
 
   // Make sure all lists same size
   const unsigned size = defaultTxSrcMac.size();
-  bool valid = (size==defaultTxDstMac.size()  &&
+  bool valid = (size>0                        &&
+                size==defaultTxDstMac.size()  &&
                 size==defaultTxSrcIp.size()   &&
                 size==defaultTxDstIp.size()   &&
                 size==defaultTxSrcPort.size() &&
@@ -85,7 +86,7 @@ int Dpdk::Init::configDefaultRouting(const std::string& prefix, Util::Environmen
     Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::DEFAULT_ROUTE_SRC_MAC);
     env->valueAsString(variable, &value);
     REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, valid,
-        variable.c_str(), value.c_str(), "entry count not matched in dstMac, src/dst IPV4, or src/dst ports");
+        variable.c_str(), value.c_str(), "item count not matched in dstMac, src/dst IPV4, or src/dst ports or count zero");
   }
 
   //
