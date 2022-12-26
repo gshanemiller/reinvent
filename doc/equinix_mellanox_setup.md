@@ -101,7 +101,7 @@ grub boot file.
 18. In the editor change the `GRUB_CMDLINE_LINUX` line appending a space plus `iommu=1 intel_iommu=on'` so that it reads
 `export GRUB_CMDLINE_LINUX='... iommu=1 intel_iommu=on'`
 19. Save and exit by escaping and entering `:wq`
-20. Installation part 1 is done. Press CTRL-C and proceed to part 2 next.
+20. Installation part 1 is done. Press CTRL-C and proceed to part 2 next. You can defer reboot until end of part 2.
 
 # Procedure Part 2 of 3
 By default Equinix configures both Mellanox cards into a single bonded device. The purpose of this procedure is to break
@@ -157,11 +157,9 @@ iface enp1s0f1 inet static
 
 24. Near line 36 in the entry for `auto bond0` find the line reading `bond-slaves enp1s0f0 enp1s0f1`
 and simply remove `enp1s0f1` so it reads `bond-slaves enp1s0f0`. Save and exit.
-25. If you have not rebooted yet do so now by running `reboot` in your shell. If you have rebooted you can simply
-restart the networking subsystem with `systemctl restart networking`
+25. Now reboot your machine: run `$ reboot [ENTER]"
 26. Repeat steps 21-25 for each of your other machines **EXCEPT** do not give the static address `192.168.0.2/28`.
 Use the next IPV4 address e.g. `192.168.0.3/28` so each machine has a distinct IP address.
-27. Now reboot your machine: run `$ reboot [ENTER]"
 
 # Procedure Part 3 of 3
 You will now exercise the reinvent test UDP program to make a basic assessment of throughput between two of the machines.
