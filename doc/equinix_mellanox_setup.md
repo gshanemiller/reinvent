@@ -53,8 +53,7 @@ Host *
 ```
 
 # Procedure Part 1 of 3
-This will take approximately 30 mins per machine most of it building DPDK and
-uploading one file.
+This will take approximately 30 mins per machine most of it building DPDK.
 
 1. You'll need an Equinix account and a form of payment. You will incur no charges
 except for the machine time you reserve. Charges are per hour, and you can return
