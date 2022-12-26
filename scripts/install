@@ -252,5 +252,5 @@ echo
 echo "Installation is done except for VLAN/network setup."
 
 echo
-read -p "You need to reboot your machine. Press ENTER to reboot or CTRL-C to exit: "
+read -p "Press ENTER to reboot now or CTRL-C to exit: "
 reboot
