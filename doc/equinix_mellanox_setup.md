@@ -163,7 +163,7 @@ iface enp1s0f1 inet static
 
 24. Near line 36 in the entry for `auto bond0` find the line reading `bond-slaves enp1s0f0 enp1s0f1`
 and simply remove `enp1s0f1` so it reads `bond-slaves enp1s0f0`. Save and exit.
-25. Now reboot your machine: run `$ reboot [ENTER]"
+25. Now reboot your machine: run `reboot`
 26. Repeat steps 21-25 for each of your other machines **EXCEPT** do not give the static address `192.168.0.2/28`.
 Use the next IPV4 address e.g. `192.168.0.3/28` so each machine has a distinct IP address.
 
