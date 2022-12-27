@@ -19,6 +19,131 @@
 
 namespace Reinvent {
 
+int Dpdk::Init::createStaticUdpDestPortFlowControl(int deviceId, const std::vector<unsigned>& queue,                       
+  const std::vector<unsigned>& mask) {
+
+  assert(queue.size()>0);
+  assert(mask.size()==queue.size());
+
+  for (unsigned rxq = 0; rxq < queue.size(); ++rxq) {                                                                      
+    // Matching packets must be incoming. Note memset also initializes group,                                           
+    // and priority to 0                                                                                                
+    struct rte_flow_attr attr;                                                                                          
+    memset(&attr, 0, sizeof(struct rte_flow_attr));                                                                     
+    attr.ingress = 1;                                                                                                   
+                                                                                                                        
+    // Matching packets must be IP UDP                                                                                  
+    struct rte_flow_item pattern[4];                                                                                    
+    memset(pattern, 0, sizeof(pattern));                                                                                
+    pattern[0].type = RTE_FLOW_ITEM_TYPE_ETH;                                                                           
+    pattern[1].type = RTE_FLOW_ITEM_TYPE_IPV4;                                                                          
+    pattern[2].type = RTE_FLOW_ITEM_TYPE_UDP;                                                                           
+    pattern[3].type = RTE_FLOW_ITEM_TYPE_END;                                                                           
+                                                                                                                        
+    struct rte_flow_item_udp portSpec;                                                                                  
+    struct rte_flow_item_udp portMask;                                                                                  
+    memset(&portMask, 0, sizeof(struct rte_flow_item_udp));                                                             
+    memset(&portSpec, 0, sizeof(struct rte_flow_item_udp));                                                             
+    portMask.hdr.src_port = 0;          // don't care; mask it to 0 always                                                
+    portMask.hdr.dst_port = mask[rxq];  // bit#rxq ON all other bits OFF                                                  
+    portSpec.hdr.src_port = 0;          // match anything                                                                 
+    portSpec.hdr.dst_port = mask[rxq];  // match anything with bit#rxq ON                                                 
+    pattern[2].mask = &portMask;                                                                                        
+    pattern[2].spec = &portSpec;                                                                                        
+                                                                                                                        
+    // paterns 0 (ETH), 1 (IPV4) do not get a mask/spec                                                                 
+    // Everything is matched by default there and no action taken                                                       
+                                                                                                                        
+    // Setup the RXQ queue we want to assign                                                                            
+    struct rte_flow_action_queue queueAssignment;                                                                                 
+    memset(&queueAssignment, 0, sizeof(rte_flow_action_queue));                                                                   
+    queueAssignment.index = queue[rxq]; // this is the queue we're assigning                                                             
+                                                                                                                        
+    // Setup the action and associate the queue assignment to it                                                        
+    struct rte_flow_action action[2];                                                                                   
+    memset(action, 0, sizeof(action));                                                                                  
+    action[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;                                                                        
+    action[0].conf = &queueAssignment;                                                                                            
+    action[1].type = RTE_FLOW_ACTION_TYPE_END;                                                                          
+                                                                                                                        
+    // Validate the rule on port 0 and create it                                                                        
+    struct rte_flow_error error;                                                                                        
+    int rc = rte_flow_validate((unsigned)deviceId, &attr, pattern, action, &error);                                               
+    if (0==rc) {                                                                                                        
+      // flow[rxq] = rte_flow_create((unsigned)deviceId, &attr, pattern, action, &error);                                                   
+      rte_flow_create((unsigned)deviceId, &attr, pattern, action, &error);                                                   
+    } else { 
+      return -1;                                                                                                        
+    }                                                                                                                   
+  }                                                                                                                     
+                                                                                                                        
+  return 0; 
+}
+
+int Dpdk::Init::configStaticUdpPortFlowControl(const std::string& prefix, Util::Environment *env, unsigned rxqs,
+  std::vector<unsigned> *staticUdpPortFlowControlQueue, std::vector<unsigned> *staticUdpPortFlowControlBitMask) {
+
+  assert(env);
+  assert(rxqs>0);
+  assert(staticUdpPortFlowControlQueue);
+  assert(staticUdpPortFlowControlBitMask);
+
+  staticUdpPortFlowControlQueue->clear();
+  staticUdpPortFlowControlBitMask->clear();
+
+  int rc;
+  bool valid;
+  std::string variable;
+  std::vector<std::string> value;
+
+  // Get flow control settings if any
+  Dpdk::Names::make(prefix, &variable, "%s", Dpdk::Names::STATIC_UDP_DEST_PORT_FLOW_CONTROL);
+  if ((rc = env->valueAsStringList(variable, &value))!=0) {
+    return 0;
+  }
+  if (value.size()==0) {
+    return 0;
+  }
+
+  for (unsigned i=0; i<value.size(); ++i) {
+    const std::string& config(value[i]);
+    auto index = config.find(':');
+    valid = (index!=std::string::npos || index==config.length()-1);
+    if (!valid) {
+      REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, valid,
+        variable.c_str(), config.c_str(), "missing ':' or invalid placed delimiter in one or more entries");
+    }
+
+    // Get the bit and queue on either side of colon
+    // ex. string "1:0" meaning bit mask 1 enables queue 0
+    int mask = atoi(config.c_str());
+    int queue = atoi(config.c_str()+index+1);
+
+    // Check for valid values and that queue assignment is ordered from starting from queue 0
+    valid = (mask>0 && queue>=0 && (unsigned)queue==i);
+    if (!valid) {
+      REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, valid,
+        variable.c_str(), config.c_str(), "bit mask not >0 and/or queue not ascending starting at 0");
+    }
+
+    // Save parsed values
+    staticUdpPortFlowControlQueue->push_back((unsigned)queue);
+    staticUdpPortFlowControlBitMask->push_back((unsigned)mask);
+  }
+
+  assert(staticUdpPortFlowControlQueue->size()==staticUdpPortFlowControlBitMask->size());
+
+  valid = (staticUdpPortFlowControlQueue->size()==rxqs);
+  if (!valid) {
+    std::string valueAsString;
+    env->valueAsString(variable, &valueAsString);
+    REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, valid,
+      variable.c_str(), valueAsString.c_str(), "configures a different number of entries than number of RXQs");
+  }
+
+  return 0;
+}
+
 int Dpdk::Init::configDefaultRouting(const std::string& prefix, Util::Environment *env,
   std::vector<IPV4Route>* defaultTxRoute) {
 
@@ -1063,16 +1188,6 @@ int Dpdk::Init::startEna(const std::string& device, const std::string& envPrefix
   }
 
   //
-  // Get default routes
-  //
-  std::vector<IPV4Route> defaultRoute;
-  if (config->txqPolicy() != Dpdk::Names::OFF) {
-    if ((rc = configDefaultRouting(prefix, env, &defaultRoute))!=0) {
-        return rc;
-    }
-  }
-
-  //
   // Get TXQ threshold values
   //
   if (config->txqPolicy() != Dpdk::Names::OFF) {
@@ -1134,6 +1249,29 @@ int Dpdk::Init::startEna(const std::string& device, const std::string& envPrefix
       return rc;
     }
     config->setRxqFreeThresh(intValue);
+  }
+
+  //
+  // Get default routes
+  //
+  std::vector<IPV4Route> defaultRoute;
+  if (config->txqPolicy() != Dpdk::Names::OFF) {
+    if ((rc = configDefaultRouting(prefix, env, &defaultRoute))!=0) {
+        return rc;
+    }
+  }
+
+  //
+  // Load static UDP dest port flow control if any
+  //
+  std::vector<unsigned> staticUdpPortFlowControlQueue;
+  std::vector<unsigned> staticUdpPortFlowControlBitMask;
+  if ((rc = configStaticUdpPortFlowControl(prefix, env, config->rxqThreadCount(), &staticUdpPortFlowControlQueue,
+    &staticUdpPortFlowControlBitMask))!=0) {
+    return rc;
+  }
+  if (config->rxqThreadCount()>0 && staticUdpPortFlowControlQueue.size()==(unsigned)config->rxqThreadCount()) {
+    config->setStaticUdpDestPortFlowControl(staticUdpPortFlowControlQueue, staticUdpPortFlowControlBitMask);
   }
 
   // =================================================================================
@@ -1442,7 +1580,7 @@ int Dpdk::Init::startEna(const std::string& device, const std::string& envPrefix
   config->setDefaultRoute(defaultRoute);
 
   // =================================================================================
-  // Final step: start-up the NIC device and its queues in DPDK
+  // Start the NIC device and its queues in DPDK
   // =================================================================================
 
   //
@@ -1450,6 +1588,14 @@ int Dpdk::Init::startEna(const std::string& device, const std::string& envPrefix
   //
   if ((rc = rte_eth_dev_start(config->deviceId()))!=0) {
     REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_API, (rc==0), "Start DPDK ENA device", rte_strerror(rc), rc);
+  }
+
+  // =================================================================================
+  // If static routing based on UDP destination port was defined install it
+  // =================================================================================
+  if ((rc = createStaticUdpDestPortFlowControl(config->deviceId(), config->staticUdpDestPortFlowControlQueue(),
+    config->staticUdpDestPortFlowControlBitMask()))!=0) {
+    return rc;
   }
 
   return 0;

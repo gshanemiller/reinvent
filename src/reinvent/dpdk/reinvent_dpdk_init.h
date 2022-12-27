@@ -375,6 +375,12 @@ class Init {
   static int configDefaultRouting(const std::string& prefix, Util::Environment *env,
     std::vector<IPV4Route> *defaultTxRoute);
 
+  static int configStaticUdpPortFlowControl(const std::string& prefix, Util::Environment *env, unsigned rxqs,        
+    std::vector<unsigned> *staticUdpPortFlowControlQueue, std::vector<unsigned> *staticUdpPortFlowControlBitMask);
+
+  static int createStaticUdpDestPortFlowControl(int deviceId, const std::vector<unsigned>& queue,
+    const std::vector<unsigned>& mask);
+
 public:
   // PUBLIC MANIPULATORS
   static int startEna(const std::string& device, const std::string& envPrefix, Util::Environment *env,

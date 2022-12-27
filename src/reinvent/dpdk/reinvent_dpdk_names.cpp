@@ -75,6 +75,9 @@ const char *Dpdk::Names::DEFAULT_ROUTE_DST_IPV4     = "DEFAULT_ROUTE_DST_IPV4";
 const char *Dpdk::Names::DEFAULT_ROUTE_SRC_PORT     = "DEFAULT_ROUTE_SRC_PORT";
 const char *Dpdk::Names::DEFAULT_ROUTE_DST_PORT     = "DEFAULT_ROUTE_DST_PORT"; 
 
+const char *Dpdk::Names::STATIC_UDP_DEST_PORT_FLOW_CONTROL = "STATIC_UDP_DEST_PORT_FLOW_CONTROL";                                                                 
+
+
 void Dpdk::Names::make(std::string *name, const char *format, ...) {                                  
   assert(name);                                                                                                         
   assert(format);                                                                                                       

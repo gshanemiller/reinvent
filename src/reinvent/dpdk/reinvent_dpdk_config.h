@@ -114,7 +114,13 @@ private:
   int                       d_rxqWriteBackThresh;
   int                       d_rxqFreeThresh;
 
+  // Default routes
   std::vector<IPV4Route>    d_defaultRoute;
+
+  // UDP Destination Port Based Static Routing config
+  // Refer to 'packet_design.md' for details on usage
+  std::vector<unsigned>     d_staticUdpDestPortFlowControlQueue;
+  std::vector<unsigned>     d_staticUdpDestPortFlowControlBitMask;
 
   // DPDK structures initialized
   struct rte_eth_conf       d_ethDeviceConf;
@@ -264,7 +270,13 @@ public:
 
   const std::vector<IPV4Route>& defaultRoute() const;
     // Return unmodifiable reference to 'defaultRoute' attribute
-  
+
+  const std::vector<unsigned>& staticUdpDestPortFlowControlQueue() const;
+    // Return unmodifiable reference to 'staticUdpPortFlowControlQueue' attribute
+
+  const std::vector<unsigned>& staticUdpDestPortFlowControlBitMask() const;
+    // Return unmodifiable reference to 'staticUdpPortFlowControlBitMask' attribute
+
   // MANIPULATORS
   void setIsValid(int value);
     // Assign specified 'value' to the attribute 'isValid'. Note callers should set 'value=0' after successful NIC
@@ -405,7 +417,12 @@ public:
     // Assign value to the 'rxqFreeThresh` attribute
 
   void setDefaultRoute(std::vector<IPV4Route>& value);
-    // Assign value to the 'defaultRoute' attribute by swapping vectors
+    // Assign value to the 'defaultRoute' attribute by swapping vectors. Behavior is defined provided
+    // 'value.size()>0'
+
+  void setStaticUdpDestPortFlowControl(std::vector<unsigned>& queue, std::vector<unsigned>& mask);
+    // Assign 'queue, mask' resp to 'staticUdpDestPortFlowControlQueuem staticUdpDestPortFlowControlBitMask'
+    // by swapping vectors. Behavior is defined provided 'queue.size()>0 && mask.size()==queue.size()'.
 
   // ASPECTS
   std::ostream& print(std::ostream& stream) const;
@@ -667,6 +684,17 @@ int Config::rxqFreeThresh() const {
 inline
 const std::vector<IPV4Route>& Config::defaultRoute() const {
   return d_defaultRoute;
+
+}
+
+inline
+const std::vector<unsigned>& Config::staticUdpDestPortFlowControlQueue() const {
+  return d_staticUdpDestPortFlowControlQueue;
+}
+
+inline
+const std::vector<unsigned>& Config::staticUdpDestPortFlowControlBitMask() const {
+  return d_staticUdpDestPortFlowControlBitMask;
 }
 
 // MANIPULATORS
@@ -902,7 +930,16 @@ void Config::setRxqFreeThresh(int value) {
 
 inline
 void Config::setDefaultRoute(std::vector<IPV4Route>& value) {
+  assert(value.size()>0);
   d_defaultRoute.swap(value);
+}
+
+inline
+void Config::setStaticUdpDestPortFlowControl(std::vector<unsigned>& queue, std::vector<unsigned>& mask) {
+  assert(queue.size()>0);
+  assert(queue.size()==mask.size());
+  d_staticUdpDestPortFlowControlQueue.swap(queue);
+  d_staticUdpDestPortFlowControlBitMask.swap(mask);
 }
 
 // FREE OPERATORS
