@@ -20,10 +20,11 @@
 namespace Reinvent {
 
 int Dpdk::Init::createStaticUdpDestPortFlowControl(int deviceId, const std::vector<unsigned>& queue,                       
-  const std::vector<unsigned>& mask) {
+  const std::vector<unsigned>& mask, std::vector<struct rte_flow*> *rule) {
 
   assert(queue.size()>0);
   assert(mask.size()==queue.size());
+  assert(rule);
 
   for (unsigned rxq = 0; rxq < queue.size(); ++rxq) {                                                                      
     // Matching packets must be incoming. Note memset also initializes group,                                           
@@ -70,8 +71,7 @@ int Dpdk::Init::createStaticUdpDestPortFlowControl(int deviceId, const std::vect
     struct rte_flow_error error;                                                                                        
     int rc = rte_flow_validate((unsigned)deviceId, &attr, pattern, action, &error);                                               
     if (0==rc) {                                                                                                        
-      // flow[rxq] = rte_flow_create((unsigned)deviceId, &attr, pattern, action, &error);                                                   
-      rte_flow_create((unsigned)deviceId, &attr, pattern, action, &error);                                                   
+      rule->push_back(rte_flow_create((unsigned)deviceId, &attr, pattern, action, &error));
     } else { 
       return -1;                                                                                                        
     }                                                                                                                   
@@ -1593,16 +1593,28 @@ int Dpdk::Init::startEna(const std::string& device, const std::string& envPrefix
   // =================================================================================
   // If static routing based on UDP destination port was defined install it
   // =================================================================================
+  std::vector<struct rte_flow*> rule;
   if ((rc = createStaticUdpDestPortFlowControl(config->deviceId(), config->staticUdpDestPortFlowControlQueue(),
-    config->staticUdpDestPortFlowControlBitMask()))!=0) {
+    config->staticUdpDestPortFlowControlBitMask(), &rule))!=0) {
     return rc;
   }
+  config->setFlowRule(rule);
 
   return 0;
 }
 
 int Dpdk::Init::stopEna(const Config& config) {
   int rc;
+
+  //
+  // Stop flows if any
+  //
+  for (unsigned i=0; i<config.flowRule().size(); ++i) {
+    if (config.flowRule()[i]) {
+      struct rte_flow_error error;
+      rte_flow_destroy(config.deviceId(), config.flowRule()[i], &error);
+    }
+  }
 
   //
   // Stop TXQs

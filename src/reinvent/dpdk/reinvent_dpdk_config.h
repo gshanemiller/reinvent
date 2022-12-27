@@ -40,6 +40,7 @@
 #pragma GCC diagnostic push                                                                                             
 #pragma GCC diagnostic ignored "-Wpedantic"                                                                             
 #include <rte_eal.h>                                                                                                    
+#include <rte_flow.h>                                                                                                 
 #include <rte_ethdev.h>                                                                                                 
 #include <rte_memzone.h>
 #pragma GCC diagnostic pop 
@@ -121,6 +122,9 @@ private:
   // Refer to 'packet_design.md' for details on usage
   std::vector<unsigned>     d_staticUdpDestPortFlowControlQueue;
   std::vector<unsigned>     d_staticUdpDestPortFlowControlBitMask;
+
+  // Any flow rules stored here for later cleanup
+  std::vector<struct rte_flow *> d_flowRule;
 
   // DPDK structures initialized
   struct rte_eth_conf       d_ethDeviceConf;
@@ -277,6 +281,9 @@ public:
   const std::vector<unsigned>& staticUdpDestPortFlowControlBitMask() const;
     // Return unmodifiable reference to 'staticUdpPortFlowControlBitMask' attribute
 
+  const std::vector<struct rte_flow *>& flowRule() const;
+    // Return unmodifiable reference to 'flowRule' attribute
+
   // MANIPULATORS
   void setIsValid(int value);
     // Assign specified 'value' to the attribute 'isValid'. Note callers should set 'value=0' after successful NIC
@@ -423,6 +430,9 @@ public:
   void setStaticUdpDestPortFlowControl(std::vector<unsigned>& queue, std::vector<unsigned>& mask);
     // Assign 'queue, mask' resp to 'staticUdpDestPortFlowControlQueuem staticUdpDestPortFlowControlBitMask'
     // by swapping vectors. Behavior is defined provided 'queue.size()>0 && mask.size()==queue.size()'.
+
+  void setFlowRule(std::vector<struct rte_flow *>& value);
+    // Assign value to the 'flowRule' attribute by swapping vectors
 
   // ASPECTS
   std::ostream& print(std::ostream& stream) const;
@@ -697,6 +707,11 @@ const std::vector<unsigned>& Config::staticUdpDestPortFlowControlBitMask() const
   return d_staticUdpDestPortFlowControlBitMask;
 }
 
+inline
+const std::vector<struct rte_flow *>& Config::flowRule() const {
+  return d_flowRule;
+}
+
 // MANIPULATORS
 inline
 void Config::setIsValid(int value) {
@@ -940,6 +955,11 @@ void Config::setStaticUdpDestPortFlowControl(std::vector<unsigned>& queue, std::
   assert(queue.size()==mask.size());
   d_staticUdpDestPortFlowControlQueue.swap(queue);
   d_staticUdpDestPortFlowControlBitMask.swap(mask);
+}
+
+inline
+void Config::setFlowRule(std::vector<struct rte_flow *>& value) {
+  d_flowRule.swap(value);
 }
 
 // FREE OPERATORS

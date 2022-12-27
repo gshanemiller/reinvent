@@ -379,7 +379,7 @@ class Init {
     std::vector<unsigned> *staticUdpPortFlowControlQueue, std::vector<unsigned> *staticUdpPortFlowControlBitMask);
 
   static int createStaticUdpDestPortFlowControl(int deviceId, const std::vector<unsigned>& queue,
-    const std::vector<unsigned>& mask);
+    const std::vector<unsigned>& mask, std::vector<struct rte_flow*> *rule);
 
 public:
   // PUBLIC MANIPULATORS
