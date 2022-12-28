@@ -68,13 +68,34 @@ int Dpdk::Init::createStaticUdpDestPortFlowControl(int deviceId, const std::vect
     action[1].type = RTE_FLOW_ACTION_TYPE_END;                                                                          
                                                                                                                         
     // Validate the rule on port 0 and create it                                                                        
+    bool valid;
     struct rte_flow_error error;                                                                                        
     int rc = rte_flow_validate((unsigned)deviceId, &attr, pattern, action, &error);                                               
-    if (0==rc) {                                                                                                        
+    valid = (0==rc);
+    if (valid) {                                                                                                        
+      struct rte_flow *flow = rte_flow_create((unsigned)deviceId, &attr, pattern, action, &error);
+      valid = (flow!=0);
+      if (!valid) {
+        char value[512];
+        char detail[512];
+        snprintf(value, sizeof(value), "queue %u bitMask %u", queue[rxq], mask[rxq]);
+        snprintf(detail, sizeof(detail), "flow creation failed: %s", error.message); 
+        REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, valid,
+          Dpdk::Names::STATIC_UDP_DEST_PORT_FLOW_CONTROL, value, detail);
+      } else {
+        rule->push_back(flow);
+        REINVENT_UTIL_LOG_DEBUG_VARGS("UDP destPort flow control rule for queue %d with bitMask %d created\n",
+          queue[rxq], mask[rxq]);
+      } 
       rule->push_back(rte_flow_create((unsigned)deviceId, &attr, pattern, action, &error));
     } else { 
-      return -1;                                                                                                        
-    }                                                                                                                   
+      char value[512];
+      char detail[512];
+      snprintf(value, sizeof(value), "queue %u bitMask %u", queue[rxq], mask[rxq]);
+      snprintf(detail, sizeof(detail), "flow validation failed: %s", error.message); 
+      REINVENT_UTIL_ERRNO_RETURN(Util::Errno::REINVENT_UTIL_ERRNO_ENVIRONMENT, valid,
+        Dpdk::Names::STATIC_UDP_DEST_PORT_FLOW_CONTROL, value, detail);
+    }
   }                                                                                                                     
                                                                                                                         
   return 0; 

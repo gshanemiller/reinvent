@@ -3,6 +3,8 @@
 #include <dpdk/reinvent_dpdk_util.h>
 #include <dpdk/reinvent_dpdk_stream.h>
 
+#include <reinvent_dpdk_static_route_udp_test_common.h>
+
 //                                                                                                                      
 // Tell GCC to not enforce '-Wpendantic' for DPDK headers                                                               
 //                                                                                                                      
@@ -11,192 +13,20 @@
 #include <rte_ether.h>
 #include <rte_ip.h>
 #include <rte_udp.h>
-#include <rte_flow.h>
 #include <rte_mbuf_ptype.h>
 #include <rte_rawdev.h>
 #include <rte_per_lcore.h>
 #pragma GCC diagnostic pop 
 
-#include <time.h>
-#include <unistd.h>
-#include <signal.h>
+const int SERVER_RX_BURST_CAPACITY = 15;
+const unsigned SERVER_REPORT_COUNT = 100000;
 
-//
-// Default burst capacities
-//
-unsigned RX_BURST_CAPACITY = 15;
-
-const unsigned REPORT_COUNT = 100000;
-
-//
-// See -P argument
-//
-bool constantPorts(true);
-
-//
-// Set true to terminate RXQ
-//
-static volatile int terminate = 0;
-
-//
-// Clients send this. Servers get it
-//
-struct TxMessage {
-  int      lcoreId;   // lcoreId which sent this message
-  int      txqId;     // txqId which sent this message
-  unsigned sequence;  // txqId's sequence number
-  char     pad[20];   // to fill out message to 32 bytes
-};
-
-static void handle_sig(int sig) {
-  switch (sig) {
-    case SIGINT:
-    case SIGTERM:
-      terminate = 1;
-      break;
-  }
-}
-
-uint64_t timeDifference(timespec start, timespec end) {
-  uint64_t diff = static_cast<uint64_t>(end.tv_sec)*static_cast<uint64_t>(1000000000)+static_cast<uint64_t>(end.tv_nsec);
-  diff -= (static_cast<uint64_t>(start.tv_sec)*static_cast<uint64_t>(1000000000)+static_cast<uint64_t>(start.tv_nsec));
-  return diff;
-}
-
-void internalExit(const Reinvent::Dpdk::Config& config) {
-  if (Reinvent::Dpdk::Init::stopEna(config)!=0) {
-    REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize DPDK ENA device\n");
-  }
-
-  if (Reinvent::Dpdk::Init::stopDpdk()!=0) {
-    REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize DPDK system\n");
-  }
-}
-
-void onExit(const Reinvent::Dpdk::Config& config) {
-  //
-  // Print the report link speed
-  //
-  rte_eth_link linkStatus;
-  rte_eth_link_get_nowait(config.deviceId(), &linkStatus);
-  printf("linkRate value: %u\n", linkStatus.link_speed);
-
-  //
-  // Get high level stats. Unfortuantely this can only report up
-  // to RTE_ETHDEV_QUEUE_STAT_CNTRS queues which is 16. But
-  // most DPDK NICs can have up to 32 queues or more. So for queue
-  // stats we use the xstats API 
-  //
-  rte_eth_stats stats;
-  memset(&stats, 0, sizeof(stats));
-  rte_eth_stats_get(config.deviceId(), &stats);
-
-  //
-  // Dump high level stats
-  //
-  printf("in  packets : %lu\n", stats.ipackets);
-  printf("out packets : %lu\n", stats.opackets);
-  printf("in  bytes   : %lu\n", stats.ibytes);
-  printf("out bytes   : %lu\n", stats.obytes);
-  printf("missed pkts : %lu\n", stats.imissed);
-  printf("in err pkts : %lu\n", stats.ierrors);
-  printf("out err pkts: %lu\n", stats.oerrors);
-  printf("rx allc errs: %lu\n", stats.rx_nombuf);
-
-  rte_eth_xstat *xstats;
-  rte_eth_xstat_name *xstats_names;
-  int len = rte_eth_xstats_get(config.deviceId(), 0, 0);
-  if (len < 0) {
-    printf("warn: cannot get xstats\n");
-    internalExit(config);
-  }
-
-  xstats = static_cast<rte_eth_xstat*>(calloc(len, sizeof(*xstats)));
-  if (xstats == 0) {
-    printf("warn: out of memory\n");
-    internalExit(config);
-  }
-  int ret = rte_eth_xstats_get(config.deviceId(), xstats, len);
-  if (ret<0||ret>len) {
-    free(xstats);
-    printf("warn: rte_eth_xstats_get unexpected result\n");
-    internalExit(config);
-  }
-  xstats_names = static_cast<rte_eth_xstat_name*>(calloc(len, sizeof(*xstats_names)));
-  if (xstats_names == 0) {
-    free(xstats);
-    printf("warn: out of memory\n");
-    internalExit(config);
-  }
-  ret = rte_eth_xstats_get_names(config.deviceId(), xstats_names, len);
-  if (ret<0||ret > len) {
-    free(xstats);
-    free(xstats_names);
-    printf("warn: rte_eth_xstats_get_names unexpected result\n");
-    internalExit(config);
-  }
-  for (int i=0; i<len; i++) {
-    printf("%-32s: %lu\n", xstats_names[i].name, xstats[i].value);
-  }
-
-  free(xstats);
-  free(xstats_names);
-
-  internalExit(config);
-}
-
-void usageAndExit() {
-  printf("reinvent_dpdk_udp_integration_test.tsk -m <client|server> -p <env-var-prefix>\n");
-  printf("   -m <client|server>       optional (default server). mode to run task in.\n");
-  printf("   -p <string>              required: non-empty ENV variable prefx name with config\n");
-  printf("   -r <integer>             optional: per RXQ burst capacity default %d\n", RX_BURST_CAPACITY);
-  printf("   -P                       increment src/dst ports for each TX packet sent\n");
-  printf("                            this option helps RSS use more queues by changing hash\n");
-  exit(2);
-}
-
-void parseCommandLine(int argc, char **argv, bool *isServer, std::string *prefix) {
-  int c, n;
-
-  *isServer = true;
-  prefix->clear();
-
-  while ((c = getopt (argc, argv, "m:p:r:P")) != -1) {
-    switch(c) {
-      case 'm':
-        if (strcmp(optarg, "server")==0) {
-          *isServer = true;
-        } else if (strcmp(optarg, "client")==0) {
-          *isServer = false;
-        } else {
-          usageAndExit();
-        }
-        break;
-      case 'p':
-        *prefix = optarg;
-        break;
-      case 'r':
-        n = atoi(optarg);
-        if (n<=0) {
-          usageAndExit();
-        }
-        RX_BURST_CAPACITY = static_cast<unsigned>(n);
-        break;
-      case 'P':
-        constantPorts=false;
-        break;
-      default:
-        usageAndExit();
-    }
-  }
-
-  if (prefix->empty()) {
-    usageAndExit();
-  }
-}
-
-int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigned packetCount) {
+int serverTxMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigned packetCount,
+  const Reinvent::Dpdk::IPV4Route& defaultRoute) {
   assert(config);
+
+  printf("lcoreId %02d txqIndex %02d transmitting packets\n", id, txqIndex);
+  return 0;
 
   rte_ether_addr  srcMac __rte_cache_aligned;
   rte_ether_addr  dstMac = {0};
@@ -212,10 +42,6 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigne
   uint32_t        ip_cksum;
   uint16_t       *ptr16;
   srcMac = {0};
-
-  // Arbitrarily pick the first default route. ENA Init ensures we have at
-  // least one valid route with good mac, ip, and port identifiers
-  const Reinvent::Dpdk::IPV4Route& defaultRoute(worker->config().defaultRoute()[0]);
 
   //
   // Device Id
@@ -262,17 +88,17 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigne
   //
   // Total all-in packet size sent
   //
-  const int packetSize = sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr)+sizeof(TxMessage);
+  const int packetSize = sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr)+sizeof(Message);
 
   //
   // Size relative to IP4V header
   //
-  const uint16_t ip4Size = rte_cpu_to_be_16(static_cast<uint16_t>(sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr)+sizeof(TxMessage)));
+  const uint16_t ip4Size = rte_cpu_to_be_16(static_cast<uint16_t>(sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr)+sizeof(Message)));
 
   //
   // Size relative to UDP header
   //
-  const uint16_t udpSize = rte_cpu_to_be_16(static_cast<uint16_t>(sizeof(rte_udp_hdr)+sizeof(TxMessage)));
+  const uint16_t udpSize = rte_cpu_to_be_16(static_cast<uint16_t>(sizeof(rte_udp_hdr)+sizeof(Message)));
 
   struct timespec start;
   clock_gettime(CLOCK_REALTIME, &start);
@@ -293,7 +119,7 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigne
     //  +---> rte_pktmbuf_mtod_offset(mbuf, rte_ether_hdr*, 0) 
     // /
     // +---------------+--------------+-------------+-----------+
-    // | rte_ether_hdr | rte_ipv4_hdr | rte_udp_hdr | TxMessage |   
+    // | rte_ether_hdr | rte_ipv4_hdr | rte_udp_hdr | Message |   
     // +---------------+--------------+-------------+-----------+
     //
 
@@ -332,9 +158,9 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigne
     udpHdr->dgram_cksum = 0;
   
     //
-    // Prepare TxMessage Payload
+    // Prepare Message Payload
     //
-    TxMessage *payload = rte_pktmbuf_mtod_offset(mbuf, TxMessage*,
+    Message *payload = rte_pktmbuf_mtod_offset(mbuf, Message*,
       sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr));
     payload->lcoreId = lcoreId;
     payload->txqId = txqId;
@@ -374,11 +200,6 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigne
       } while(1!=rte_eth_tx_burst(deviceId, txqId, &mbuf, 1));
     }
     ++count;
-
-    if (likely(!constantPorts)) {
-      ++dstPort;
-      ++dstIp;
-    }
   }
 
   struct timespec now;
@@ -390,17 +211,17 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigne
   double bytesPerSecond = static_cast<double>(count)*static_cast<double>(packetSize)/
     (static_cast<double>(elapsedNs)/static_cast<double>(1000000000));
   double mbPerSecond = bytesPerSecond/static_cast<double>(1024)/static_cast<double>(1024);
-  double payloadBytesPerSecond = static_cast<double>(count)*static_cast<double>(sizeof(TxMessage))/
+  double payloadBytesPerSecond = static_cast<double>(count)*static_cast<double>(sizeof(Message))/
     (static_cast<double>(elapsedNs)/static_cast<double>(1000000000));
   double payloadMbPerSecond = payloadBytesPerSecond/static_cast<double>(1024)/static_cast<double>(1024);
 
   printf("lcoreId: %02d, txqIndex: %02d: elsapsedNs: %lu, packetsQueued: %u, packetSizeBytes: %d, payloadSizeBytes: %lu, pps: %lf, nsPerPkt: %lf, bytesPerSec: %lf, mbPerSec: %lf, mbPerSecPayloadOnly: %lf stalledTx %u\n", 
-    id, txqIndex, elapsedNs, count, packetSize, sizeof(TxMessage), pps, rateNsPerPacket, bytesPerSecond, mbPerSecond, payloadMbPerSecond, stalledTx);
+    id, txqIndex, elapsedNs, count, packetSize, sizeof(Message), pps, rateNsPerPacket, bytesPerSecond, mbPerSecond, payloadMbPerSecond, stalledTx);
 
   return 0;
 }
 
-int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
+int serverRxMainLoop(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
   const uint16_t deviceId = static_cast<uint16_t>(worker->config().deviceId());
 
   //
@@ -410,16 +231,16 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
   
   uint32_t count(0);
   uint32_t stalledRx(0);
-  std::vector<rte_mbuf*> mbuf(RX_BURST_CAPACITY);
+  std::vector<rte_mbuf*> mbuf(SERVER_RX_BURST_CAPACITY);
 
   struct timespec start;
   clock_gettime(CLOCK_REALTIME, &start);
 
   while(!terminate) {
     //
-    // Receive up to RX_BURST_CAPACITY packets
+    // Receive up to SERVER_RX_BURST_CAPACITY packets
     //
-    uint16_t rxCount = rte_eth_rx_burst(deviceId, rxqIndex, mbuf.data(), RX_BURST_CAPACITY);
+    uint16_t rxCount = rte_eth_rx_burst(deviceId, rxqIndex, mbuf.data(), SERVER_RX_BURST_CAPACITY);
     if (likely(rxCount==0)) {
       ++stalledRx;
       continue;
@@ -429,30 +250,30 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
       //                                                                                                                
       // Find payload and print it                                                                                      
       //                                                                                                                
-      TxMessage *payload = rte_pktmbuf_mtod_offset(mbuf[i], TxMessage*,
+      Message *payload = rte_pktmbuf_mtod_offset(mbuf[i], Message*,
         sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr));
       REINVENT_UTIL_LOG_INFO_VARGS("id %d rxqIndex %d packet: sender: lcoreId: %d, txqId: %d, sequence: %d\n",
         id, rxqIndex, payload->lcoreId, payload->txqId, payload->sequence);
       rte_pktmbuf_free(mbuf[i]);
     }
 
-    if ((count += rxCount)>=REPORT_COUNT) {
+    if ((count += rxCount)>=SERVER_REPORT_COUNT) {
       struct timespec now;
       clock_gettime(CLOCK_REALTIME, &now);
       uint64_t elapsedNs = timeDifference(start, now);
 
-      const int packetSize = sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr)+sizeof(TxMessage);
+      const int packetSize = sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr)+sizeof(Message);
       double rateNsPerPacket = static_cast<double>(elapsedNs)/static_cast<double>(count);
       double pps = static_cast<double>(1000000000)/rateNsPerPacket;
       double bytesPerSecond = static_cast<double>(count)*static_cast<double>(packetSize)/
         (static_cast<double>(elapsedNs)/static_cast<double>(1000000000));
       double mbPerSecond = bytesPerSecond/static_cast<double>(1024)/static_cast<double>(1024);
-      double payloadBytesPerSecond = static_cast<double>(count)*static_cast<double>(sizeof(TxMessage))/
+      double payloadBytesPerSecond = static_cast<double>(count)*static_cast<double>(sizeof(Message))/
         (static_cast<double>(elapsedNs)/static_cast<double>(1000000000));
       double payloadMbPerSecond = payloadBytesPerSecond/static_cast<double>(1024)/static_cast<double>(1024);
 
       printf("lcoreId: %02d, rxqIndex: %02d: elsapsedNs: %lu, packetsDequeued: %u, packetSizeBytes: %d, payloadSizeBytes: %lu, pps: %lf, nsPerPkt: %lf, bytesPerSec: %lf, mbPerSec: %lf, mbPerSecPayloadOnly: %lf, stalledRx: %u\n", 
-        id, rxqIndex, elapsedNs, count, packetSize, sizeof(TxMessage), pps, rateNsPerPacket, bytesPerSecond, mbPerSecond, payloadMbPerSecond, stalledRx);
+        id, rxqIndex, elapsedNs, count, packetSize, sizeof(Message), pps, rateNsPerPacket, bytesPerSecond, mbPerSecond, payloadMbPerSecond, stalledRx);
     
       count = stalledRx = 0;
 
@@ -463,11 +284,11 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
   return 0;
 }
 
-int clientEntryPoint(int id, int txqIndex, Reinvent::Dpdk::Worker *worker) {
+int serverTxEntryPoint(int id, int txqIndex, Reinvent::Dpdk::Worker *worker) {
   assert(config);
 
   //
-  // Get number of packets to send from client to server
+  // Get number of packets to send
   //
   int rc, tmp;
   std::string variable;
@@ -476,23 +297,31 @@ int clientEntryPoint(int id, int txqIndex, Reinvent::Dpdk::Worker *worker) {
     return rc;
   }
   unsigned packetCount = static_cast<unsigned>(tmp);
-  
+
   //
-  // Finally enter the main processing loop passing state collected here
+  // Get a route to TX on
   //
-  return clientMainLoop(id, txqIndex, worker, packetCount);
+  if (worker->config().defaultRoute().size()<=(unsigned)txqIndex) {
+    REINVENT_UTIL_LOG_ERROR_VARGS("no default route for server txq %d\n", txqIndex);
+    return -1;
+  }
+
+  //
+  // Run the TXQ
+  //
+  return serverTxMainLoop(id, txqIndex, worker, packetCount, worker->config().defaultRoute()[txqIndex]);
 }
 
-int serverEntryPoint(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
+int serverRxEntryPoint(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
   assert(config);
 
   //
-  // Run main receiving loop
+  // Proceed directly to RXQ
   //
-  return serverMainLoop(id, rxqIndex, worker);
+  return serverRxMainLoop(id, rxqIndex, worker);
 }
 
-int entryPoint(void *arg) {
+int serverEntryPoint(void *arg) {
   Reinvent::Dpdk::Worker *worker= reinterpret_cast<Reinvent::Dpdk::Worker*>(arg);
 
   if (0==worker) {
@@ -513,11 +342,11 @@ int entryPoint(void *arg) {
   
   rc = -1;
   if (tx) {
-    rc = clientEntryPoint(id, txqIndex, worker);
-    REINVENT_UTIL_LOG_INFO_VARGS("clientEntryPoint rc=%d\n", rc);
+    rc = serverTxEntryPoint(id, txqIndex, worker);
+    REINVENT_UTIL_LOG_INFO_VARGS("serverEntryPoint TXQ rc=%d\n", rc);
   } else if (rx) {
-    rc = serverEntryPoint(id, rxqIndex, worker);
-    REINVENT_UTIL_LOG_INFO_VARGS("serverEntryPoint rc=%d\n", rc);
+    rc = serverRxEntryPoint(id, rxqIndex, worker);
+    REINVENT_UTIL_LOG_INFO_VARGS("serverEntryPoint RXQ rc=%d\n", rc);
   } else {
     REINVENT_UTIL_LOG_ERROR_VARGS("cannot classify DPDK lcore %d as RX or TX\n", id);
   }
@@ -525,62 +354,21 @@ int entryPoint(void *arg) {
   return rc;
 }
 
-int main(int argc, char **argv) {
-  bool isServer(true);
-  std::string prefix;
-  std::string device("DPDK_NIC_DEVICE");
-
-  parseCommandLine(argc, argv, &isServer, &prefix);
-
-  Reinvent::Util::LogRuntime::resetEpoch();
-  Reinvent::Util::LogRuntime::setSeverityLimit(REINVENT_UTIL_LOGGING_SEVERITY_TRACE);
-
-  Reinvent::Util::Environment env;
-  Reinvent::Dpdk::Config config;
-
+int serverEntryPoint(std::string& envPrefix, Reinvent::Util::Environment& env, Reinvent::Dpdk::Config& config) {
   //
-  // Install signal handlers
+  // Setup and run Workers for server. Recall the server receives messages
+  // from client (RXQ) then TXQ responses back. So this code runs one thread
+  // for each lcore handling its respective TXQ/RXQ
   //
-  signal(SIGINT, &handle_sig);
-  signal(SIGTERM, &handle_sig);
-
-  //
-  // Initialize the DPDK ENA Nic
-  //
-  int rc = Reinvent::Dpdk::Init::startEna(device, prefix, &env, &config);
-  REINVENT_UTIL_LOG_INFO(config << std::endl);
-  if (rc!=0) {
-    REINVENT_UTIL_LOG_FATAL_VARGS("Cannot initialize DPDK ENA device rc=%d\n", rc);                                      
-    if (Reinvent::Dpdk::Init::stopEna(config)!=0) {
-      REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize DPDK ENA device\n");
-    }
-    return 1;
+  int rc = -1;
+  Reinvent::Dpdk::Worker worker(envPrefix, env, config);
+  REINVENT_UTIL_LOG_INFO_VARGS("launching server DPDK worker threads\n");
+  if ((rc = rte_eal_mp_remote_launch(serverEntryPoint, static_cast<void*>(&worker), CALL_MAIN))!=0) {
+    REINVENT_UTIL_LOG_FATAL_VARGS("Cannot launch DPDK cores rc=%d\n", rc);
+  } else {
+    REINVENT_UTIL_LOG_INFO_VARGS("waiting for server DPDK worker threads to stop\n");
+    rte_eal_mp_wait_lcore();
   }
 
-  //
-  // Setup and run Workers. Now if the enviromment is setup right, the client
-  // will only configure RXQ work (TX work turned off) and the server will only see
-  // the configured RX work (TX work turned off). In turn that means the client only
-  // will ever fall into 'txEntryPoint' and 'rxEntryPoint' for server. As such this
-  // code file can be used for both modes. It's the enviroment 'prefix' that keeps
-  // the code paths separate.
-  {
-    Reinvent::Dpdk::Worker worker(prefix, env, config);
-    REINVENT_UTIL_LOG_INFO_VARGS("launching DPDK worker threads\n");
-    if ((rc = rte_eal_mp_remote_launch(entryPoint, static_cast<void*>(&worker), CALL_MAIN))!=0) {
-      REINVENT_UTIL_LOG_FATAL_VARGS("Cannot launch DPDK cores rc=%d\n", rc);
-    } else {
-      REINVENT_UTIL_LOG_INFO_VARGS("waiting for DPDK worker threads to stop\n");
-      rte_eal_mp_wait_lcore();
-    }
-  }
-
-  REINVENT_UTIL_LOG_INFO_VARGS("DPDK worker threads done\n");
-
-  //
-  // Cleanup and exit from main thread
-  //
-  onExit(config);
-
-  return 0;
+  return rc;
 }
