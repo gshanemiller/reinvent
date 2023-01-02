@@ -367,7 +367,7 @@ class Init {
     std::vector<int> *txqMemPoolCacheSize, std::vector<int> *rxqMemPoolPrivSize, std::vector<int> *txqMemPoolPrivSize,
     std::vector<int> *rxqMemPoolDataRoomSize, std::vector<int> *txqMemPoolDataRoomSize);
 
-  static int makeAssignment(Config *config, std::vector<RXQ>& rxq, std::vector<TXQ>& txq,
+  static int makeLcoreAssignment(Config *config, std::vector<RXQ>& rxq, std::vector<TXQ>& txq,
     std::vector<LCORE>& lcore);
 
   static int makeDpdkInitParams(const std::string& envPrefix, Util::Environment *env, Config *config);

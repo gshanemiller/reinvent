@@ -355,7 +355,7 @@ int Dpdk::Init::makeDpdkInitParams(const std::string& envPrefix, Util::Environme
   return 0;
 }
 
-int Dpdk::Init::makeAssignment(Config *config, std::vector<RXQ>& rxq, std::vector<TXQ>& txq,
+int Dpdk::Init::makeLcoreAssignment(Config *config, std::vector<RXQ>& rxq, std::vector<TXQ>& txq,
   std::vector<LCORE>& lcore) {
   assert(config);
   assert(config->vcpu().size()!=0);
@@ -1307,7 +1307,7 @@ int Dpdk::Init::startEna(const std::string& device, const std::string& envPrefix
   std::vector<Dpdk::RXQ> rxq;
   std::vector<Dpdk::TXQ> txq;
   std::vector<Dpdk::LCORE> lcore;
-  if ((rc = Dpdk::Init::makeAssignment(config, rxq, txq, lcore))!=0) {
+  if ((rc = Dpdk::Init::makeLcoreAssignment(config, rxq, txq, lcore))!=0) {
     return rc;
   }
   config->setRxq(rxq);

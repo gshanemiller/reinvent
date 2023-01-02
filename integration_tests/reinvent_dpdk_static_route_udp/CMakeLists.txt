@@ -27,6 +27,7 @@ set(SOURCES
   reinvent_dpdk_static_route_udp_test_common.cpp
   reinvent_dpdk_static_route_udp_test_client.cpp
   reinvent_dpdk_static_route_udp_test_server.cpp
+  reinvent_dpdk_static_route_udp_test_spsc.cpp
 ) 
 
 #

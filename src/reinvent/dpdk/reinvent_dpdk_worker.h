@@ -116,12 +116,12 @@ public:
  
   Worker(const std::string& prefix, Reinvent::Util::Environment& env,
     const Reinvent::Dpdk::Config& config);
-    // Create Worker with specified 'envPrefix, env, config'. 'txqMempool' has size zero on return.
+    // Create Worker with specified 'envPrefix, env, config'.
 
   Worker(const Worker& other) = delete;
     // Copy constructor not provided
 
-  ~Worker();
+  virtual ~Worker();
     // Destroy this object
 
   // ACCESSORS
@@ -144,6 +144,10 @@ public:
 
   Worker& operator=(const Worker& rhs) = delete;
     // Assignment operator not provided
+
+  // MANIPULATORS
+  std::mutex& mux();
+    // Provide a modifiable reference to this object's mutex. Intended for use with child classes
 };
 
 // INLINE DEFINITIONS
@@ -241,6 +245,12 @@ int Worker::id(int *val, bool *isRX, bool *isTX, int *rxqIndex, int *txqIndex) {
   }
 
   return 0;
+}
+
+// MANIPULATORS
+inline
+std::mutex& Worker::mux() {
+  return d_mux;
 }
 
 } // Dpdk
