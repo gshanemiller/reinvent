@@ -74,7 +74,7 @@ note a clock icon reading 3-o'clock. Wait for it to disappear meaning your boxes
 ready.
 9. Login to one of the machines with `ssh -i <ssh-key-pem-file> root@<public-ip-address>`
 using the public IP address from step 8. Make sure your machine has the four NIC
-cards mentioned above. Very rarely you'll get a machine which does not:
+cards mentioned above. Rarely you'll get a machine which does not. Usually the NICs are in PCI slot 1:
 
 ```
 $ lspci | grep Ether
@@ -84,7 +84,18 @@ $ lspci | grep Ether
 04:00.0 Ethernet controller: Intel Corporation I210 Gigabit Network Connection (rev 03)
 ```
 
-Instructions 10-20 must repeated once for each machine:
+Very rarely you might find the Mellanox NICs installed in different PCI slots. If that's your case nothing hard changes
+but please see the **IMPORTANT** note below re: enp2s0f1:
+
+```
+# lspci | grep Eth
+02:00.0 Ethernet controller: Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+02:00.1 Ethernet controller: Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+04:00.0 Ethernet controller: Intel Corporation I210 Gigabit Network Connection (rev 03)
+05:00.0 Ethernet controller: Intel Corporation I210 Gigabit Network Connection (rev 03)
+```
+
+Instructions 10-20 must be repeated once for each machine:
 
 10. [In your browser surf to the install script](https://github.com/rodgarrison/reinvent/blob/main/scripts/install)
 11. Copy the script by clicking on github's copy button.
@@ -148,10 +159,20 @@ the procedure will work. The isolated DPDK Mellanox card will be given on interf
 Now in the last sub-step you'll fix your NIC interfaces file in each machine.
 
 **IMPORTANT NOTE** 99.9% of the time Equinix servers use `enp1s0f0/enp1s0f1` for the bonded Mellanox NICs you
-just unbonded above. However, once in a while you may find `enp2s0f0/enp2s0f1`. If that's your situation the
-procedure is essentially unchanged. Wherever you read `enp1s0f0` in the instructions replace with `enp2s0f0`
-and ditto `enp2s0f1` for `enp1s0f1`. You'll need to keep this in mind for Part 3 below when you run the DPDK
-code too.
+just unbonded above because they're installed in PCI slots 01:00.0 and 01:00.1. However, if your NICs are installed
+in 02:00.0 and 02:00.1 like this:
+
+```
+# lspci | grep Eth
+02:00.0 Ethernet controller: Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+02:00.1 Ethernet controller: Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+04:00.0 Ethernet controller: Intel Corporation I210 Gigabit Network Connection (rev 03)
+05:00.0 Ethernet controller: Intel Corporation I210 Gigabit Network Connection (rev 03)
+```
+
+Then your NIC interfaces will talk about `enp2s0f0/enp2s0f1`. If that's your situation the procedure is essentially
+unchanged. Wherever you read `enp1s0f0` in the instructions next replace with `enp2s0f0` and ditto `enp2s0f1` for
+`enp1s0f1`. You'll need to keep this in mind for Part 3 below when you run the DPDK code too.
 
 21. ssh login to one of your machines
 22. Run command: `vi /etc/network/interfaces`
@@ -216,6 +237,12 @@ enp1s0f1 device ex. `192.168.0.2`
 8. Near line 86 change `TEST_CLIENT_DPDK_NIC_DEVICE_DEFAULT_ROUTE_DST_IPV4` to hold the IPV4 address from your server's
 enp1s0f1 device ex. `192.168.0.3`
 9. Save and exit.
+
+If your Mellnox NICs are in 02:00.0 and 02:00.1 you'll also need to change `reinvent_dpdk_udp_integration_test`
+configs for PCI_DEVICE_ID to `0000:02:00.1` from `0000:01:00.1` for the client and/or server config as needed. Recall
+the 0th device `...00.0` handles logins from your public IPV4 while the `...:00.1` is the unbonded NIC reserved for
+DPDK use.
+
 10. In the current working directory (still on client machine) run: `./setup`. This will configure huge pages.
 11. On your server machine run command: `cd /root/Dev/reinvent/scripts` and then run `./setup`
 12. On your server machine run command: `./reinvent_dpdk_udp_integration_test server perf`. You should see this output:

@@ -232,7 +232,7 @@ echo "export LD_LIBRARY_PATH=${D}/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu
 echo "export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig" >> ${HOME}/.bashrc
 echo "alias ll=\"ls -la\"" >> ${HOME}/.bashrc
 echo "alias edit=\"vi\"" >> ${HOME}/.bashrc
-echo "alias initbld=\"cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DPERFORMANCE_TEST=ON ..\"" >> ${HOME}/.bashrc
+echo "alias ppjson=\"python3 -m json.tool\"" >> ${HOME}/.bashrc
 
 #
 # Add variables to .vimrc

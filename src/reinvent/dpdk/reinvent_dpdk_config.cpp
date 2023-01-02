@@ -101,9 +101,9 @@ std::ostream& Dpdk::Config::print(std::ostream& stream) const {
     for (unsigned i=0; i<RSS_HASH_KEY_SIZE; ++i) {
       sprintf(buf+(i*3), "%02x:", (int)d_rxRssKey[i]);
     }
-    stream << "[" << buf << "]";
+    stream << "[" << buf << "],";
   } else {
-    strcpy(buf, "[]");
+    stream << "[],";
   }
 
   stream << "\"defaultRoute\":[";
@@ -113,7 +113,22 @@ std::ostream& Dpdk::Config::print(std::ostream& stream) const {
       stream << ",";
     }
   }
-  stream << "]";
+  stream << "],";
+
+  if (d_staticUdpDestPortFlowControlQueue.size()>0 && d_staticUdpDestPortFlowControlQueue.size()==
+    d_staticUdpDestPortFlowControlBitMask.size()) {
+    stream << "\"udpDestPortFlowControl\": [";
+    for (unsigned i=0; i<d_staticUdpDestPortFlowControlQueue.size(); i++) {
+      stream << "{\"rxQueue\": " << d_staticUdpDestPortFlowControlQueue[i] << ", \"udpDestPortBitMask\": "
+        << d_staticUdpDestPortFlowControlBitMask[i] << "}";
+      if ((i+1)!=d_staticUdpDestPortFlowControlQueue.size()) {
+        stream << ",";
+      }
+    }
+    stream << "]";
+  } else {
+    stream << "\"udpDestPortFlowControl\":[]";
+  }
 
   stream << "}";
 

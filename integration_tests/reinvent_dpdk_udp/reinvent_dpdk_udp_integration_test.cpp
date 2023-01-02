@@ -551,9 +551,6 @@ int main(int argc, char **argv) {
   REINVENT_UTIL_LOG_INFO(config << std::endl);
   if (rc!=0) {
     REINVENT_UTIL_LOG_FATAL_VARGS("Cannot initialize DPDK ENA device rc=%d\n", rc);                                      
-    if (Reinvent::Dpdk::Init::stopEna(config)!=0) {
-      REINVENT_UTIL_LOG_WARN_VARGS("Cannot uninitialize DPDK ENA device\n");
-    }
     return 1;
   }
 
