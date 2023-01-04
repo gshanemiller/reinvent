@@ -21,7 +21,7 @@ value `V` for `K` or nil if not found. This is static routing in the sense `C` c
 discussed here but, for example, `C` could consult `etcd` or some other service which knows which `S` handles which keys
 `K`.  
 
-# Architecture
+# Design Overview
 
 To do KV lookup through static routing [we need flow control](https://github.com/rodgarrison/reinvent/blob/main/doc/packet_design.md#flow-control)
 on clients and servers. Flow control on the servers insures requests go to the right DPDK RXQ which does request
