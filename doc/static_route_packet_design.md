@@ -115,8 +115,28 @@ together we get on the client side:
 
 and similarly for the server.
 
-Finally, we need to integrate one SPSC ring buffer per RXQ/TXQ pair on the server. This is accomplished by extending the
+Next, we need to integrate one SPSC ring buffer per RXQ/TXQ pair on the server. This is accomplished by extending the
 class `Reinvent::Dpdk::Worker` with [ExtWorker](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_static_route_udp/reinvent_dpdk_static_route_udp_test_common.h#L18). This class is used on server boxes only. Upon construction `ExtWorker` inspects the RXQ/TXQ assignments
 to create one [SPSC](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_static_route_udp/reinvent_dpdk_static_route_udp_test_spsc.h)
 per TXQ/RXQ pair. TXQs own the buffer and RXQs have a pointer to it which is exposed in the public API.
 
+Then, we need to deal with memory management of the packets flowing through the client and server boxes. [As per](https://github.com/rodgarrison/reinvent/blob/static/doc/packet_design.md#packet-memory-mental-picture) DPDK wraps packet memory in a structure called `rte_mbuf`. Assuming the NIC supports
+`RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE` (all Mellanox NICs do) the DPDK library will automatically free transmitted
+packets. Then on the client side we:
+
+* TXQ side allocate a `rte_mbuf` then prepare and transmit it; `RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE` will free it after
+transmission
+* RXQ side call `rte_pktmbuf_free` after each packet is received
+
+The server side is slightly complicated by SPSC:
+
+* Server RXQ side queues (like RQX client side) receive incoming packets in a pre-allocated array of `rte_mbuf`
+* Upon reception of a packet, a pointer to the `rte_mbuf` is enqueued in the resp. SPSC
+* The server RXQ **does not free it** received packets; it only enqueues them
+* In the server's resp. TXQ the packet is dequeued and prepared for transmission by swaping UDP IP addresses and ports.
+The key value is also inserted into the packet
+* The server TXQ transmits the packet and `RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE` will free it
+
+This arrangement makes for fairly efficient reuse of packets server side without undo memory copying. The only
+complication is that RXQs have to be careful to not receive new packets in a pre-existing `rte_mbuf` before the
+corresponding TXQ is done with it and it's freed.` 
