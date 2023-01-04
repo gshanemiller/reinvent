@@ -121,7 +121,7 @@ to create one [SPSC](https://github.com/rodgarrison/reinvent/blob/main/integrati
 per TXQ/RXQ pair. TXQs own the buffer and RXQs have a pointer to it which is exposed in the public API.
 
 Then, we need to deal with memory management of the packets flowing through the client and server boxes. [As per DPDK](https://github.com/rodgarrison/reinvent/blob/static/doc/packet_design.md#packet-memory-mental-picture) packet memory is wrapped in a structure called `rte_mbuf`. Assuming the NIC supports `RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE` (all Mellanox NICs do) the DPDK library will automatically free transmitted
-packets. Then on the client side:
+packets. Then in the client:
 
 * TXQ side allocate a `rte_mbuf` then prepares and transmits it; `RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE` will free it after
 transmission on the wire
@@ -133,8 +133,8 @@ The server side is slightly complicated by SPSC:
 * Upon reception of a packet, a pointer to the `rte_mbuf` is enqueued in the resp. SPSC
 * The server RXQ **does not free it** received packets; it only enqueues them
 * In the server's resp. TXQ the packet is dequeued and prepared for transmission by swaping UDP IP addresses and ports.
-The key value is also inserted into the packet
-* The server TXQ transmits the packet and `RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE` will free it
+The key value (or nil) is also inserted into the packet
+* The server TXQ transmits the packet and `RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE` will eventually free it
 
 This arrangement makes for efficient reuse of packets server side without undo memory copying. The only complication is that 
 RXQs have to be careful to not receive new packets in a pre-existing `rte_mbuf` before the corresponding TXQ is done with it. 
