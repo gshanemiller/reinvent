@@ -1,5 +1,5 @@
 # Static Routing Request/Response in DPDK
-This section discusses [an extension of the UDP example in](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md)
+This section discusses [an extension of the UDP example](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md)
 adding:
 
 * requests and responses
@@ -83,7 +83,7 @@ the src/dst IP addresses and ports to make static routing work in reverse. Flow 
 RXQ gets the packet
 * Client pid 1234 RXQ#0 on thread 1 for lcore 1 receives the response packet
 
-Static routing between the clients and servers insures work is share nothing also ensuring this arrangement works for
+Static routing between the clients and servers means request/responses are share nothing also insuring this arrangement works for
 any number of client and server boxes.
 
 To efficiently connect RXQs and TXQs --- for example server 0's RXQ0 and TXQ0 or client 1's RXQ1 and TXQ1 --- we impose
@@ -102,7 +102,7 @@ To implement all these constraints we use Reinvent's flexible configuration syst
 and [client RXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L72)
 so it's staggered.
 * [Program server TXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L189)
-and [server RXQ assignment)[https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L197)
+and [server RXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L197)
 so it's staggered
 
 These configurations are based on the Equinix's `c3.small.x86` offering which has 1 CPU with 8 cores and two hyper-threads
