@@ -106,8 +106,10 @@ and [server RXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/sc
 so it's staggered
 
 These configurations are based on the Equinix's `c3.small.x86` offering which has 1 CPU with 8 cores and two hyper-threads
-per core. We use all 16 virtual CPUs making 8 clients per client box and 8 servers per server box. Putting these configs
-together we get on the client side:
+per core. We use all 16 virtual CPUs making 8 clients per client box and 8 servers per server box. That amounts to 8 RXQs
+and 8 TXQs per client box and ditto server side assuming clients and servers are both `c3.small.x86`
+
+Putting these configs together we get on the client side:
 
 * Core 0 VCPU #0 for RXQ0 for client 0; core 0 VCPU#1 for TXQ0 for client 0 flow controlled to 192.168.0.2 udpDestPort 1
 * Core 1 VCPU #2 for RXQ1 for client 1; core 1 VCPU#3 for TXQ1 for client 1 flow controlled to 192.168.0.2 udpDestPort 2
