@@ -100,10 +100,10 @@ To implement all these constraints we use Reinvent's flexible configuration syst
 * [Program flow control server side](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L226)
 * [Program client TXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L58)
 and [client RXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L72)
-so it's staggered.
+so it's staggered by CPU core
 * [Program server TXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L189)
 and [server RXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L197)
-so it's staggered
+so it's staggered by CPU core
 
 These configurations are based on the Equinix's `c3.small.x86` offering which has 1 CPU with 8 cores and two hyper-threads
 per core. We use all 16 virtual CPUs making 8 clients per client box and 8 servers per server box. That amounts to 8 RXQs
