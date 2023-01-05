@@ -128,8 +128,8 @@ This design will see one or two minor modifications once some implementation det
 
 ## SPSC Performance
 Imposing a SPSC between server side RXQ/TXQs lcores adds latency. The [SPSC implementation](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_static_route_udp/reinvent_dpdk_static_route_udp_test_spsc.h) was benchmarked on `c3.small.x86`. It can move around 105 Mb/sec or about 10ns per 64-byte message running two 
-threads on the same core. The SPSC had a fixed capacity of 5000 data elements each 64-bytes in side. This flow enqueues
-one message, and deques one message at a time. Batching read/writes is not coded yet. I consider this acceptable loss.
+threads on the same core. The SPSC had a fixed capacity of 5000 data elements each 64-bytes in size. This flow enqueues
+one message, and dequeues one message at a time. Batching read/writes is not coded yet. I consider this acceptable loss.
 
 ## Packet memory
 [As per DPDK](https://github.com/rodgarrison/reinvent/blob/static/doc/packet_design.md#packet-memory-mental-picture)
@@ -144,7 +144,7 @@ In the **client**:
 * After each message is processed RXQ side, `rte_pktmbuf_free` is called on it
 
 The **server side** is complicated by SPSC, potential race conditions managing packet memory, and by the different
-size requirements of respone packets. Let's take these issues in reverse order.
+size requirements of response packets. Let's take these issues in reverse order.
 
 First, keys are limited to 16-64 bytes, but values could be several kilobytes. Therefore, there's no ultimate benefit
 in transferring over SPSC the received request packet e.g. each `rte_mbuf*`. It's likely not big enough to hold the
@@ -165,7 +165,7 @@ packet which can be sized better.
 
 Thus we modify the design **server side** as follows:
 
-* Server RXQ side queues receive incoming packets in a rte_mbuf*` array. The memory comes from the RXQ's mempool
+* Server RXQ side queues receive incoming packets in a `rte_mbuf*` array. The memory comes from the RXQ's mempool
 * The server RXQ enqueues the key, plus src/dst IP address and destination UDP ports onto the SPSC approximately
 64 bytes total if the key is no larger than 16-bytes
 * The server RXQ calls `rte_pktmbuf_free` on each packet after SPSC enqueue
