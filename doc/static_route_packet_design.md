@@ -177,8 +177,8 @@ Thus we modify the design **server side** as follows:
 This allows the schema for requests and responses to differ since their packet memory layout is also different.
 
 ## Hot CPUs
-Recall DPDK is poll based. [As shown in the UDP example](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md#rss-benchmark-output-1)
-the CPU can spin looking for packet work faster than it sometimes comes. This is shown with the `stalledTx, stalledRx`
-metrics. SPSC is another hot-spin loop: queues may be empty (on read) or full (on write). To avoid running at 100% CPU
-utilization all the time, expoential backoff sleeps should be added. Once an event is finally found, the micro sleep
-time should be reset to the smallest delay.  
+Recall DPDK is poll based. [As shown in the simple UDP example](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md#rss-benchmark-output-1)
+the CPU can spin looking for packet work faster than it sometimes comes. This is shown by the `stalledTx, stalledRx`
+metrics. SPSC is another hot-spin loop opportunity: queues may be empty (on read) or full (on write). To avoid running
+at 100% CPU utilization all the time, exponential backoff micro sleeps should be added. Once an event is finally found,
+the sleep time should be reset to the smallest delay.  
