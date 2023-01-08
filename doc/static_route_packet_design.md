@@ -221,7 +221,8 @@ This calculation converts 25Gbps to bytes per 1 million microseconds (e.g. 1 sec
 
 Now, consider what happens there's multiple `(a1, a2)` pairs pushing data through switch#1. The switch can only buffer 12Mb. So if all senders work at 25Gbps there can be at most `12Mb + BDP` of un-ACK'd data over a 6us time period before the switch drops data. BDP sets the maximum amount of data each sender should have outstanding before stopping for ACKs. That is, if senders continue to enqueue un-ACK'd data over BDP the switch will lose data.
 
-[Per eRPC Presentation Slide #10](https://www.usenix.org/sites/default/files/conference/protected-files/nsdi19_slides_kalia.pdf) the theoretical number of incasts is `12Mb/19Kb` or about 640 adding just 50 incasts is often preferrable based on some industry studies. eRPC was tested at 100 incasts without data loss suggesting eRPC is a better steward of bandwidth use.   
+[Per eRPC Presentation Slide #10](https://www.usenix.org/sites/default/files/conference/protected-files/nsdi19_slides_kalia.pdf) the theoretical number of incasts is `12Mb/19Kb` or about 640 adding just 50 incasts is often preferrable based on some industry studies. eRPC was tested at 100 incasts without data loss suggesting eRPC is a better steward of bandwidth use. But in all cases switch buffer sizes must greatly exceed BDP if incast count is practical.
+Finally, note BDP will be bounded from above by the slowest link in the overall network including routers and NICs.
 
 
 ## ACK/NACK
