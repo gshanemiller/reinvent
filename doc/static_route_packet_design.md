@@ -209,7 +209,7 @@ Packet movement between hosts in the same subnet goes through its respective swi
 
 Suppose switch#1 has a 12Mb buffer, 25Gbps bandwidth, and an average 6us RTT in its subnet. Now consider a distinct sender/receiver host pair `(a1, a2)` in subnet#1. Ideally `a1` would transmit data to `a2` at the switch's bandwidth capacity. Assume host box NICs equal or exceed the switch's bandwidth. Once `a2` gets data it transmits `ACKs` to `a1`. So after the first packet of the first message from `a1` is on the wire, it'll require 6us to get an `ACK` by assumption for that message. While `a1` awaits `ACKs` its shoving data on the wire.
 
-The amount of un-ACK'd data in the pipeline between `(a1, a2)` is called the BDP (Bandwidth Delay Product) regardless of whether it's on the wire or in the switch. So starting at time `t=0us` when the switch is empty and there's no I/O until `t=6us=RTT` the BDP is ~19Kb:
+The amount of un-ACK'd data in the pipeline between `(a1, a2)` is called the BDP (Bandwidth Delay Product) no matter if it's on the wire, in the switch, or processing in the receiver. So starting at time `t=0us` when the switch is empty and there's no I/O until `t=6us=RTT` the BDP is ~19Kb:
 
 ```
 BDP = bandwidth * RTT
@@ -219,10 +219,13 @@ BDP = bandwidth * RTT
 
 This calculation converts 25Gbps to bytes per 1 million microseconds (e.g. 1 sec) then multiplies by the RTT of 6us giving ~19Kb. 
 
-Now, consider what happens there's multiple `(a1, a2)` pairs pushing data through switch#1. The switch can only buffer 12Mb. So if all senders work at 25Gbps there can be at most `12Mb + BDP` of un-ACK'd data over a 6us time period before the switch drops data. BDP sets the maximum amount of data each sender should have outstanding before stopping for ACKs. That is, if senders continue to enqueue un-ACK'd data over BDP the switch will lose data.
+Now, consider what happens there's multiple `(a1, a2)` pairs pushing data through switch#1. The switch can only buffer 12Mb. So if all senders work at 25Gbps there can be at most `12Mb + BDP` of un-ACK'd data over a 6us time period before the switch drops data. In each RTT period 19Kb can be acknowledged allowing a new 19Kb to enqueue. BDP sets the maximum amount of data each sender should have outstanding before stopping for ACKs. That is, if senders continue to enqueue un-ACK'd data over BDP the switch will lose data.
 
-[Per eRPC Presentation Slide #10](https://www.usenix.org/sites/default/files/conference/protected-files/nsdi19_slides_kalia.pdf) the theoretical number of incasts is `12Mb/19Kb` or about 640 adding just 50 incasts is often preferrable based on some industry studies. eRPC was tested at 100 incasts without data loss suggesting eRPC is a better steward of bandwidth use. But in all cases switch buffer sizes must greatly exceed BDP if incast count is practical.
-Finally, note BDP will be bounded from above by the slowest link in the overall network including routers and NICs.
+[Per eRPC Presentation Slide #10](https://www.usenix.org/sites/default/files/conference/protected-files/nsdi19_slides_kalia.pdf) the theoretical number of incasts is `12Mb/19Kb` or about 640. The slide points out just 50 incasts is preferrable based on some industry studies. eRPC was tested at 100 incasts without data loss suggesting eRPC is a better steward of bandwidth. But in all cases switch buffer sizes must greatly exceed BDP if incast count is practical. Finally, note BDP is bounded from above by the *slowest link in the network* including routers and NICs.
+
+## BDP Implications and Omissions
+BDP has implications for other parts of the design. And it misses some details too. In any userspace network library the infrastructure code manipulates data into finite sized TXQs and data out of finite sized RXQs. So, for example, it's pointless to transmit new packets if the coreesponding RXQ holding ACKs and responses is full. If the NIC RXQ is full data drops. [eRPC's white paper](https://www.usenix.org/system/files/nsdi19-kalia.pdf) discusses this point in section 4.3.1 called Session credits. 
+
 
 
 ## ACK/NACK
