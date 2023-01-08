@@ -209,52 +209,19 @@ Packet movement between hosts in the same subnet goes through its respective swi
 
 Suppose switch#1 has a 12Mb buffer, 25Gbps bandwidth, and an average 6us RTT in its subnet. Now consider a distinct sender/receiver host pair `(a1, a2)` in subnet#1. Ideally `a1` would transmit data to `a2` at the switch's bandwidth capacity. Assume host box NICs equal or exceed the switch's bandwidth. Once `a2` gets data it transmits `ACKs` to `a1`. So after the first packet of the first message from `a1` is on the wire, it'll require 6us to get an `ACK` by assumption for that message. While `a1` awaits `ACKs` its shoving data on the wire.
 
-The amount of un-ACK'd data in the pipeline between `(a1, a2)` is called the BDP (Bandwidth Delay Product) regardless of whether it's on the wire or in the switch. So starting at time `t=0us` when the switch is empty and there's no I/O until `t=6us=RTT` the BDP is ~20Kb:
+The amount of un-ACK'd data in the pipeline between `(a1, a2)` is called the BDP (Bandwidth Delay Product) regardless of whether it's on the wire or in the switch. So starting at time `t=0us` when the switch is empty and there's no I/O until `t=6us=RTT` the BDP is ~19Kb:
 
 ```
 BDP = bandwidth * RTT
 >>> float(25/8) * (1024*1024*1024) / 1e6 * 6
-20132.659200000002 bytes
+~20133 bytes
 ```
 
-This calculation converts 25Gbps to bytes per 1 million microseconds (us) then multiplies by the RTT of 6us giving ~20133 bytes or ~20Kb. Sender `a1` by time `t=6us` sending at ideal bandwith managed to transmit 
+This calculation converts 25Gbps to bytes per 1 million microseconds (e.g. 1 sec) then multiplies by the RTT of 6us giving ~19Kb. 
 
+Now, consider what happens there's multiple `(a1, a2)` pairs pushing data through switch#1. The switch can only buffer 12Mb. So if all senders work at 25Gbps there can be at most `12Mb + BDP` of un-ACK'd data over a 6us time period before the switch drops data. BDP sets the maximum amount of data each sender should have outstanding before stopping for ACKs. That is, if senders continue to enqueue un-ACK'd data over BDP the switch will lose data.
 
-
-
-. Now if the total amount of data being moved through switch#1 by all A hosts is 19Kb
-
-
-With these assumptions at any instant in time 
-
-
-Each switch/router has a buffer for in-progress packets. It is useful to estimate the maxinum number of in-casts a single switch or router can handle simulteanously. One in-cast is, with respect to the switch or router, the number of bytes a host is sending through the switch as part of a request or response.
-
-
-
-Further suppose all A hosts in subnet#1 are sending messages to each other with an average 6us RTT through the switch. The switch can buffer 12Mb maximum of in-flight data before packets drop. If we assume data movement between switch#1 and hosts is instantenous so the full 6us RTT is due soley to the switch, we can estimate BDP (Bandwidth Delay Product) which tells us a target value each of the A hosts should have outstanding i.e. transmitted in-flight data not acknowledged:
-
-
-
-
-
-at any instant of time packets will not be dropped. In this diagram the oldest packets in switch memory are on the left; newer packets fill up the buffer appending on the right for a FIFO array: 
-
-```
-          Switch#1 buffer (12Mb)
-
- /--- oldest packets                newer packets---\               
-+----------------------------------------------------+
-|                      <empty>                       | t=0us   No messages IP (in-progress)
-+----------------------------------------------------+
-
-+----------------------------------------------------+
-|                      <empty>                       | t=1 us  
-+----------------------------------------------------+
-```
-
-What does it all mean ? The TCP Window is a buffer that determines how much data can be transferred before the server stops and waits for acknowledgements of received packets. Throughput is in essence bound by the BDP. If the BDP (or RWIN) is lower than the product of the latency and available bandwidth, we can't fill the line since the client can't send acknowledgements back fast enough. A transmission can't exceed the (RWIN / latency) value, so The TCP Window (RWIN) needs to be large enough to fit the maximum_available_bandwidth x maximum_anticipaded_delay.
-
+[Per eRPC Presentation Slide #10](https://www.usenix.org/sites/default/files/conference/protected-files/nsdi19_slides_kalia.pdf) the theoretical number of incasts is `12Mb/19Kb` or about 640 adding just 50 incasts is often preferrable based on some industry studies. eRPC was tested at 100 incasts without data loss suggesting eRPC is a better steward of bandwidth use.   
 
 
 ## ACK/NACK
