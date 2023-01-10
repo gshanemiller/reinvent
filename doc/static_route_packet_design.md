@@ -1,4 +1,4 @@
-# Static Routing Request/Response in DPDK
+# Static Routed RPCs in DPDK
 This section discusses [an extension of the UDP example](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md)
 adding:
 
@@ -21,12 +21,13 @@ value `V` for `K` or nil if not found. This is static routing in the sense `C` c
 discussed here but, for example, `C` could consult `etcd` or some other service which knows which `S` handles which keys
 `K`.  
 
-# Design Overview
+# Bare Bones Static Route Design
 
 To do KV lookup through static routing [we need flow control](https://github.com/rodgarrison/reinvent/blob/main/doc/packet_design.md#flow-control)
 on clients and servers. Flow control on the servers insures requests go to the right DPDK RXQ which does request
-in-take. We need flow control on the clients too so the response is sent back to the client `C` that made the original
-request. Note that the source UDP destination port is unused/ignored in this work:
+in-take. We need flow control on the clients so the response is sent back to the client `C` that made the original
+request. Note that the source UDP destination port is unused/ignored in this work. Recall that unlike kernel based I/O, ports 
+are pseudo in DPDK to be used or ignored as needed.
 
 ```
  /------------------------------Client Box-----------------------------\
@@ -86,10 +87,10 @@ RXQ gets the packet
 Static routing between the clients and servers means request/responses are share nothing also insuring this arrangement works for
 any number of client and server boxes.
 
-To efficiently connect RXQs and TXQs --- for example server 0's RXQ0 and TXQ0 or client 1's RXQ1 and TXQ1 --- we impose
+To efficiently pair off RXQs and TXQs --- for example server 0's RXQ0 and TXQ0 or client 1's RXQ1 and TXQ1 --- we impose
 two constraints:
 
-* the threads (lcores) handling the NIC queues run on the same CPU core. This applies to both clients and servers for
+* the threads (lcores) handling the queues run on the same CPU core. This applies to both clients and servers for
 better cache locality
 * for servers we additionally impose a SPSC (single-producer single-consumer) ring buffer to enqueue at the RXQ side
 and dequeue at the resp. TXQ side.
@@ -177,32 +178,24 @@ Thus we modify the design **server side** as follows:
 This allows the schema for requests and responses to differ since their packet memory layout is also different.
 
 ## Hot CPUs
-DPDK is poll based. [As shown in the simple UDP example](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md#rss-benchmark-output-1)
-the CPU can spin for packet work faster than it sometimes comes evidenced by the `stalledTx, stalledRx` metrics. SPSC is another 
-hot-spin loop opportunity: queues may be empty (on read) or full (on write). To avoid running at 100% CPU utilization all the time, 
-exponential backoff micro sleeps should be added. Once an event is finally found, the sleep time should be reset to the smallest delay.  
+DPDK is poll based. [As shown in the simple UDP example](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md#rss-benchmark-output-1) the CPU can spin for packet work faster than it sometimes comes evidenced by the `stalledTx, stalledRx` metrics. SPSC is another hot-spin loop opportunity: queues may be empty (on read) or full (on write). To avoid running at 100% CPU utilization all the time, exponential backoff micro sleeps should be added. Once an event is finally found, the sleep time should be reset to the smallest delay.  
 
 ## BDP (Bandwidth Delay Product)
 Typical data center networks are two tier:
 
 ```
                                   +----------+
-                                  | Router#1 |
+                                  | Router#1 | Top-of-Rack (tier-1)
                                   +----+-----+
                                  ^     ^     ^
                                 /      |      \
-                               /       V       \
+                Tier2          /       V       \      Tier 2
               +----------+<---/   +----------+  \-->+----------+
-              | Switch#1 |        | Switch#2 |      | Switch#3 |
-              | subnet#1 |        | subnet#2 |      | subnet#3 |
+              | Rack#1   |        | Rack#2   |      | Rack#3   |     <- Rack holding host boxes
+              | subnet#1 |        | subnet#2 |      | subnet#3 |     <- Rack switch for its subnet
               +----------+        +----------+      +----------+
-                    ^                   ^                 ^
-                    |                   |                 |
-                    V                   V                 V
-              +----------+        +----------+      +----------+
-              | A hosts  |        | B hosts  |      | C hosts  |     <- sender/receiver boxes with
-              | subnet#1 |        | subnet#2 |      | subnet#3 |     <- NICs talking to their switch
-              +----------+        +----------+      +----------+
+              | A hosts  |        | B hosts  |      | C hosts  |     <- boxes in rack with NICs
+              +----------+        +----------+      +----------+     <- talking to rack switch
 ```
 
 Packet movement between hosts in the same subnet goes through its respective switch 1, 2, or three. Packet movement between subnets must go out through a switch into the router down to the destination switch into the destination host.
@@ -219,13 +212,104 @@ BDP = bandwidth * RTT
 
 This calculation converts 25Gbps to bytes per 1 million microseconds (e.g. 1 sec) then multiplies by the RTT of 6us giving ~19Kb. 
 
-Now, consider what happens there's multiple `(a1, a2)` pairs pushing data through switch#1. The switch can only buffer 12Mb. So if all senders work at 25Gbps there can be at most `12Mb + BDP` of un-ACK'd data over a 6us time period before the switch drops data. In each RTT period 19Kb can be acknowledged allowing a new 19Kb to enqueue. BDP sets the maximum amount of data each sender should have outstanding before stopping for ACKs. That is, if senders continue to enqueue un-ACK'd data over BDP the switch will lose data.
+Now, consider what happens there's multiple `(a1, a2)` pairs pushing data through switch#1. The switch can only buffer 12Mb. So if all senders work at 25Gbps there can be at most `12Mb + BDP` of un-ACK'd data over a 6us time period before the switch drops data. In each RTT period 19Kb can be acknowledged allowing a new 19Kb to enqueue. In this way BDP approximates the maximum amount of data each sender should have outstanding before stopping for ACKs. It's not practically possible for senders to transmit a large amount of data without stopping for ACK at some point. BDP is that point.
 
-[Per eRPC Presentation Slide #10](https://www.usenix.org/sites/default/files/conference/protected-files/nsdi19_slides_kalia.pdf) the theoretical number of incasts is `12Mb/19Kb` or about 640. The slide points out just 50 incasts is preferrable based on some industry studies. eRPC was tested at 100 incasts without data loss suggesting eRPC is a better steward of bandwidth. But in all cases switch buffer sizes must greatly exceed BDP if incast count is practical. Finally, note BDP is bounded from above by the *slowest link in the network* including routers and NICs.
+[Per eRPC Presentation Slide #10](https://www.usenix.org/sites/default/files/conference/protected-files/nsdi19_slides_kalia.pdf) the theoretical number of incasts is `12Mb/19Kb` or about 640. An incast is a data transmitter which pushes data over the network, say, via a RPC. However, the slide also points out just 50 incasts is preferrable based on industry studies. eRPC was tested at 100 incasts without data loss suggesting eRPC is a better steward of bandwidth. 
 
-## BDP Implications and Omissions
-BDP has implications for other parts of the design. And it misses some details too. In any userspace network library the infrastructure code manipulates data into finite sized TXQs and data out of finite sized RXQs. So, for example, it's pointless to transmit new packets if the coreesponding RXQ holding ACKs and responses is full. If the NIC RXQ is full data drops. [eRPC's white paper](https://www.usenix.org/system/files/nsdi19-kalia.pdf) discusses this point in section 4.3.1 called Session credits. 
+But in all cases switch buffer sizes must greatly exceed BDP for practical incast counts. Note BDP is bounded from above by the *slowest link in the network*. It's also worth noting that plentiful switch/router buffer while honoring BDP avoids a lot of congestion and packet loss. Per [eRPC's white paper](https://www.usenix.org/system/files/nsdi19-kalia.pdf) section 5.2.2 *Common-case optimizations*:
 
+```
+Recent studies of Facebook’s datacenters support this claim: Roy et al. [60] report  that 99% of all datacenter links
+are less than 10% utilized at one-minute timescales. Zhang et al. [71, Fig. 6] report that for Web and Cache traffic, 
+90% of top-of-rack switch links, which are the most congested switches, are less than  10% utilized at 25 us timescales.
+```
+
+## Packet Flow Control
+BDP has implications for other parts of the design. [eRPC's white paper](https://www.usenix.org/system/files/nsdi19-kalia.pdf) discusses packet-level flow control in section 4.3.1 *Session credits*.  First, since any userspace network I/O runs over finite sized queues, it's pointless to transmit new packets if the corresponding RXQ holding response data is full. NICs drop data on queue-full. With BDP this also limits outstanding un-ACK'd data.
+
+Second, each eRPC session (RXQ/TXQ lcore pair here) is provisioned `C` credits on creation where `C = BDP/MTU` to achieve line rate. The paper notes Mittal et al. [53] have proposed similar flow control for RDMA NICs. Credits are spent transmitting packets, and replentished when transmitters get responses. Transmitters must await responses before sending more data if it's out of credits. Maintaining the transmitter invariant `C>=0` is best done with client initiated messaging. Servers never unilaterally send data except unless the client requests it first.
+
+*Section 5.1 Protocol messages* eRPC describes this packet protocol:
+
+* (Required) client request packet to start a new RPC
+* (Optional) client initiated request-for-response (RFR 16-bytes) when responses require multiple continuation packets
+* (Required) server credit return (CR 16-bytes) packet sent to client for each incoming packet
+ 
+The final CR is included in the final server RPC response. In the simplest case, a RPC requires only two packets one each for request and response. CRs may included in the final response.
+
+## Packet Drop/Loss
+DPDK moves UDP packet drop/loss detection responsibilities onto the library developer. The main challenge here is retransmissions  
+
+For simplicity, eRPC treats reordered packets as losses by
+dropping them. This is not a major deciency because datacenter networks typically use ECMP for load balancing,
+which preserves intra-ow ordering [30, 71, 72] except during rare route churn events. Note that current RDMA NICs
+also drop reordered packets [53].
+On suspecting a lost packet, the client rolls back the request’s wire protocol state using a simple go-back-N mechanism. It then reclaims credits used for the rolled-back transmissions, and retransmits from the updated state. The server
+never runs the request handler for a request twice, guaranteeing at-most-once RPC semantics.
+In case of a false positive, a client may violate the credit
+agreement by having more packets outstanding to the server
+than its credit limit. In the extremely rare case that such an
+erroneous loss detection occurs and the server’s RQ is out
+of descriptors, eRPC will have “induced” a real packet loss.
+We allow this possibility and handle the induced loss like a
+real packet loss.
+
+
+## Congestion and Rate Limiting
+
+## Client Initiatiated Protocol
+
+
+## Linearizability and Exactly Once Requests
+In order to implement exactly-once semantics, RIFL must
+solve four overall problems: RPC identification, completion
+record durability, retry rendezvous, and garbage collection.
+This section discusses these issues and introduces the key
+techniques RIFL uses to deal with them; Section 4 describes
+the mechanisms in more detail.
+In order to detect redundant RPCs, each RPC must have
+a unique identifier, which is present in all invocations of
+that RPC. In RIFL, RPC identifiers are assigned by clients
+and they consist of two parts: a 64-bit unique identifier for
+the client and a 64-bit sequence number allocated by that
+client. This requires a system-wide mechanism for allocating
+unique client identifiers. RIFL manages client identifiers
+with a lease mechanism described later in this section.
+The second overall problem is completion record durability. Whenever an operation completes, a record of its completion must be stored durably. This completion record must
+include the RPC identifier as well as any results that are
+returned to the client. Furthermore, the completion record
+must be created atomically with the mutations of the operation, and it must have similar durability properties. It must
+not be possible for an operation to complete without a visible completion record, or vice versa. RIFL assumes that the
+underlying system provides durable storage for completion
+records.
+The third problem is retry rendezvous: if an RPC completes and is then retried at a later time, the retries must
+find the completion record to avoid re-executing the operation. However, in a large-scale system the retry may not be
+sent to the same server as the original request. For example, many systems migrate data after a server crash, transferring ownership of the crashed server’s data to one or more
+other servers; once crash recovery completes, RPCs will be
+reissued to whichever server now stores the relevant data.
+RIFL must ensure that the completion record finds its way
+to the server that handles retries and that the server receives
+the completion record before any retries arrive. Retry rendezvous also creates issues for distributed operations that
+involve multiple servers, such as multi-object transactions:
+which server(s) should store the completion record?
+RIFL uses a single principle to handle both migration and
+distributed operations. Each operation is associated with a
+particular object in the underlying system, and the completion record is stored wherever that object is stored. If the
+object migrates, then the completion record must move with
+it. All retries must necessarily involve the same object(s),
+so they will discover the completion record. If an operation
+involves more than one object, one of them is chosen as a
+distinguished object for that operation, and the completion
+record is stored with that object. The distinguished object
+must be chosen in an unambiguous fashion, so that retries
+use the same distinguished object as the original request.
+The fourth overall problem for RIFL is garbage collection: eventually, RIFL must reclaim the storage used for
+completion records. A completion record cannot be reclaimed until it is certain that the corresponding request will
+never be retried. T
+
+
+
+https://web.stanford.edu/~ouster/cgi-bin/papers/rifl.pdf
 
 
 ## ACK/NACK
@@ -233,3 +317,31 @@ The design is errorless single message movement both at client and server.
 
 ## Multi-Packet Request/Response
 TBD
+
+
+
+
+
+
+
+Appendix B. Handling node failures
+
+
+
+
+
+
+A key design decision for an RPC system is which thread runs
+an RPC handler. Some RPC systems such as RAMCloud use
+dispatch threads for only network I/O. RAMCloud’s dispatch
+threads communicate with worker threads that run request
+handlers. At datacenter network speeds, however, interthread communication is expensive: it reduces throughput
+and adds up to 400 ns to request latency [56]. Other RPC systems such as Accelio and FaRM avoid this overhead by running all request handlers directly in dispatch threads [25, 38].
+This latter approach suers from two drawbacks when executing long request handlers: First, such handlers block other
+dispatch processing, increasing tail latency. Second, they prevent rapid server-to-client congestion feedback, since the
+server might not send packets while running user code.
+Striking a balance, eRPC allows running request handlers
+in both dispatch threads and worker threads: When registering a request handler, the programmer species whether
+the handler should run in a dispatch thread. This is the only
+
+
