@@ -177,8 +177,59 @@ Thus we modify the design **server side** as follows:
 This allows the schema for requests and responses to differ since their packet memory layout is also different.
 
 ## Hot CPUs
-Recall DPDK is poll based. [As shown in the simple UDP example](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md#rss-benchmark-output-1)
-the CPU can spin looking for packet work faster than it sometimes comes. This is shown by the `stalledTx, stalledRx`
-metrics. SPSC is another hot-spin loop opportunity: queues may be empty (on read) or full (on write). To avoid running
-at 100% CPU utilization all the time, exponential backoff micro sleeps should be added. Once an event is finally found,
-the sleep time should be reset to the smallest delay.  
+DPDK is poll based. [As shown in the simple UDP example](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md#rss-benchmark-output-1)
+the CPU can spin for packet work faster than it sometimes comes evidenced by the `stalledTx, stalledRx` metrics. SPSC is another 
+hot-spin loop opportunity: queues may be empty (on read) or full (on write). To avoid running at 100% CPU utilization all the time, 
+exponential backoff micro sleeps should be added. Once an event is finally found, the sleep time should be reset to the smallest delay.  
+
+## BDP (Bandwidth Delay Product)
+Typical data center networks are two tier:
+
+```
+                                  +----------+
+                                  | Router#1 |
+                                  +----+-----+
+                                 ^     ^     ^
+                                /      |      \
+                               /       V       \
+              +----------+<---/   +----------+  \-->+----------+
+              | Switch#1 |        | Switch#2 |      | Switch#3 |
+              | subnet#1 |        | subnet#2 |      | subnet#3 |
+              +----------+        +----------+      +----------+
+                    ^                   ^                 ^
+                    |                   |                 |
+                    V                   V                 V
+              +----------+        +----------+      +----------+
+              | A hosts  |        | B hosts  |      | C hosts  |     <- sender/receiver boxes with
+              | subnet#1 |        | subnet#2 |      | subnet#3 |     <- NICs talking to their switch
+              +----------+        +----------+      +----------+
+```
+
+Packet movement between hosts in the same subnet goes through its respective switch 1, 2, or three. Packet movement between subnets must go out through a switch into the router down to the destination switch into the destination host.
+
+Suppose switch#1 has a 12Mb buffer, 25Gbps bandwidth, and an average 6us RTT in its subnet. Now consider a distinct sender/receiver host pair `(a1, a2)` in subnet#1. Ideally `a1` would transmit data to `a2` at the switch's bandwidth capacity. Assume host box NICs equal or exceed the switch's bandwidth. Once `a2` gets data it transmits `ACKs` to `a1`. So after the first packet of the first message from `a1` is on the wire, it'll require 6us to get an `ACK` by assumption for that message. While `a1` awaits `ACKs` its shoving data on the wire.
+
+The amount of un-ACK'd data in the pipeline between `(a1, a2)` is called the BDP (Bandwidth Delay Product) no matter if it's on the wire, in the switch, or processing in the receiver. So starting at time `t=0us` when the switch is empty and there's no I/O until `t=6us=RTT` the BDP is ~19Kb:
+
+```
+BDP = bandwidth * RTT
+>>> float(25/8) * (1024*1024*1024) / 1e6 * 6
+~20133 bytes
+```
+
+This calculation converts 25Gbps to bytes per 1 million microseconds (e.g. 1 sec) then multiplies by the RTT of 6us giving ~19Kb. 
+
+Now, consider what happens there's multiple `(a1, a2)` pairs pushing data through switch#1. The switch can only buffer 12Mb. So if all senders work at 25Gbps there can be at most `12Mb + BDP` of un-ACK'd data over a 6us time period before the switch drops data. In each RTT period 19Kb can be acknowledged allowing a new 19Kb to enqueue. BDP sets the maximum amount of data each sender should have outstanding before stopping for ACKs. That is, if senders continue to enqueue un-ACK'd data over BDP the switch will lose data.
+
+[Per eRPC Presentation Slide #10](https://www.usenix.org/sites/default/files/conference/protected-files/nsdi19_slides_kalia.pdf) the theoretical number of incasts is `12Mb/19Kb` or about 640. The slide points out just 50 incasts is preferrable based on some industry studies. eRPC was tested at 100 incasts without data loss suggesting eRPC is a better steward of bandwidth. But in all cases switch buffer sizes must greatly exceed BDP if incast count is practical. Finally, note BDP is bounded from above by the *slowest link in the network* including routers and NICs.
+
+## BDP Implications and Omissions
+BDP has implications for other parts of the design. And it misses some details too. In any userspace network library the infrastructure code manipulates data into finite sized TXQs and data out of finite sized RXQs. So, for example, it's pointless to transmit new packets if the coreesponding RXQ holding ACKs and responses is full. If the NIC RXQ is full data drops. [eRPC's white paper](https://www.usenix.org/system/files/nsdi19-kalia.pdf) discusses this point in section 4.3.1 called Session credits. 
+
+
+
+## ACK/NACK
+The design is errorless single message movement both at client and server.  
+
+## Multi-Packet Request/Response
+TBD
