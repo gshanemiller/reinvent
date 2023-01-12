@@ -190,7 +190,7 @@ cd $H
 rm -rf ./dpdk
 git clone git://dpdk.org/dpdk
 rm -rf ./reinvent
-git clone https://github.com/rodgarrison/reinvent.git
+git clone https://github.com/gshanemiller/reinvent.git
 
 #
 # Build and install DPDK

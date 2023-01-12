@@ -23,7 +23,7 @@ This document is no longer maintained. I quit using AWS (almost) bare metal inst
 * Stock packages installed by `yum`
 * [DPDK](https://git.dpdk.org/) head commit
 * [AWS DPDK Drivers](https://github.com/amzn/amzn-drivers.git) head commit
-* [Reinvent source code](https://github.com/rodgarrison/reinvent) head commit
+* [Reinvent source code](https://github.com/gshanemiller/reinvent) head commit
 * Last test completed 2022-03-06
 
 # References:
@@ -130,7 +130,7 @@ DPDK build is about ~20mins.
 
 1. Insure machine meets requirements and that IOMMU is enabled on each machine
 2. SSH login to machine allocated in (1)
-3. [From the reinvent GIT repo](https://github.com/rodgarrison/reinvent/blob/main/scripts/install) copy-and-paste this script into your home directory in (2)
+3. [From the reinvent GIT repo](https://github.com/gshanemiller/reinvent/blob/main/scripts/install) copy-and-paste this script into your home directory in (2)
 4. Run command: `chmod 555 ./install`
 5. Run command: `./install`
 6. When install is done run command: `. ~/.bashrc`
@@ -299,7 +299,7 @@ The client side shows packets sent:
 Each task dumps the AWSConfig object which configures the DPDK work in Reinvent. It's in JSON format so it can pretty-printed.
 The client config is given here (elided) with some comments in the right margin. This config is 100% based on the 
 environment variables in the driver script `reinvent_dpdk_udp_integration_test`. The environment variables are described
-in [detail here](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_initaws.h):
+in [detail here](https://github.com/gshanemiller/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_initaws.h):
 
 ```
 $ cat config | python3 -m json.tool

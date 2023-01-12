@@ -1,12 +1,12 @@
 # Static Routed RPCs in DPDK
-This section discusses [an extension of the UDP example](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md)
+This section discusses [an extension of the UDP example](https://github.com/gshanemiller/reinvent/blob/main/doc/equinix_mellanox_setup.md)
 adding:
 
 * requests and responses
 * static routing in which the client transmits a request to a specific receiver on the server
 * the server sends a response back to the requesting client
 
-[Find the code here.](https://github.com/rodgarrison/reinvent/tree/main/integration_tests/reinvent_dpdk_static_route_udp)
+[Find the code here.](https://github.com/gshanemiller/reinvent/tree/main/integration_tests/reinvent_dpdk_static_route_udp)
 
 Beyond how this is architected in DPDK, we'll use this program to asssess UDP reliability in the absence of conjestion
 control and correction to find:
@@ -14,7 +14,7 @@ control and correction to find:
 * number of UDP packets dropped
 * number of UDP packets misordered
 
-To motivate this work consider the [static routing scenario discussed in the packet design doc.](https://github.com/rodgarrison/reinvent/blob/main/doc/packet_design.md#flow-control)
+To motivate this work consider the [static routing scenario discussed in the packet design doc.](https://github.com/gshanemiller/reinvent/blob/main/doc/packet_design.md#flow-control)
 Here a client `C` wants to obtain the value `V` for a key `K`. To do this, the client first determines the IP address
 and destination port `S` of the server which handles `K`. `C` send sends a request to `S`. `S` responds to `C` with the
 value `V` for `K` or nil if not found. This is static routing in the sense `C` chooses `S`. Determining `S` is not
@@ -23,7 +23,7 @@ discussed here but, for example, `C` could consult `etcd` or some other service 
 
 # Bare Bones Static Route Design
 
-To do KV lookup through static routing [we need flow control](https://github.com/rodgarrison/reinvent/blob/main/doc/packet_design.md#flow-control)
+To do KV lookup through static routing [we need flow control](https://github.com/gshanemiller/reinvent/blob/main/doc/packet_design.md#flow-control)
 on clients and servers. Flow control on the servers insures requests go to the right DPDK RXQ which does request
 in-take. We need flow control on the clients so the response is sent back to the client `C` that made the original
 request. Note that the source UDP destination port is unused/ignored in this work. Recall that unlike kernel based I/O, ports 
@@ -97,13 +97,13 @@ and dequeue at the resp. TXQ side.
 
 To implement all these constraints we use Reinvent's flexible configuration system:
 
-* [Program flow control client side](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L92)
-* [Program flow control server side](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L226)
-* [Program client TXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L58)
-and [client RXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L72)
+* [Program flow control client side](https://github.com/gshanemiller/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L92)
+* [Program flow control server side](https://github.com/gshanemiller/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L226)
+* [Program client TXQ assignment](https://github.com/gshanemiller/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L58)
+and [client RXQ assignment](https://github.com/gshanemiller/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L72)
 so it's staggered by CPU core
-* [Program server TXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L189)
-and [server RXQ assignment](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L197)
+* [Program server TXQ assignment](https://github.com/gshanemiller/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L189)
+and [server RXQ assignment](https://github.com/gshanemiller/reinvent/blob/main/scripts/reinvent_dpdk_static_route_udp_integration_test#L197)
 so it's staggered by CPU core
 
 These configurations are based on the Equinix's `c3.small.x86` offering which has 1 CPU with 8 cores and two hyper-threads
@@ -119,8 +119,8 @@ Putting these configs together we get on the client side:
 and similarly for the server.
 
 Finally, we need to integrate one SPSC ring buffer per RXQ/TXQ pair on the server. This is accomplished by extending the
-class `Reinvent::Dpdk::Worker` with [ExtWorker](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_static_route_udp/reinvent_dpdk_static_route_udp_test_common.h#L18). This class is used on server boxes only. Upon construction `ExtWorker` inspects the RXQ/TXQ assignments
-to create one [SPSC](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_static_route_udp/reinvent_dpdk_static_route_udp_test_spsc.h)
+class `Reinvent::Dpdk::Worker` with [ExtWorker](https://github.com/gshanemiller/reinvent/blob/main/integration_tests/reinvent_dpdk_static_route_udp/reinvent_dpdk_static_route_udp_test_common.h#L18). This class is used on server boxes only. Upon construction `ExtWorker` inspects the RXQ/TXQ assignments
+to create one [SPSC](https://github.com/gshanemiller/reinvent/blob/main/integration_tests/reinvent_dpdk_static_route_udp/reinvent_dpdk_static_route_udp_test_spsc.h)
 per TXQ/RXQ pair. TXQs own the buffer and RXQs have a pointer to it which is exposed in the public API.
 
 This design will see one or two minor modifications once some implementation details are considered.
@@ -128,12 +128,12 @@ This design will see one or two minor modifications once some implementation det
 # Design Details
 
 ## SPSC Performance
-Imposing a SPSC between server side RXQ/TXQs lcores adds latency. The [SPSC implementation](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_static_route_udp/reinvent_dpdk_static_route_udp_test_spsc.h) was benchmarked on `c3.small.x86`. It can move around 105 Mb/sec or about 10ns per 64-byte message running two 
+Imposing a SPSC between server side RXQ/TXQs lcores adds latency. The [SPSC implementation](https://github.com/gshanemiller/reinvent/blob/main/integration_tests/reinvent_dpdk_static_route_udp/reinvent_dpdk_static_route_udp_test_spsc.h) was benchmarked on `c3.small.x86`. It can move around 105 Mb/sec or about 10ns per 64-byte message running two 
 threads on the same core. The SPSC had a fixed capacity of 5000 data elements each 64-bytes in size. This flow enqueues
 one message, and dequeues one message at a time. Batching read/writes is not coded yet. I consider this acceptable loss.
 
 ## Packet memory
-[As per DPDK](https://github.com/rodgarrison/reinvent/blob/static/doc/packet_design.md#packet-memory-mental-picture)
+[As per DPDK](https://github.com/gshanemiller/reinvent/blob/static/doc/packet_design.md#packet-memory-mental-picture)
 packet memory is wrapped in a structure called `rte_mbuf`. Assuming the NIC supports `RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE`
 (Mellanox NICs can) the DPDK library will automatically free transmitted packets.
 
@@ -178,7 +178,7 @@ Thus we modify the design **server side** as follows:
 This allows the schema for requests and responses to differ since their packet memory layout is also different.
 
 ## Hot CPUs
-DPDK is poll based. [As shown in the simple UDP example](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md#rss-benchmark-output-1) the CPU can spin for packet work faster than it sometimes comes evidenced by the `stalledTx, stalledRx` metrics. SPSC is another hot-spin loop opportunity: queues may be empty (on read) or full (on write). To avoid running at 100% CPU utilization all the time, exponential backoff micro sleeps should be added. Once an event is finally found, the sleep time should be reset to the smallest delay.  
+DPDK is poll based. [As shown in the simple UDP example](https://github.com/gshanemiller/reinvent/blob/main/doc/equinix_mellanox_setup.md#rss-benchmark-output-1) the CPU can spin for packet work faster than it sometimes comes evidenced by the `stalledTx, stalledRx` metrics. SPSC is another hot-spin loop opportunity: queues may be empty (on read) or full (on write). To avoid running at 100% CPU utilization all the time, exponential backoff micro sleeps should be added. Once an event is finally found, the sleep time should be reset to the smallest delay.  
 
 ## BDP (Bandwidth Delay Product)
 Typical data center networks are two tier:

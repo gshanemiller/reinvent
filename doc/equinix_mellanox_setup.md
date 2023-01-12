@@ -97,7 +97,7 @@ but please see the **IMPORTANT** note below re: enp2s0f1:
 
 Instructions 10-20 must be repeated once for each machine:
 
-10. [In your browser surf to the install script](https://github.com/rodgarrison/reinvent/blob/main/scripts/install)
+10. [In your browser surf to the install script](https://github.com/gshanemiller/reinvent/blob/main/scripts/install)
 11. Copy the script by clicking on github's copy button.
 12. In your ssh login run the command: `cat > install` then paste in the script. Press CTRL-D.
 13. Run command: `chmod 755 install`

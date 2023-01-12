@@ -2,7 +2,7 @@
 Library: DPDK userspace library read/write UDP messages with congestion control
 
 # Status
-* Early-alpha: under heavy development. [Major limitations given here.](https://github.com/rodgarrison/reinvent/issues)
+* Early-alpha: under heavy development. [Major limitations given here.](https://github.com/gshanemiller/reinvent/issues)
 
 # Design Goals
 This library intends to be a rewrite of [eRPC](https://github.com/erpc-io/eRPC) which was the motivation for this work.
@@ -45,6 +45,6 @@ in turn on the O/S and version. DPDK NICs must have an IP address assignment and
 other over a local LAN. The Equinix setup guide (link below) deals with all these issues.
 
 # Getting Started
-* [Read setup instructions](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md). This will
+* [Read setup instructions](https://github.com/gshanemiller/reinvent/blob/main/doc/equinix_mellanox_setup.md). This will
 take you from just-provisioned Equinix boxes to running UDP sender/receiver tests through DPDK.
-* [Read about DPDK packet design for IPV4 UDP](https://github.com/rodgarrison/reinvent/blob/main/doc/packet_design.md)
+* [Read about DPDK packet design for IPV4 UDP](https://github.com/gshanemiller/reinvent/blob/main/doc/packet_design.md)

@@ -12,11 +12,11 @@ sub-divided into cores.
 
 You may also find these links helpful:
 
-* [UDP client/server example](https://github.com/rodgarrison/reinvent/tree/main/integration_tests/reinvent_dpdk_udp) 
-* [Example UDP client/server configuration](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_udp_integration_test)
-* [Lcore description](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_lcore.h)
-* [How your threads get started](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_awsworker.h)
-* [How to build this library and run UDP send/receive tests](https://github.com/rodgarrison/reinvent/blob/main/doc/equinix_mellanox_setup.md)
+* [UDP client/server example](https://github.com/gshanemiller/reinvent/tree/main/integration_tests/reinvent_dpdk_udp) 
+* [Example UDP client/server configuration](https://github.com/gshanemiller/reinvent/blob/main/scripts/reinvent_dpdk_udp_integration_test)
+* [Lcore description](https://github.com/gshanemiller/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_lcore.h)
+* [How your threads get started](https://github.com/gshanemiller/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_awsworker.h)
+* [How to build this library and run UDP send/receive tests](https://github.com/gshanemiller/reinvent/blob/main/doc/equinix_mellanox_setup.md)
 
 # H/W Mental Picture
 ```
@@ -130,7 +130,7 @@ to the hash function only.
 
 Note that if RSS is disabled all packets go to logical RXQ #0 at the destination. 
 
-Enabling RSS in the Reinvent library is a straightforward process. The [example script](https://github.com/rodgarrison/reinvent/blob/main/scripts/reinvent_dpdk_udp_integration_test)
+Enabling RSS in the Reinvent library is a straightforward process. The [example script](https://github.com/gshanemiller/reinvent/blob/main/scripts/reinvent_dpdk_udp_integration_test)
 demonstrates the settings you need: 
 
 1. You must set RX_MQ_MASK value to include the bit for RTE_ETH_MQ_RX_RSS_FLAG (e.g. value 1)
@@ -138,7 +138,7 @@ demonstrates the settings you need:
 3. You must set a non-zero value in RX_RSS_HF which describes which packet types RSS should be applied over (e.g. 41868
 enables all IP packet types).
 
-[Source code](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_initaws.h) provides
+[Source code](https://github.com/gshanemiller/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_initaws.h) provides
 additional information with links to the DPDK API documentation where values may be found. Search for RSS.
 
 To get symmetrical RSS assignment meaning the reverse route `B` to `A` goes back to the same lcore that originally
@@ -318,7 +318,7 @@ Figure 2: DPDK TLB, memzone, mempool, mbuf relationships
 --------------------------------------------------------
 ```
 
-The [setup script](https://github.com/rodgarrison/reinvent/blob/main/scripts/setup) reserves huge TLB memory. TLB
+The [setup script](https://github.com/gshanemiller/reinvent/blob/main/scripts/setup) reserves huge TLB memory. TLB
 memory helps to avoid TLB misses which is important for user-space NIC work. All packets run through main memory,
 and there will be zillions of these. TLB mounts are praxis in this space, and it's easy to do. Creating the mount
 is done once after machine (re)start.
@@ -595,15 +595,15 @@ UDP IPV4 packet data includes many things,
 The Reinvent library accomplishes this in three ways:
 
 * Runs DPDK helper macros `rte_cpu_to_be_16, rte_cpu_to_be_32, rte_cpu_to_be_64`
-* Runs `rte_ether_unformat_addr` to convert a textual MAC address into packet ready binary format. See [UDPRoute::convertSrcMac](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_udproute.h#L208)
-* A combination of above, for example, [IPV4 addresses in UDPRoute::convertSrcIp](https://github.com/rodgarrison/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_udproute.h#L228)
+* Runs `rte_ether_unformat_addr` to convert a textual MAC address into packet ready binary format. See [UDPRoute::convertSrcMac](https://github.com/gshanemiller/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_udproute.h#L208)
+* A combination of above, for example, [IPV4 addresses in UDPRoute::convertSrcIp](https://github.com/gshanemiller/reinvent/blob/main/src/reinvent/dpdk/reinvent_dpdk_udproute.h#L228)
 
 Programmers **do not** need to prepare the application payload in a defined endianess or byte order if it's guaranteed
 that senders and receivers are binary compatible. Serious consideration of payload encoding might include Protobuf, 
 Cap'n Proto, XML, or JSON.
 
 # Creating a UDP Packet and Transmitting it
-[For a buildable example demonstrating UDP RX/TX see](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_udp/reinvent_dpdk_udp_integration_test.cpp#L102) in the function `clientMainLoop`. 
+[For a buildable example demonstrating UDP RX/TX see](https://github.com/gshanemiller/reinvent/blob/main/integration_tests/reinvent_dpdk_udp/reinvent_dpdk_udp_integration_test.cpp#L102) in the function `clientMainLoop`. 
 
 **Note:** the following code mention UDP ports. Those who have done UNIX socket programming know ports are an integral
 part to point-to-point communication. However, in the DPDK context, **you do not create ports**. These ports are pseudo
@@ -639,7 +639,7 @@ allocate eight mbufs (cira line 310 in example code):
   }
 ```
 
-[The buildable example](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_udp/reinvent_dpdk_udp_integration_test.cpp#L102) comes with a default route for each TXQ. Therefore we can prepare some of the information ahead of time before we enter a loop that prepares each packet. Unless otherwise noted these variables are in DPDK big-endian format correct for packet construction:
+[The buildable example](https://github.com/gshanemiller/reinvent/blob/main/integration_tests/reinvent_dpdk_udp/reinvent_dpdk_udp_integration_test.cpp#L102) comes with a default route for each TXQ. Therefore we can prepare some of the information ahead of time before we enter a loop that prepares each packet. Unless otherwise noted these variables are in DPDK big-endian format correct for packet construction:
 
 ```
   // rte_cpu_to_be_16 not run here because this doesn't go into packets
@@ -811,7 +811,7 @@ REINVENT_UTIL_LOG_DEBUG("sent " << txCount << " packets" << std::endl);
 
 # Receiving UDP Packet(s)
 
-RX is very simple. See [serverMainLoop](https://github.com/rodgarrison/reinvent/blob/main/integration_tests/reinvent_dpdk_udp/reinvent_dpdk_udp_integration_test.cpp#L270).
+RX is very simple. See [serverMainLoop](https://github.com/gshanemiller/reinvent/blob/main/integration_tests/reinvent_dpdk_udp/reinvent_dpdk_udp_integration_test.cpp#L270).
 
 # On Queue Thresholds
 

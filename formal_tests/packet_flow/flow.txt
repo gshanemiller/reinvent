@@ -1,0 +1,94 @@
+Legend: 
+    * Client TX Packets: are packets client SHOULD send 
+    * Server TX Packets: are packets server SHOULD send
+    * Diagram shows what client sent & what it ACTUALLY got
+    * Focus is on client's perspective. What server ACTUALLY
+      got is not discussed/indicated
+    * 'i' is RPC uniqueId
+    * 's' is per RPC unique sequenceId within some 'i'
+
+ERROR FREE EXAMPLE
+==========================================================
+Scenario: 1 REQ packet <-> 1 RSP_CR packet
+
+C = 2                               
+Client            Server
+  |                 |
+  |  REQ i=0, s=0   |         Client TX Packets
+  +---------------+ |         -----------------
+  |                \|         Req = [ {t=REQ, i=0, s=0} ]
+  |                 +
+  |                 |
+  |  RSP_CR i=0, s=0|
+  | +---------------+         Server State
+  |/                |         ------------
+  +                 |         Rsp = [ {t=RSP_CR, i=0, s=0} ]
+  |                 |
+  |                 |
+
+
+PACKET REORDER EXAMPLE
+==========================================================
+Scenario: 2 REQ packets <-> 3 RSP_CR packets
+
+At the indicated error point client receives {t=CR, i=0, s=1}.
+It expects s=0. At this point in time client can't know if its
+{t=REQ, i=0, s=0} was lost/dropped or if CRs came back in wrong
+order 
+
+eRPC treats packet reording as packet drop. Therefore the
+behavior of eRPC, when it corrects for this problem, is the
+same as *IF* {t=CR, i=0, s=0} that comes later was never
+sent. Now, in this example it *WAS* sent albeit in the wrong
+order
+  
+C = 2                               
+Client            Server
+  |                 |
+  |  REQ i=0, s=0   |         Client TX Packets
+  +---------------+ |         -----------------
+  |                \|         Req = [ {t=REQ, i=0, s=0},
+  |                 +                 {t=REQ, i=0, s=1},
+  |  REQ i=0, s=1   |                 {t=RFR, i=0, s=2},
+  +---------------+ |                 {t=RFR, i=0, s=3} ]
+  |                \| 
+  |                 + +--- error here: should be s=0
+  |  CR i=0, s=1    | |                
+  | +---------------*-+               
+  |/                |         Server TX Packets
+  +                 |         -----------------
+  |  CR i=0, s=0    |         Rsp = [ {t=CR,     i=0, s=0},
+  | +---------------*                 {t=CR,     i=0, s=1},
+  |/                |                 {t=RSP_CR, i=0, s=2},
+  |                 |                 {t=RSP_CR, i=0, s=3},
+  .                 .                 {t=RSP_CR, i=0, s=4} ]
+  .                 .
+  .                 .
+
+PACKET DROP EXAMPLE
+==========================================================
+Scenario: 2 REQ packets <-> 3 RSP_CR packets
+
+This is essentially the same as the immeidately previous
+scenaio. {t=CR, i=0, s=0} was never received by client
+  
+C = 2                               
+Client            Server
+  |                 |
+  |  REQ i=0, s=0   |         Client TX Packets
+  +---------------+ |         -----------------
+  |                \|         Req = [ {t=REQ, i=0, s=0},
+  |                 +                 {t=REQ, i=0, s=1},
+  |  REQ i=0, s=1   |                 {t=RFR, i=0, s=2},
+  +---------------+ |                 {t=RFR, i=0, s=3} ]
+  |                \| 
+  |                 + +--- error here: should be s=0
+  |  CR i=0, s=1    | |                
+  | +---------------*-+               
+  |/                |         Server TX Packets
+  +                 |         -----------------
+  .                 .         Rsp = [ {t=CR,     i=0, s=0},
+  .                 .                 {t=CR,     i=0, s=1},
+  .                 .                 {t=RSP_CR, i=0, s=2},
+                                      {t=RSP_CR, i=0, s=3},
+                                      {t=RSP_CR, i=0, s=4} ]
