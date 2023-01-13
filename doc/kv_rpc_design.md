@@ -5,7 +5,7 @@ Evolving from [a trivial UDP example](https://github.com/gshanemiller/reinvent/b
 * durable writes 
 * exactly-once message processing
 
-Composing each feature into a well engineered whole is complex. This document elicits each technical challenge with periodic pauses to summarize and integrate ultimately answering the overall goal.
+Composing each feature into a well engineered whole is complex. This document elicits each technical challenge with periodic pauses to summarize and integrate ultimately resolving he overall goal.
 
 To motivate this work consider the [static routing scenario discussed in the packet design doc.](https://github.com/gshanemiller/reinvent/blob/main/doc/packet_design.md#flow-control)
 Here a client `C` wants to obtain the value `V` for a key `K`. To do this, the client first determines the IP address and destination port `S` of the server which handles `K`. `C` send sends a request to `S`. `S` responds to `C` with the value `V` for `K` or nil if not found. This is static routing in the sense `C` chooses `S`. Determining `S` is not discussed here but, for example, `C` could consult `etcd` or some other service which knows which `S` handles which keys `K`.  
@@ -107,7 +107,7 @@ dispatch threads, and longer handlers use worker threads.
 
 Now, the static routing topic above is designed so that RXQ/TXQ lcore pairs are distinct. But this is a design choice too. One DPDK lcore could handle both i.e. read request from its RXQ transmitting a response through its TXQ. Combining both eliminates interthread communication. Charging worker threads with request work involves at least one interthread handoff. The RXQ must find an eligble worker then transfer request state to it. The worker either transmits the response over a TXQ it owns, or gives the response data to a separate TXQ lcore through a second interthread handoff.
 
-Before moving to solutions we need to look at *linearizability* and *queue processing*. The only thing that can be reasonably excluded now is interthread communication of large responses. If computing the result runs on one thread, and is transmitted to the requester in another thead, the response either must be copied or the threads must carefully avoid data races. KV requests are typically small whereas responses could be comparitively large.
+Before moving to solutions we need to look at *linearizability* and *queue processing*. The only thing that can be reasonably excluded now is interthread communication of large responses. If computing the result runs on one thread, and is transmitted to the requester in another thead, the response must either be copied or the threads must carefully avoid data races. KV requests are typically small whereas responses can be comparitively large.
  
 # Linearizability 
 If the KV system allows writes it must guarantee sensible responses interleaved with reads. *Linearizability* is the strongest guarantee. It comes in three parts:
@@ -154,15 +154,70 @@ read of 1.
 
 Linearizability correctness runs into DPDK queue processing in two ways. First, a RXQ contain packets for multiple different RPC requests at different stages of completion. Although many RPCs require one just request packet, packet flow control (below) and multi-packet RPCs require two or more request packets. This means the server must carefully start or complete read/writes so linearizability is obeyed.
 
-The second and larger problem is worker threads. Suppose a server's request RXQ contiguously contains several read and two write requests for the same key. If the server runs the requests concurrently through worker threads the resulting system behavior is undefined. Putting aside the obvious race condition reading/writing the same KV pair memory, this scenario is just Herlihy's counter-example in a different context. Multi-key writes amplifies this problem considerably.
+The second and larger problem is worker threads. Suppose a server's request RXQ contains several read and two write requests for the same key. If the server runs the requests concurrently through worker threads the resulting system behavior is undefined. Putting aside the obvious race condition reading/writing the same KV pair memory, this scenario is just Herlihy's counter-example in a different context. Multi-key writes amplifies this problem considerably.
+
+Now, in the context of KV alone, worker threads are probably net-bad. If key lookup is fast one distinguished thread can handle each request sequentially. Linearizability is satisfied. But summarily excluding work threads is not consequence free. eRPC reminds lengthy request work in dispatch threads increases latency putting back pressure on clients. Linearizability partially conflicts with general RPC handling options.
 
 # Queue Processing
 
+## Client/Server Context
+The static routing diagram shows RXQ/TXQ queue pairs in the client and server are similarly designed. RXQ/TXQ lcores are distinct, which is one design choice. However, there are contextual differences processing packets. Per Packet Flow Control (below) clients only initiate RPCs. Servers never unilaterally send data to clients. This means client TXQ processing of server responses may potentially leverage state it previosuly made for the request.
 
+RXQ server side does not have this advantage. The server only becomes aware of RPC work when it takes a packet off the wire. Eventually the server might parlay its accumulated request state RXQ side when it later makes and sends TXQ response packets.
 
+RXQ processors on both clients and servers are saddled with RPC identification. The next section goes into more detail. The key problem is knowing whether packet in hand is for a previously known RPC or a brand new RPC. Finding or creating this state must be fast. Removing state for completed RPCs is also a requirement. 
 
+Consequently, the need to deftly transitition RXQ to TXQ is important. The request contains the client IP address and port which should get the reply. The response needs that. The response data has to be handy. Responses can't be attemped or transmitted until the full RPC request is ready. There's no guarantee a request is well-formed in the first packet alone. If TXQ processors leverage RXQ side state, the state has to be made race condition free.
 
+## Mechanics of RXQ Processing
+Much but not all RXQ processing lead to DPDK library calls. But once a request packet has been read, the processor must know if it's a new RPC or a continuation packet of an earlier request. In general client RXQs hold responses from multiple distinct responses from multiple servers. Server RXQs hold requests for multiple distinct clients. Packet order within these RXQs is unknown.
 
+Request packets must uniquely describe the client. [RIFL](https://web.stanford.edu/~ouster/cgi-bin/papers/rifl.pdf) partially identifies clients by a lease ID. However, the same client can run multiple distinct RPCs, for example, find the value for key K1 then K2 in a second RPC. If we assign a sequence number to each new RPC by leaseId we can make a packet data prefix:
+
+```
+struct PacketPrefix = {    leaseId:  uint64,  // leaseId unique per client
+                           rpcSeqId: uint32,  // rpcSeqId per leaseId
+                           pktSeqId: uint8,   // packet number in rpcSeqId
+                           pktType:  uint8    // e.g. REQUEST, RESPONSE etc.
+};
+
+struct RequestPacket: public PacketPrefix { ... };   // more data
+struct Responseacket: public PacketPrefix { ... };   // more data
+```
+
+At 14-16 bytes each depending on alignment, it allows at most `0xFFFFFFFF` distinct RPCs per lease, and at most 255 packets per RPC. I assume leases are destroyed long before `0xFFFFFFFF` or that the client is forced into a new leaseId on wrap.
+
+Regardless of the dispatch/worker thread set design, the first RXQ processor task is determining if `(leaseId, rpcSeqId)` is known or unknown. Next steps include:
+
+* create new RPC state when the first packet of a new RPC is seen
+* update RPC state if needed for continuation packets
+* know if a request is well-formed initiating response work
+* dropped/reordered packets: detecting congestion problems depends on prior state
+* handle dups part of exactly-one-processing and linearizability
+
+`(leaseId, rpcSeqId)` lookup is a classic data structure excercise so instead I analyze data sizing. [Queue.cpp](https://github.com/gshanemiller/reinvent/blob/main/experiment/packet_flow/flow.cpp) demonstrates filling a queue with packets and processing it. The code runs from *the client perspective* e.g. processing a RXQ in the client. A full server response is 5 packets per RPC.
+
+From BDP discussion (below) we know there's at most BDP per RPC in the queue. Second, the RXQ itself has finite capacity but certainly less than the rack's switch. Third, packet-level-flow (also below) limits each sender to C credits. Using the numbers in the BDP workup, each RPC session has 13 credits:
+
+```
+BDP = 19Kb
+MTU = 1500 bytes
+C   = BDP/MTU = 13 credits per RPC
+```
+
+A RXQ with N entries can hold N distinct RPCs in the worst case. This could happen if, improbably, servers managed to get exactly one response packet from N distinct requests into the client's RXQ at the same time. `queue.cpp` models 5 response packets. If we assume that, on average, half of a response per RPC is in queue one can revise the estimate downward to `N / (2.5)`. For a 512 entry RXQ that's 204 unique RPCs. Note that RXQ sizing has two dimensions: the total data size for all packets N whether that's a few large packets or many small packets. RPC identification depends on packet count only not data size.
+
+The point: the search space is **very likely less than 1,000 identifiers**.
+
+## Exactly-Once-Processing
+Whether due to client error or due to congestion error recovery server side of RXQ processing must not re-run old RPCs. Clearly, errorenously re-running a mutation twice corrupts integrity:
+
+```
+Time t0: request 123: put(k, v)       <-- k = v
+Time t1: request 322: get(k)          <-- return v
+Time t2: request 432: put(k, v1)      <-- k = v1
+Time t3: request 123: put(k, v)       <-- repeat 123 corrupts #432
+```
 
 
 # BDP (Bandwidth Delay Product)
