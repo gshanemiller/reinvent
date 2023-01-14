@@ -206,7 +206,7 @@ Consequently, the need to deftly transitition RXQ to TXQ is important. The reque
 ## Mechanics of RXQ Processing
 Much but not all RXQ processing lead to DPDK library calls. But once a request packet has been read, the processor must know if it's a new RPC or a continuation packet of an earlier request. In general client RXQs hold responses from multiple distinct responses from multiple servers. Server RXQs hold requests for multiple distinct clients. Packet order within these RXQs is unknown.
 
-Request packets must uniquely describe the client. [RIFL](https://web.stanford.edu/~ouster/cgi-bin/papers/rifl.pdf) partially identifies clients by a lease ID. However, the same client can run multiple distinct RPCs, for example, find the value for key K1 then K2 in a second RPC. If we assign a sequence number to each new RPC by leaseId we can make a packet data prefix:
+Request packets must uniquely describe the client. [RIFL](https://web.stanford.edu/~ouster/cgi-bin/papers/rifl.pdf) partially identifies clients by a [lease ID](https://pkg.go.dev/go.etcd.io/etcd/client/v3#LeaseID). However, the same client can run multiple distinct RPCs, for example, find the value for key K1 then K2 in a second RPC. If we assign a sequence number to each new RPC by leaseId we can make a packet data prefix:
 
 ```
 struct PacketPrefix = {    leaseId:  uint64,  // leaseId unique per client
