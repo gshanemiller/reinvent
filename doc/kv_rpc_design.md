@@ -158,14 +158,39 @@ The second and larger problem is worker threads. Suppose a server's request RXQ 
 
 Now, in the context of KV alone, worker threads are probably net-bad. If key lookup is fast one distinguished thread can handle each request sequentially. Linearizability is satisfied. But summarily excluding work threads is not consequence free. eRPC reminds lengthy request work in dispatch threads increases latency putting back pressure on clients. Linearizability partially conflicts with general RPC handling options.
 
-Herlihy defines linearizability by way of a partial order. For any two events `e0, e1` the server processes their ultimate sequence order history H of processing satifies linearizability if:
+Herlihy defines linearizability (p468) as a partial order. For any two events `e0, e1` the server sequence history H in which it processed `e0, e1` satifies linearizability if:
 
 ```
-e0 <_H e1 if response(e0) precedes request(e1) in H. H is irreflexive meaning e0, e1 are distinct events.
+e0 <_H e1 if server's response(e0) precedes request(e1) in H. H is irreflexive.
 ```
 
+This ordering is *partial* not *total*. That means that not all client requests `e0, e1` can be ordered as `e0<e1` or `e1<e0` by linearizability in the server. For example, events going to different servers are not (generally) linearizability unless 2PC (two phase commit) is in effect. `e0 <_H e0` is not defined. H is irreflexive.
 
-Returning the diagram above, the server must interleave all the read/write requests *as if there was only one client* who sent the requests in the desired sequential order, and the server processed them in sequential order as received. This single client would send `W(0) C` after `W(1) B` but before `R(0) B` yielding a valid history. The counter example violates this ordering. The response for `W(0) C` came before the request for `R(1) B`. 
+The server must interleave all concurrent read/write requests *as if there was only one client* who sent all requests for all clients in *some sequential order*, and the server processed them in that same order. The issue **isn't** the per-client sequential order. It's true `A, B, C` send their requests in an order each according to their own preference. But no client can demand a global sequential order at the server for other clients. All clients race to the server with work. The server determines what's done first. 
+
+Granted we usually expect a client's `e0` at 9AM to be processed before its `e1` at 10PM. We don't expect the server to reorder client requests. Note network congestion in which `e0` sent at 9AM was actually delivered to the server after `e1` at 10PM is not in scope for linearizability. If `e0, e1` are bonafide events from the same client, they were delivered out of order. Packet flow and/or congestion control will deal with this problem before the server attempts to run them.
+
+In any case the problem space is mainly those events which overlap in time in the server. And that happens when the server wants to increase throughput by running events in parallel. The counter example violates linearizability because the response for `W(0) C` came before the request for `R(1) B` so B should have read 0 not 1.
+
+This nifty definition however elides one important detail in the following diagram. It's  exactly the valid diagram above however with an asterisk `*` indicating the point of linearizability plus labeled timestamps. Asterisks show the point in time at which the write (read) is logically and atomically complete:
+
+```
+     W(0)  A               R(1) A              W(0) C
+|-------*-------|      |------*--------|    |----------*----|
+|       |       |      |      |        |    |          |    |
+|       |       |      |      |        |    |          |    |
+|       |       |      |      |        |    |          |    |              R(0) B
+|       |       | |--*-+------+--------+----+----------+----+---|    |---*-----------|
+|       |       | |  | |      | W(1) B |    |          |    |   |    |   |           |
+|       |       | |  | |      |        |    |          |    |   |    |   |           |
+|       |       | |  | |      |        |    |          |    |   |    |   |           |
+t0     t1       | t3 | t5    t6       t7    t8        t9   t10  t11  |  t13         t14
+               t2    t4                                              t12            
+
+                  Valid Linearizability Points
+```
+
+Consider timestamps t2-t11. After t2 before t3 the server did no work. At t3 the server receives `W(1) B`. By t4 the server effected all updates to the shared memory location race condition free for `W(1) B`. However, it took the server until t11 to get the response for `W(1) B` one the wire. At time t6 `R(1) A` completed its full read race condition free of the same shared memory. Even though `R(1) A` overlaps and runs concurrently with `W(1) B` the server has ensured the operations deal with the memory as if it was atomic for the entire server box. The fact that a particular request like `W(1) B` runs far past linearizability point to flush its response is not material. What's material is that the server chooses *linearizability points* satisfying the linearizability definition.
 
 # Queue Processing
 
