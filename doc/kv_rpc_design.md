@@ -172,7 +172,7 @@ Granted we usually expect a client's `e0` at 9AM to be processed before its `e1`
 
 In any case the problem space is mainly those events which overlap in time in the server. And that happens when the server wants to increase throughput by running events in parallel. The counter example violates linearizability because the response for `W(0) C` came before the request for `R(1) B` so B should have read 0 not 1.
 
-This nifty definition however elides one important detail in the following diagram. It's  exactly the valid diagram above however with an asterisk `*` indicating the point of linearizability plus labeled timestamps. Asterisks show the point in time at which the write (read) is logically and atomically complete:
+This nifty definition however elides one important detail. The following diagram reproduces the valid case above with an asterisk `*` indicating *linearizability points*. Asterisks show the point in time at which the write (read) is logically and atomically complete:
 
 ```
      W(0)  A               R(1) A              W(0) C
@@ -190,7 +190,9 @@ t0     t1       | t3 | t5    t6       t7    t8        t9   t10  t11  |  t13     
                   Valid Linearizability Points
 ```
 
-Consider timestamps t2-t11. After t2 before t3 the server did no work. At t3 the server receives `W(1) B`. By t4 the server effected all updates to the shared memory location race condition free for `W(1) B`. However, it took the server until t11 to get the response for `W(1) B` one the wire. At time t6 `R(1) A` completed its full read race condition free of the same shared memory. Even though `R(1) A` overlaps and runs concurrently with `W(1) B` the server has ensured the operations deal with the memory as if it was atomic for the entire server box. The fact that a particular request like `W(1) B` runs far past linearizability point to flush its response is not material. What's material is that the server chooses *linearizability points* satisfying the linearizability definition.
+Consider timestamps t2-t11. After t2 before t3 the server did no work. At t3 the server receives `W(1) B`. By t4 the server completed all updates to the shared integer memory. Whether you see the writes as atomic, or mutex protected insuring serialized exclusive access, t4 marks the place `W(1) B` is done in the linearized history. The server runs until t11 to get the response for `W(1) B` on the wire.
+
+At time t6 `R(1) A` completed its full read race condition free of the same shared memory. Even though `R(1) A` overlaps and runs concurrently with `W(1) B` the server insures the operations deal with the memory sequentially. The fact that some requests run far past its linearizability point flushing response data is not material. What's material is that the server chooses *linearizability points* satisfying the linearizability definition.
 
 # Queue Processing
 
