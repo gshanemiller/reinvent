@@ -5,7 +5,7 @@ Evolving from [a trivial UDP example](https://github.com/gshanemiller/reinvent/b
 * durable writes 
 * exactly-once message processing
 
-Composing each feature into a well engineered whole is complex. This document elicits each technical challenge with periodic pauses to summarize and integrate ultimately resolving he overall goal.
+Composing each feature into a well engineered whole is complex. This document elicits each technical challenge with periodic pauses to summarize and integrate ultimately resolving the overall goal.
 
 To motivate this work consider the [static routing scenario discussed in the packet design doc.](https://github.com/gshanemiller/reinvent/blob/main/doc/packet_design.md#flow-control)
 Here a client `C` wants to obtain the value `V` for a key `K`. To do this, the client first determines the IP address and destination port `S` of the server which handles `K`. `C` send sends a request to `S`. `S` responds to `C` with the value `V` for `K` or nil if not found. This is static routing in the sense `C` chooses `S`. Determining `S` is not discussed here but, for example, `C` could consult `etcd` or some other service which knows which `S` handles which keys `K`.  
@@ -154,9 +154,18 @@ read of 1.
 
 Linearizability correctness runs into DPDK queue processing in two ways. First, a RXQ contain packets for multiple different RPC requests at different stages of completion. Although many RPCs require one just request packet, packet flow control (below) and multi-packet RPCs require two or more request packets. This means the server must carefully start or complete read/writes so linearizability is obeyed.
 
-The second and larger problem is worker threads. Suppose a server's request RXQ contains several read and two write requests for the same key. If the server runs the requests concurrently through worker threads the resulting system behavior is undefined. Putting aside the obvious race condition reading/writing the same KV pair memory, this scenario is just Herlihy's counter-example in a different context. Multi-key writes amplifies this problem considerably.
+The second and larger problem is worker threads. Suppose a server's request RXQ contains several read/write requests for the same key. If the server runs the requests concurrently through worker threads system behavior is undefined. Putting aside the obvious race condition reading/writing the same KV pair memory, this scenario is just Herlihy's counter-example in a different context. Multi-key writes amplifies this problem considerably.
 
 Now, in the context of KV alone, worker threads are probably net-bad. If key lookup is fast one distinguished thread can handle each request sequentially. Linearizability is satisfied. But summarily excluding work threads is not consequence free. eRPC reminds lengthy request work in dispatch threads increases latency putting back pressure on clients. Linearizability partially conflicts with general RPC handling options.
+
+Herlihy defines linearizability by way of a partial order. For any two events `e0, e1` the server processes their ultimate sequence order history H of processing satifies linearizability if:
+
+```
+e0 <_H e1 if response(e0) precedes request(e1) in H. H is irreflexive meaning e0, e1 are distinct events.
+```
+
+
+Returning the diagram above, the server must interleave all the read/write requests *as if there was only one client* who sent the requests in the desired sequential order, and the server processed them in sequential order as received. This single client would send `W(0) C` after `W(1) B` but before `R(0) B` yielding a valid history. The counter example violates this ordering. The response for `W(0) C` came before the request for `R(1) B`. 
 
 # Queue Processing
 
@@ -178,7 +187,7 @@ Request packets must uniquely describe the client. [RIFL](https://web.stanford.e
 struct PacketPrefix = {    leaseId:  uint64,  // leaseId unique per client
                            rpcSeqId: uint32,  // rpcSeqId per leaseId
                            pktSeqId: uint8,   // packet number in rpcSeqId
-                           pktType:  uint8    // e.g. REQUEST, RESPONSE etc.
+                           pktType:  uint8    // e.g. REQUEST, RESPONSE, CREDIT_RETURN etc.
 };
 
 struct RequestPacket: public PacketPrefix { ... };   // more data
@@ -205,12 +214,12 @@ MTU = 1500 bytes
 C   = BDP/MTU = 13 credits per RPC
 ```
 
-A RXQ with N entries can hold N distinct RPCs in the worst case. This could happen if, improbably, servers managed to get exactly one response packet from N distinct requests into the client's RXQ at the same time. `queue.cpp` models 5 response packets. If we assume that, on average, half of a response per RPC is in queue one can revise the estimate downward to `N / (2.5)`. For a 512 entry RXQ that's 204 unique RPCs. Note that RXQ sizing has two dimensions: the total data size for all packets N whether that's a few large packets or many small packets. RPC identification depends on packet count only not data size.
+A RXQ with N entries can hold N distinct RPCs in the worst case. This could happen if, improbably, servers managed to get exactly one response packet from N distinct requests into the client's RXQ at the same time. `queue.cpp` models 5 response packets. If we assume that, on average, half of a response per RPC is in queue one can revise the estimate downward to `N / (2.5)`. For a 512 entry RXQ that's 204 unique RPCs. Note that RXQ sizing has two dimensions: the total data size for all packets inqueue, and the number of packets N holding the data. This could be a few huge packets or many small packets. RPC identification depends on packet count only not data size.
 
 The point: the search space is **very likely less than 1,000 identifiers**.
 
 ## Exactly-Once-Processing
-Whether due to client error or due to congestion error recovery server side of RXQ processing must not re-run old RPCs. Clearly, errorenously re-running a mutation twice corrupts integrity:
+Whether due to client error or due to congestion error recovery server side of RXQ processing must not re-run old RPCs. Clearly, errorenously re-running a mutation twice corrupts data:
 
 ```
 Time t0: request 123: put(k, v)       <-- k = v
