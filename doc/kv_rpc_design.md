@@ -107,7 +107,7 @@ dispatch threads, and longer handlers use worker threads.
 
 Now, the static routing topic above is designed so that RXQ/TXQ lcore pairs are distinct. But this is a design choice too. One DPDK lcore could handle both i.e. read request from its RXQ transmitting a response through its TXQ. Combining both eliminates interthread communication. Charging worker threads with request work involves at least one interthread handoff. The RXQ must find an eligble worker then transfer request state to it. The worker either transmits the response over a TXQ it owns, or gives the response data to a separate TXQ lcore through a second interthread handoff.
 
-Before moving to solutions we need to look at *linearizability* and *queue processing*. The only thing that can be reasonably excluded now is interthread communication of large responses. If computing the result runs on one thread, and is transmitted to the requester in another thead, the response must either be copied or the threads must carefully avoid data races. KV requests are typically small whereas responses can be comparitively large.
+Before moving to solutions we need to look at *linearizability* and *queue processing*. The only thing that can be reasonably excluded now is interthread communication of large responses. If computing the result runs on one thread, and is transmitted back to the requester in another thead, the response must either be copied or the threads must carefully avoid data races. KV requests are typically small whereas responses can be comparitively large.
  
 # Linearizability 
 If the KV system allows writes it must guarantee sensible responses interleaved with reads. *Linearizability* is the strongest guarantee. It comes in three parts:
@@ -120,11 +120,11 @@ If the KV system allows writes it must guarantee sensible responses interleaved 
 
 ```
      W(0)  A               R(1) A              W(0) C
-|---------------|    |---------------|    |---------------|
+|---------------|    |---------------|    |---------------|                                server thread 1
 
 
                                     W(1) B                               R(0) B
-                  |-------------------------------------------|    |---------------|
+                  |-------------------------------------------|    |---------------|       server thread 2
 
                             Valid Linearizability
 ```
@@ -133,11 +133,11 @@ whereas this small variation is **invalid**:
 
 ```
      W(0)  A               R(1) A              W(0) C
-|---------------|    |---------------|    |---------------|
+|---------------|    |---------------|    |---------------|                                server thread 1
 
 
                                     W(1) B                               R(1) B
-                  |-------------------------------------------|    |---------------|
+                  |-------------------------------------------|    |---------------|       server thread 2
 
                             Invalid Linearizability
 ```
@@ -176,11 +176,11 @@ This nifty definition however elides one important detail. The following diagram
 
 ```
      W(0)  A               R(1) A              W(0) C
-|-------*-------|      |------*--------|    |----------*----|
+|-------*-------|      |------*--------|    |----------*----|                              server thread 1
 |       |       |      |      |        |    |          |    |
 |       |       |      |      |        |    |          |    |
 |       |       |      |      |        |    |          |    |              R(0) B
-|       |       | |--*-+------+--------+----+----------+----+---|    |---*-----------|
+|       |       | |--*-+------+--------+----+----------+----+---|    |---*-----------|     server thread 2
 |       |       | |  | |      | W(1) B |    |          |    |   |    |   |           |
 |       |       | |  | |      |        |    |          |    |   |    |   |           |
 |       |       | |  | |      |        |    |          |    |   |    |   |           |
@@ -197,13 +197,13 @@ At time t6 `R(1) A` completed its full read race condition free of the same shar
 # Queue Processing
 
 ## Client/Server Context
-The static routing diagram shows RXQ/TXQ queue pairs in the client and server are similarly designed. RXQ/TXQ lcores are distinct, which is one design choice. However, there are contextual differences processing packets. Per Packet Flow Control (below) clients only initiate RPCs. Servers never unilaterally send data to clients. This means client TXQ processing of server responses may potentially leverage state it previosuly made for the request.
+The static routing diagram shows RXQ/TXQ queue pairs in the client; the server are similarly designed. RXQ/TXQ lcores are distinct, which is one design choice. However, there are contextual differences processing packets. As described under *Packet Flow Control* (below) clients only initiate RPCs. Servers never unilaterally send data to clients. This means client RXQ processing of server responses may potentially leverage state it previosuly made for the request. Clients, unlike servers, initiated RPCs when it send packets out on its TXQ. So it can anticipate responses for those same RPCs in its RXQ.
 
-RXQ server side does not have this advantage. The server only becomes aware of RPC work when it takes a packet off the wire. Eventually the server might parlay its accumulated request state RXQ side when it later makes and sends TXQ response packets.
+RXQ server side does not have this advantage. The server only becomes aware of RPC work when it takes a packet off the wire. The server might parlay its accumulated request state RXQ side when it later makes and sends TXQ response packets.
 
 RXQ processors on both clients and servers are saddled with RPC identification. The next section goes into more detail. The key problem is knowing whether packet in hand is for a previously known RPC or a brand new RPC. Finding or creating this state must be fast. Removing state for completed RPCs is also a requirement. 
 
-Consequently, the need to deftly transitition RXQ to TXQ is important. The request contains the client IP address and port which should get the reply. The response needs that. The response data has to be handy. Responses can't be attemped or transmitted until the full RPC request is ready. There's no guarantee a request is well-formed in the first packet alone. If TXQ processors leverage RXQ side state, the state has to be made race condition free.
+Consequently the need to deftly transitition RXQ to TXQ is important. The request contains the client IP address and port which should get the reply. The response needs that. The response data has to be handy. Responses can't be attemped or transmitted until the full RPC request is ready. There's no guarantee a request is well-formed in the first packet alone. If TXQ processors leverage RXQ side state, the state has to be made race condition free.
 
 ## Mechanics of RXQ Processing
 Much but not all RXQ processing lead to DPDK library calls. But once a request packet has been read, the processor must know if it's a new RPC or a continuation packet of an earlier request. In general client RXQs hold responses from multiple distinct responses from multiple servers. Server RXQs hold requests for multiple distinct clients. Packet order within these RXQs is unknown.
@@ -226,10 +226,10 @@ At 14-16 bytes each depending on alignment, it allows at most `0xFFFFFFFF` disti
 Regardless of the dispatch/worker thread set design, the first RXQ processor task is determining if `(leaseId, rpcSeqId)` is known or unknown. Next steps include:
 
 * create new RPC state when the first packet of a new RPC is seen
-* update RPC state if needed for continuation packets
+* update RPC state if needed for request continuation packets
 * know if a request is well-formed initiating response work
 * dropped/reordered packets: detecting congestion problems depends on prior state
-* handle dups part of exactly-one-processing and linearizability
+* handle duplicate requests part of exactly-one-processing and linearizability
 
 `(leaseId, rpcSeqId)` lookup is a classic data structure excercise so instead I analyze data sizing. [Queue.cpp](https://github.com/gshanemiller/reinvent/blob/main/experiment/packet_flow/flow.cpp) demonstrates filling a queue with packets and processing it. The code runs from *the client perspective* e.g. processing a RXQ in the client. A full server response is 5 packets per RPC.
 
@@ -246,13 +246,13 @@ A RXQ with N entries can hold N distinct RPCs in the worst case. This could happ
 The point: the search space is **very likely less than 1,000 identifiers**.
 
 ## Exactly-Once-Processing
-Whether due to client error or due to congestion error recovery server side of RXQ processing must not re-run old RPCs. Clearly, errorenously re-running a mutation twice corrupts data:
+Whether due to client error or due to congestion error recovery, the server side of RXQ processing must not re-run old RPCs. Errorenously re-running a mutation twice corrupts data:
 
 ```
 Time t0: request 123: put(k, v)       <-- k = v
 Time t1: request 322: get(k)          <-- return v
 Time t2: request 432: put(k, v1)      <-- k = v1
-Time t3: request 123: put(k, v)       <-- repeat 123 corrupts #432
+Time t3: request 123: put(k, v)       <-- repeat #123 corrupts request #432
 ```
 
 

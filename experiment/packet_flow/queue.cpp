@@ -4,6 +4,7 @@
 
 #include <random>
 #include <vector>
+#include <unordered_map>
 
 struct Packet {
   enum Type {
@@ -12,139 +13,148 @@ struct Packet {
       REQUEST_FOR_RESPONSE = 4,
       RESPONSE             = 8
   };
-      
-  u_int32_t d_clientId;
-  u_int8_t  d_clientSeqId;
-  u_int8_t  d_typeId;
+
+  u_int64_t d_clientId;           // aka RIFL's leaseId
+  u_int32_t d_rpcSeqId;           // sequence number of RPC per clientId
+  u_int8_t  d_pktSeqId;           // sequence number of packet per RPC per clientId
+  u_int8_t  d_typeId;             // packet type
 
   Packet()
   : d_clientId(0)
-  , d_clientSeqId(0)
+  , d_rpcSeqId(0)
+  , d_pktSeqId(0)
   , d_typeId(0)
   {
   }
 
-  Packet(u_int64_t clientId, u_int8_t clientSeqId, u_int8_t typeId)
+  Packet(u_int64_t clientId, u_int32_t rpcSeqId, u_int8_t pktSeqId, u_int8_t typeId)
   : d_clientId(clientId)
-  , d_clientSeqId(clientSeqId)
+  , d_rpcSeqId(rpcSeqId)
+  , d_pktSeqId(pktSeqId)
   , d_typeId(typeId)
   {
   }
 
-  void print(u_int32_t index) {
-    printf("index: %04u: clientId: %04u, clientSeqId: %u, typeId: %u\n",
-      index, d_clientId, d_clientSeqId, d_typeId);
+  void print(u_int32_t index) const {
+    printf("clientId: %04llu, rpcSeqId: %04u, pktSeqId: %u, typeId: %u, rqxIndex: %u\n",
+      d_clientId, d_rpcSeqId, d_pktSeqId, d_typeId, index);
+  }
+
+  __int128 id() const {
+    return __int128(d_clientId)<<64 | d_rpcSeqId;
   }
 };
 
+// Data will model a RXQ holding up to 'CAPACITY' packets for different RPCs
 std::vector<Packet> data;
 const u_int32_t CAPACITY=4096;
 
-// Test set of 5 response packets a client might expect per RPC
-std::vector<Packet> packetTemplate5= { {0, 0, Packet::Type::CREDIT},
-                                       {0, 1, Packet::Type::CREDIT},
-                                       {0, 2, Packet::Type::CREDIT|Packet::Type::RESPONSE},
-                                       {0, 3, Packet::Type::CREDIT|Packet::Type::RESPONSE},
-                                       {0, 4, Packet::Type::CREDIT|Packet::Type::RESPONSE} };
+// Test set of 5 response packets types a client might expect per RPC
+const std::vector<u_int8_t> packetTemplate4= {  Packet::Type::CREDIT,
+                                                Packet::Type::CREDIT,
+                                                Packet::Type::CREDIT|Packet::Type::RESPONSE,
+                                                Packet::Type::CREDIT|Packet::Type::RESPONSE };
 
 /*
-    Randomly populate specified 'data' with RPC packets in correct order:
+    Randomly populate specified 'data' with RPC packets in order:
 
-    * There's RPC_COUNT = CAPACITY/packetTemplate5.size() RPCs
-    * Each RPC needs all packetTemplate5 packets somewhere in 'data'
-    * For each RPC 'i' let k0 be the index in 'data' holding i's packetTemplate5[0]
-                           k1 be the index in 'data' holding i's packetTemplate5[1]
+    * There's RPC_COUNT = CAPACITY/packetTemplate4.size() RPCs
+    * Each RPC needs all packetTemplate4 packets somewhere in 'data'
+    * For each RPC 'i' let k0 be the index in 'data' holding i's packetTemplate4[0]
+                           k1 be the index in 'data' holding i's packetTemplate4[1]
                            . . .
-                           k4 be the index in 'data' holding i's packetTemplate5[4]
-    * We require k0>=0 and k0 < k1 < k2 < k3 < k4 and k4<data.size()
+                           k3 be the index in 'data' holding i's packetTemplate4[4]
+    * We require 0 <= k0 < k1 < k2 < k3 < data.size()
+    * We also require for any two distinct RPCs i,j all packets for i come before j in 'data'
 */
-int fillRpc5(std::vector<Packet>& data) {
+int fillRpc4(std::vector<Packet>& data) {
 
   // The number of distinct RPCs populated in 'data'
-  const u_int32_t RPC_COUNT = CAPACITY/packetTemplate5.size();  
+  const u_int32_t RPC_COUNT = CAPACITY/packetTemplate4.size();  
+  assert((RPC_COUNT*packetTemplate4.size()) == CAPACITY);
   printf("RPC_COUNT = %u\n", RPC_COUNT);
 
-  // For each distinct rpc 'i' rpcSent[i] counts the number of packets
-  // enqueued for it e.g. rpcSent[i]==0 means nothing queued, and
-  // rpcSent[i]==packetTemplate5.size() means all packets queued. the
-  // value 3 means packetTemplate5[k] packets with k=0,1,2 queued in
-  // that order
-  std::vector<u_int32_t> rpcSent(RPC_COUNT, 0);
-  assert(rpcSent.size()==RPC_COUNT);
+  // For each distinct rpc 'i' packetsSent[i] holds the highest packet
+  // enqueued for it e.g. packetsSent[i]==0 means packetTemplate4[0] was queued
+  // A value of 1 means packetTemplate4[0], packetTemplate4[1] was queued
+  // in that order in 'data'. i = (clientId, rpcSeqId) stored as 128-bit int
+  std::unordered_map<__int128, u_int8_t> packetsSent;
 
-  // The number of packets to be enqueued: RPC_COUNT*packetTemplate5.size()
-  const u_int32_t max = RPC_COUNT*packetTemplate5.size();
+  // These are the clientIds we'll use to populate with
+  const std::vector<u_int64_t> clientIds = {0, 1, 2, 3};
+  // These are the per clientId rpcSeqIds starting at 0
+  std::vector<u_int32_t> rpcSeqIds = {0, 0, 0, 0};
+
+  // The number of packets to be enqueued: RPC_COUNT*packetTemplate4.size()
+  const u_int32_t max = RPC_COUNT*packetTemplate4.size();
   printf("packetCount = %u\n", max);
 
-  // Size the output parameter to the number of output packets
+  // Size 'data' to the number of output packets
   data.clear();
   data.resize(max);
   assert(data.size()==max);
 
-  // Setup random number generator
+  // In order to fill 'data' so that all RPCs have all their packets
+  // we only allow at most CAPACITY/packetTemplate4.size()/clientIds.size()
+  // per client. otherwise the tail end of 'data' will contain incomplete
+  // packet sets for some rpcId
+  const u_int32_t maxRpcSeqId = CAPACITY/packetTemplate4.size()/clientIds.size();
+
+  // Setup random number generator to choose a random client
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, RPC_COUNT-1);
+  std::uniform_int_distribution<> distrib(0, clientIds.size()-1);
 
-  // The index into 'data' we're initialzing
+  // The index in 'data' we're populating/initialzing
   u_int32_t k=0;
 
   while (k<max) {
-    // choose a random RPC
+    // choose a random client
     auto i = distrib(gen);
-    assert(i>=0 && i<RPC_COUNT);
+    assert(i>=0 && i<clientIds.size());
 
-    // Anything left to send?
-    const u_int32_t packetIndex = rpcSent[i];
-    if (packetIndex!=packetTemplate5.size()) {
-        assert(packetIndex>=0 && packetIndex<packetTemplate5.size());
-        data[k].d_clientId = i;
-        data[k].d_clientSeqId = packetTemplate5[packetIndex].d_clientSeqId;
-        data[k].d_typeId      = packetTemplate5[packetIndex].d_typeId;
-        rpcSent[i] = packetIndex+1;
-        k++;
+/*
+    if (rpcSeqIds[i]>=maxRpcSeqId) {
+      // Choose another random client -- hit max number for it
+      continue;
     }
-  }
+*/
 
-  // Optional: verify data contents O(n^3)
-  u_int32_t foundIndex = 0;
-  u_int32_t lastFoundIndex = 0;
-  for (u_int32_t i=0; i<RPC_COUNT; ++i) {
-    for (u_int32_t j=0; j<packetTemplate5.size(); j++) {
-      // look for clientId 'i' entry 'j' from packetTemplate5
-      bool found = false;
-      for (unsigned k=0; k<data.size() && !found; k++) {
-        found =
-            ((data[k].d_clientId    == i)                               &&
-             (data[k].d_clientSeqId == packetTemplate5[j].d_clientSeqId) &&
-             (data[k].d_typeId      == packetTemplate5[j].d_typeId));
-        foundIndex = k;
-      }
+    // Make the unique identifier for the RPC
+    const __int128 rpcId = __int128(clientIds[i])<<64 | rpcSeqIds[i];
 
-      // If not found error out
-      if (!found) {
-        printf("ERROR: rpc %u packet %u not found\n", i, j); 
-        assert(found);
-        return -1;
-      }
+    // Have we seen this RPC before?
+    u_int8_t packetSeqId = 0;
+    const std::unordered_map<__int128, u_int8_t>::iterator iter = packetsSent.find(rpcId);
 
-      // Make sure the found index is valid in 'data'
-      assert(foundIndex>=0 && foundIndex<data.size());
-
-      // Make sure its in increasing order
-      if (j==0) {
-        // This is the first packet of a new RPC
-        lastFoundIndex = foundIndex;
-        // data[foundIndex].print(foundIndex);
-      } else if (foundIndex<=lastFoundIndex) {
-        printf("ERROR: rpc %u packet %u found but in wrong order\n", i, j); 
-        assert(foundIndex>lastFoundIndex);
-        return -1;
+    if (iter!=packetsSent.end()) {
+      // Then get the last packet sent
+      packetSeqId = packetsSent[rpcId];
+      // And if we've sent everything skip it. randomly choose something else
+      if (packetSeqId == packetTemplate4.size()-1) {
+        continue;
       } else {
-        lastFoundIndex = foundIndex;
-        // data[foundIndex].print(foundIndex);
+        // Not done: enqueue next packet
+        ++packetSeqId;
       }
     }
+
+    // Record fact that we're enqueuing 'packetSeqId' for rpcId
+    assert(packetSeqId>=0 && packetSeqId<packetTemplate4.size());
+    packetsSent[rpcId] = packetSeqId;
+
+    // Enqueue packet
+    data[k].d_clientId = clientIds[i];
+    data[k].d_rpcSeqId = rpcSeqIds[i];
+    data[k].d_pktSeqId = packetSeqId;
+    data[k].d_typeId   = packetTemplate4[packetSeqId];
+
+    // Are we done for this RPC?
+    if (packetSeqId == packetTemplate4.size()-1) {
+      rpcSeqIds[i] = rpcSeqIds[i]+1;
+    }
+
+    k++;
   }
 
   return 0;
@@ -156,17 +166,23 @@ int fillRpc5(std::vector<Packet>& data) {
     While, in this test, there are no missing or dropped packets, packets
     data[i] and data[i+1] are in general different RPCs. To work towards
     dealing with packet drop/loss, the RXQ loop must quickly make and update
-    state per distinct RPC such as,
+    state per distinct RPC. It needs to know if the response is complete;
+    it needs to know if packets came out of order.
 */
-int readRpc5(const std::vector<Packet>& data) {
+int readRpc4(const std::vector<Packet>& data) {
+  for (u_int32_t i=0; i<data.size(); ++i) {
+      const Packet& pkt = data[i];
+      pkt.print(i);
+  }
+  
   return 0;
 }
 
 int main() {
-  int rc = fillRpc5(data);
+  int rc = fillRpc4(data);
   assert(rc==0);
 
-  rc = readRpc5(data);
+  rc = readRpc4(data);
   assert(rc==0);
 
   return 0;
