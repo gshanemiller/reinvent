@@ -197,7 +197,7 @@ At time t6 `R(1) A` completed its full read race condition free of the same shar
 # Queue Processing
 
 ## Client/Server Context
-The static routing diagram shows RXQ/TXQ queue pairs in the client; the server are similarly designed. RXQ/TXQ lcores are distinct, which is one design choice. However, there are contextual differences processing packets. As described under *Packet Flow Control* (below) clients only initiate RPCs. Servers never unilaterally send data to clients. This means client RXQ processing of server responses may potentially leverage state it previosuly made for the request. Clients, unlike servers, initiated RPCs when it send packets out on its TXQ. So it can anticipate responses for those same RPCs in its RXQ.
+The static routing diagram shows RXQ/TXQ lcoree queue pairs for the client; the server is similarly designed. RXQ/TXQ lcores are distinct, which is one design choice. However, there are contextual differences processing packets. As described under *Packet Flow Control* (below) clients only initiate RPCs. Servers never unilaterally send data to clients. This means client RXQ processing of server responses may potentially leverage state it previosuly made for the request. Clients, unlike servers, initiate RPCs when it sent packets out. So it can anticipate responses for those same RPCs in its RXQ.
 
 RXQ server side does not have this advantage. The server only becomes aware of RPC work when it takes a packet off the wire. The server might parlay its accumulated request state RXQ side when it later makes and sends TXQ response packets.
 
@@ -208,12 +208,12 @@ Consequently the need to deftly transitition RXQ to TXQ is important. The reques
 ## Mechanics of RXQ Processing
 Much but not all RXQ processing lead to DPDK library calls. But once a request packet has been read, the processor must know if it's a new RPC or a continuation packet of an earlier request. In general client RXQs hold responses from multiple distinct responses from multiple servers. Server RXQs hold requests for multiple distinct clients. Packet order within these RXQs is unknown.
 
-Request packets must uniquely describe the client. [RIFL](https://web.stanford.edu/~ouster/cgi-bin/papers/rifl.pdf) partially identifies clients by a [lease ID](https://pkg.go.dev/go.etcd.io/etcd/client/v3#LeaseID). However, the same client can run multiple distinct RPCs, for example, find the value for key K1 then K2 in a second RPC. If we assign a sequence number to each new RPC by leaseId we can make a packet data prefix:
+Request packets must uniquely describe the client. [RIFL](https://web.stanford.edu/~ouster/cgi-bin/papers/rifl.pdf) partially identifies clients by a [lease ID](https://pkg.go.dev/go.etcd.io/etcd/client/v3#LeaseID). However, the same client can run multiple distinct RPCs, for example, find the value for key K1 then K2 in a second RPC. If we assign a sequence number to each new RPC by clientId we can make a packet data prefix:
 
 ```
-struct PacketPrefix = {    leaseId:  uint64,  // leaseId unique per client
-                           rpcSeqId: uint32,  // rpcSeqId per leaseId
-                           pktSeqId: uint8,   // packet number in rpcSeqId
+struct PacketPrefix = {    clientId: uint64,  // unique clientId aka leaseId in RIFL
+                           rpcSeqId: uint32,  // rpc sequenceId per clientId
+                           pktSeqId: uint8,   // packet sequenceId per rpcSeqId
                            pktType:  uint8    // e.g. REQUEST, RESPONSE, CREDIT_RETURN etc.
 };
 
@@ -221,9 +221,9 @@ struct RequestPacket: public PacketPrefix { ... };   // more data
 struct Responseacket: public PacketPrefix { ... };   // more data
 ```
 
-At 14-16 bytes each depending on alignment, it allows at most `0xFFFFFFFF` distinct RPCs per lease, and at most 255 packets per RPC. I assume leases are destroyed long before `0xFFFFFFFF` or that the client is forced into a new leaseId on wrap.
+At 14-16 bytes each depending on alignment, it allows at most `0xFFFFFFFF` distinct RPCs per lease, and at most 255 packets per RPC. I assume leases are destroyed long before `0xFFFFFFFF` or that the client is forced into a new clientId on wrap.
 
-Regardless of the dispatch/worker thread set design, the first RXQ processor task is determining if `(leaseId, rpcSeqId)` is known or unknown. Next steps include:
+Regardless of the dispatch/worker thread set design, the first RXQ processor task is determining if `(clientId, rpcSeqId)` is known or unknown. Next steps include:
 
 * create new RPC state when the first packet of a new RPC is seen
 * update RPC state if needed for request continuation packets
@@ -231,7 +231,7 @@ Regardless of the dispatch/worker thread set design, the first RXQ processor tas
 * dropped/reordered packets: detecting congestion problems depends on prior state
 * handle duplicate requests part of exactly-one-processing and linearizability
 
-`(leaseId, rpcSeqId)` lookup is a classic data structure excercise so instead I analyze data sizing. [Queue.cpp](https://github.com/gshanemiller/reinvent/blob/main/experiment/packet_flow/flow.cpp) demonstrates filling a queue with packets and processing it. The code runs from *the client perspective* e.g. processing a RXQ in the client. A full server response is 5 packets per RPC.
+`(clientId, rpcSeqId)` lookup is a classic data structure excercise so instead I analyze data sizing. [Queue.cpp](https://github.com/gshanemiller/reinvent/blob/main/experiment/packet_flow/flow.cpp) demonstrates filling a queue with packets and processing it. The code runs from *the client perspective* e.g. processing a RXQ in the client. A full server response is 5 packets per RPC.
 
 From BDP discussion (below) we know there's at most BDP per RPC in the queue. Second, the RXQ itself has finite capacity but certainly less than the rack's switch. Third, packet-level-flow (also below) limits each sender to C credits. Using the numbers in the BDP workup, each RPC session has 13 credits:
 
@@ -244,6 +244,159 @@ C   = BDP/MTU = 13 credits per RPC
 A RXQ with N entries can hold N distinct RPCs in the worst case. This could happen if, improbably, servers managed to get exactly one response packet from N distinct requests into the client's RXQ at the same time. `queue.cpp` models 5 response packets. If we assume that, on average, half of a response per RPC is in queue one can revise the estimate downward to `N / (2.5)`. For a 512 entry RXQ that's 204 unique RPCs. Note that RXQ sizing has two dimensions: the total data size for all packets inqueue, and the number of packets N holding the data. This could be a few huge packets or many small packets. RPC identification depends on packet count only not data size.
 
 The point: the search space is **very likely less than 1,000 identifiers**.
+
+## RPCs vs. RPC Packets v. Sessions
+Reverse engineering the `rpcId = (clientId, rpcSeqId)` out of the packet is too much work. An online mutable data structure is required. eRPC eliminates this code by adding data to each packet from which a *session slot* is extracted. Now, no packets are in scope anywhere until a client creates a RPC. If that RPC can be indexed by `i`, this index can be sent with its packets to locate state for `i` efficiently in clients and servers. RPCs are associated with a eRPC session, which, unfortunately isn't well described.
+
+There cannot be an unbounded number of outstanding RPCs per client for three reasons. First, a specific client runs RPCs sequentially through a session. It usually finishes one before it starts another. Second, no client/server session manager has unbounded memory. Neither do NICs. There can only be a finite number of RPCs running regardless of the HW count. This suggests pre-allocating indexable fixed capacity memory (array, ring) in a session can help. Third, BDP and packet-level flow control bound the number of unacknowledged packets.
+
+As such it's necessary to again re-examine the design of dispatch/worker threads with sessions. In conventional kernel based socket work the connection is the session:
+
+```
+// Runs in either the main thread or app created thread
+UDP::Connection con("10.10.0.128:332");
+con.connect();
+con.send(...);
+con.receive(...);
+con.disconnect();
+
+// Do more work with another endpoint
+UDP::Connection con1("23.43.22.33:4140");
+con1.connect();
+. . .
+con1.disconnect();
+```
+
+The UDP objects can be cached to avoid connect overhead, but are probably not thread safe. Therefore each thread has its own set of UDP objects created and destoryed when needed. These constraints still allow for mixing I/O over different endpoints:
+
+```
+// Runs in either the main thread or app created thread
+UDP::Connection con("10.10.0.128:332");
+UDP::Connection con1("23.43.22.33:4140");
+
+con.connect();
+con1.connect();
+
+con.send(...);
+con.receive(...);
+con1.send(...);
+con.receive(...);
+. . .
+```
+
+DPDK however cannot so easily create connections. There is no IP/port binding per se like kernel work. RXQ/TXQs require considerable setup and, in fact, are usually created once and run once at startup time.
+
+We can make a proxy object for a DPDK session, however. Assume `session` knows about valid DPDK RXQ/TXQs ready for use:
+
+```
+// Runs in either the main thread or app created thread
+const std::string key1("test");
+const Dpdk::Endpoint endpoint1 = etcd.serverForKey(key1);
+const std::string key2("abc");
+const Dpdk::Endpoint endpoint2 = etcd.serverForKey(key2);
+
+std::string value;
+Dpdk::Session session;
+
+int rc = session.get(endpoint1, key1, &value);
+assert(0==rc);
+
+rc = session.get(endpoint2, key2, &value);
+assert(0==rc);
+``` 
+
+Now if session's packet handling runs in a different thread than the caller here, an interthread off is required. On the other hand, the application could make a fixed set of sessions running as lcores, and give the caller its context so thread hand off is avoided:
+
+```
+int main(int argc, char **argv) {
+  std::string prefix;
+  std::string device("DPDK_NIC_DEVICE");
+
+  parseCommandLine(argc, argv, &isServer, &prefix);
+
+  Reinvent::Util::Environment env;
+  Reinvent::Dpdk::Config config;
+
+  //
+  // Initialize the DPDK ENA Nic
+  //
+  int rc = Reinvent::Dpdk::Init::startEna(device, prefix, &env, &config);
+  REINVENT_UTIL_LOG_INFO(config << std::endl);
+  if (rc!=0) {
+    REINVENT_UTIL_LOG_FATAL_VARGS("Cannot initialize DPDK ENA device rc=%d\n", rc);                                      
+    return 1;
+  }
+
+  // 
+  // Create and run all configured sessions each starting in function pointer
+  // 'entryPoint'
+  //
+  {
+    Reinvent::Dpdk::Worker worker(prefix, env, config);
+    REINVENT_UTIL_LOG_INFO_VARGS("launching DPDK sessions...\n");
+    if ((rc = rte_eal_mp_remote_launch(entryPoint, static_cast<void*>(&worker), CALL_MAIN))!=0) {
+      REINVENT_UTIL_LOG_FATAL_VARGS("Cannot launch DPDK cores rc=%d\n", rc);
+    } else {
+      REINVENT_UTIL_LOG_INFO_VARGS("waiting for DPDK worker threads to stop\n");
+      rte_eal_mp_wait_lcore();
+    }
+  }
+```
+
+In this way all configured sessions are launched, and the application code now looks more like:
+
+```
+// Running thread explicitly created by Reinvent library for exactly 1 session
+int entryPoint(Reinvent::Dpdk::Session *session, ....) {
+  const std::string key1("test");
+  const Dpdk::Endpoint endpoint1 = etcd.serverForKey(key1);
+  const std::string key2("abc");
+  const Dpdk::Endpoint endpoint2 = etcd.serverForKey(key2);
+
+  int rc = session->get(endpoint1, key1, &value);
+  assert(0==rc);
+
+  rc = session->get(endpoint2, key2, &value);
+  assert(0==rc);
+```
+
+If the entry point function doesn't know what operations to run, the application programmer will have to add code to get it from somewhere else, for example, over a SPSC. See below.
+
+Returning the problem at hand `session` will come preconfigured with a bounded number of RPC slots
+
+
+
+
+  
+
+
+
+
+```
+
+
+ While the above code does not create different UDP objects to the same endpoint because concurrent data on the same server usually goes to different ports, DPDK server RXQ/TXQs will hold packets from multiple requesters. So will the client.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Exactly-Once-Processing
 Whether due to client error or due to congestion error recovery, the server side of RXQ processing must not re-run old RPCs. Errorenously re-running a mutation twice corrupts data:
