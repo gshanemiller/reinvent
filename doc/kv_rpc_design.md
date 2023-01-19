@@ -1,14 +1,16 @@
+# Status
+This document is currently under heavy, daily revision
+
 # Key Value RPCs
-Evolving from [a trivial UDP example](https://github.com/gshanemiller/reinvent/blob/main/doc/equinix_mellanox_setup.md) to practical RPC (Remote Procedure Call) for scalable KV (Key Value) processing is difficult. Real world RPC under DPDK must meet and exceed all the excellent features of [eRPC](https://www.usenix.org/system/files/nsdi19-kalia.pdf) adding:
+Evolving from [a trivial DPDK UDP example](https://github.com/gshanemiller/reinvent/blob/main/doc/equinix_mellanox_setup.md) to practical RPC (Remote Procedure Call) for scalable KV (Key Value) processing is difficult. Real world RPC under DPDK must meet and exceed all the excellent features of [eRPC](https://www.usenix.org/system/files/nsdi19-kalia.pdf) adding:
 
 * linearizability
 * durable writes 
 * exactly-once message processing
 
-Composing each feature into a well engineered whole is complex. This document elicits each technical challenge with periodic pauses to summarize and integrate ultimately resolving the overall goal.
+Composing each feature into a well engineered whole is complex. This document describes each technical challenge with periodic pauses to summarize and integrate. In the second half of the document, a practical design is given.
 
-To motivate this work consider the [static routing scenario discussed in the packet design doc.](https://github.com/gshanemiller/reinvent/blob/main/doc/packet_design.md#flow-control)
-Here a client `C` wants to obtain the value `V` for a key `K`. To do this, the client first determines the IP address and destination port `S` of the server which handles `K`. `C` send sends a request to `S`. `S` responds to `C` with the value `V` for `K` or nil if not found. This is static routing in the sense `C` chooses `S`. Determining `S` is not discussed here but, for example, `C` could consult `etcd` or some other service which knows which `S` handles which keys `K`.  
+To motivate this work consider the [static routing scenario discussed in the packet design doc.](https://github.com/gshanemiller/reinvent/blob/main/doc/packet_design.md#flow-control) Here a client `C` wants to obtain the value `V` for a key `K`. To do this, the client first determines the IP address and destination port `S` of the server which handles `K`. `C` send sends a request to `S`. `S` responds to `C` with the value `V` for `K` or nil if not found. This is static routing in the sense `C` chooses `S`. Determining `S` is not discussed here but, for example, `C` could consult `etcd` or some other service which knows which `S` handles which keys `K`.  
 
 # Bare Bones Static Routing
 To do KV lookup through static routing [we need flow control](https://github.com/gshanemiller/reinvent/blob/main/doc/packet_design.md#flow-control) on clients and servers. Flow control on the servers insures requests go to the right DPDK RXQ which does request in-take. We need flow control on the clients so the response is sent back to the client `C` that made the original request. Note that the source UDP destination port is unused/ignored in this work. Recall that unlike kernel based I/O, ports are pseudo in DPDK to be used or ignored as needed.
@@ -85,7 +87,7 @@ This is just the bare bones. Packet (DPDK rte_mbuf) memory management is elided.
 There are only three kinds of server threads that could be charged with doing the work in the request:
 
 * the server RXQ lcore (dispatch thread in eRPC jargon) which got the request
-* the corresponding TXQ lcore (alterate dispatch thread) which is supposed to send the response
+* the corresponding TXQ lcore (alternate dispatch thread) which is supposed to send the response
 * generic worker threads
 
 [eRPC Section 3.2 Worker Threads](https://www.usenix.org/system/files/nsdi19-kalia.pdf) smartly describes the trade-offs:
@@ -93,7 +95,7 @@ There are only three kinds of server threads that could be charged with doing th
 ```
 A key design decision for an RPC system is which thread runs an RPC handler. Some RPC systems such as RAMCloud use
 dispatch threads for only network I/O. RAMCloud’s dispatch threads communicate with worker threads that run request
-handlers. At datacenter network speeds, however, interthread communication is expensive: it reduces throughput and adds
+handlers. At data center network speeds, however, inter-thread communication is expensive: it reduces throughput and adds
 up to 400 ns to request latency [56]. Other RPC systems such as Accelio and FaRM avoid this overhead by running all
 request handlers directly in dispatch threads [25, 38]. This latter approach suffers from two drawbacks when executing
 long request handlers: First, such handlers block other dispatch processing, increasing tail latency. Second, they
@@ -105,9 +107,9 @@ additional user input required in eRPC. In typical use cases, handlers that requ
 dispatch threads, and longer handlers use worker threads.
 ```
 
-Now, the static routing topic above is designed so that RXQ/TXQ lcore pairs are distinct. But this is a design choice too. One DPDK lcore could handle both i.e. read request from its RXQ transmitting a response through its TXQ. Combining both eliminates interthread communication. Charging worker threads with request work involves at least one interthread handoff. The RXQ must find an eligble worker then transfer request state to it. The worker either transmits the response over a TXQ it owns, or gives the response data to a separate TXQ lcore through a second interthread handoff.
+Now, the static routing topic above is designed so that RXQ/TXQ lcore pairs are distinct. This one design choice. One DPDK lcore could handle both i.e. read request from its RXQ transmitting a response through its TXQ. Combining both eliminates inter-thread communication. Delegating \textt{get/put} requests to worker threads work involves at least one inter-thread hand-off. The RXQ must find an eligible worker then transfer request state to it. The worker either transmits the response over a TXQ it owns, or gives the response data to a separate TXQ lcore through a second inter-thread hand-off. Workers compete for access to a shared data structure.
 
-Before moving to solutions we need to look at *linearizability* and *queue processing*. The only thing that can be reasonably excluded now is interthread communication of large responses. If computing the result runs on one thread, and is transmitted back to the requester in another thead, the response must either be copied or the threads must carefully avoid data races. KV requests are typically small whereas responses can be comparitively large.
+Before moving to solutions we need to look at *linearizability* and *queue processing*. The only thing that can be reasonably excluded now is inter-thread communication of large responses. If computing the result runs on one thread, and is transmitted back to the requester in another thread, the response must either be copied or the threads must carefully avoid data races. KV requests are typically small whereas responses can be comparatively large.
  
 # Linearizability 
 If the KV system allows writes it must guarantee sensible responses interleaved with reads. *Linearizability* is the strongest guarantee. It comes in three parts:
@@ -126,7 +128,7 @@ If the KV system allows writes it must guarantee sensible responses interleaved 
                                     W(1) B                               R(0) B
                   |-------------------------------------------|    |---------------|       server thread 2
 
-                            Valid Linearizability
+                            Valid Linearizability as seen in the server
 ```
 
 whereas this small variation is **invalid**:
@@ -139,10 +141,10 @@ whereas this small variation is **invalid**:
                                     W(1) B                               R(1) B
                   |-------------------------------------------|    |---------------|       server thread 2
 
-                            Invalid Linearizability
+                            Invalid Linearizability in the server
 ```
 
-Here three concurrent client processes `A, B, C` are reading and writing the same integer in the server's memory. Time increases left to right. The span of time it takes the server to handle a request is indicated by a line bounded by `|`. Overlapping lines represents the server concurrently handling requests in at least two threads. The code `W(0) A` means client A requested 0 to be written to memory. `R(0) B` means client B got 0 in its response reading the same memory.
+Here three concurrent client processes `A, B, C` are reading and writing the same integer in the server's memory. The server runs two response threads. Time increases left to right. The span of time it takes the server to handle a request is indicated by a line bounded by `|`. Overlapping lines represents the server concurrently handling requests in at least two threads. The code `W(0) A` means client A requested 0 to be written to memory. `R(0) B` means client B got 0 in its response reading the same memory.
 
 In the valid case, A reads 1 because the server already updated the memory with B's write request of 1. As the server continues to make and transmit OK to client B, client C overwrites the memory with 0. C's response is transmitted before B's. Finally, client B reads the memory getting 0 reflecting C's write. The invalid case has this critical difference: the final read by B gets 1 because it doesn't see C's write. Quoting Herlihy [p467]:
 
@@ -152,11 +154,9 @@ occurred before A’s read. C’s subsequent write of 0, though concurrent with 
 read of 1. 
 ```
 
-Linearizability correctness runs into DPDK queue processing in two ways. First, a RXQ contain packets for multiple different RPC requests at different stages of completion. Although many RPCs require one just request packet, packet flow control (below) and multi-packet RPCs require two or more request packets. This means the server must carefully start or complete read/writes so linearizability is obeyed.
+Linearizability may conflict with DPDK queue processing in two ways. First, a server RXQ contain packets for multiple different RPC requests at different stages of completion. Although most RPCs require one just request packet, *packet flow control* (below) and multi-packet RPC requests require two or more request packets. This means the server must carefully start and complete read/writes so linearizability is obeyed.
 
-The second and larger problem is worker threads. Suppose a server's request RXQ contains several read/write requests for the same key. If the server runs the requests concurrently through worker threads system behavior is undefined. Putting aside the obvious race condition reading/writing the same KV pair memory, this scenario is just Herlihy's counter-example in a different context. Multi-key writes amplifies this problem considerably.
-
-Now, in the context of KV alone, worker threads are probably net-bad. If key lookup is fast one distinguished thread can handle each request sequentially. Linearizability is satisfied. But summarily excluding work threads is not consequence free. eRPC reminds lengthy request work in dispatch threads increases latency putting back pressure on clients. Linearizability partially conflicts with general RPC handling options.
+The larger problem is worker threads. Suppose a server's request RXQ contains several read/write requests for the same key. If the server runs the requests concurrently through worker threads system behavior is undefined. Putting aside the obvious race condition reading/writing the same KV pair memory, this scenario is just Herlihy's counter-example in a different context. 
 
 Herlihy defines linearizability (p468) as a partial order. For any two events `e0, e1` the server sequence history H in which it processed `e0, e1` satifies linearizability if:
 
@@ -166,13 +166,11 @@ e0 <_H e1 if server's response(e0) precedes request(e1) in H. H is irreflexive.
 
 This ordering is *partial* not *total*. That means that not all client requests `e0, e1` can be ordered as `e0<e1` or `e1<e0` by linearizability in the server. For example, events going to different servers are not (generally) linearizability unless 2PC (two phase commit) is in effect. `e0 <_H e0` is not defined. H is irreflexive.
 
-The server must interleave all concurrent read/write requests *as if there was only one client* who sent all requests for all clients in *some sequential order*, and the server processed them in that same order. The issue **isn't** the per-client sequential order. It's true `A, B, C` send their requests in an order each according to their own preference. But no client can demand a global sequential order at the server for other clients. All clients race to the server with work. The server determines what's done first. 
+The server must interleave all concurrent read/write requests *as if there was only one client* who sent all requests for all clients in *some sequential order*, and the server processed them in that same order. The issue **isn't** the per-client sequential order. It's true `A, B, C` send their requests in an order each according to their own preference. But no client can demand a global sequential order at the server for itself *and* other clients. All clients race to the server with work. The server determines what's done first. Granted, we usually expect a client's `e0` at 9AM to be processed before its `e1` at 10PM. We don't expect the server to coarsely reorder client requests. 
 
-Granted we usually expect a client's `e0` at 9AM to be processed before its `e1` at 10PM. We don't expect the server to reorder client requests. Note network congestion in which `e0` sent at 9AM was actually delivered to the server after `e1` at 10PM is not in scope for linearizability. If `e0, e1` are bonafide events from the same client, they were delivered out of order. Packet flow and/or congestion control will deal with this problem before the server attempts to run them.
+In any case the problem space is mainly those events which overlap in time in the server. And that happens when the server wants to increase throughput by running events in parallel. The counter example violates linearizability because the response for `W(0) C` (t4 in the diagram below) came before the request for `R(1) B` (t6) so B should have read 0 not 1.
 
-In any case the problem space is mainly those events which overlap in time in the server. And that happens when the server wants to increase throughput by running events in parallel. The counter example violates linearizability because the response for `W(0) C` came before the request for `R(1) B` so B should have read 0 not 1.
-
-This nifty definition however elides one important detail. The following diagram reproduces the valid case above with an asterisk `*` indicating *linearizability points*. Asterisks show the point in time at which the write (read) is logically and atomically complete:
+This definition however elides one important detail. The following diagram reproduces the valid case above with an asterisk `*` indicating *linearizability points*. Asterisks show the point in time at which the write (read) is logically and atomically complete:
 
 ```
      W(0)  A               R(1) A              W(0) C
@@ -187,19 +185,19 @@ This nifty definition however elides one important detail. The following diagram
 t0     t1       | t3 | t5    t6       t7    t8        t9   t10  t11  |  t13         t14
                t2    t4                                              t12            
 
-                  Valid Linearizability Points
+                  Valid Linearizability Points (*) in the server
 ```
 
 Consider timestamps t2-t11. After t2 before t3 the server did no work. At t3 the server receives `W(1) B`. By t4 the server completed all updates to the shared integer memory. Whether you see the writes as atomic, or mutex protected insuring serialized exclusive access, t4 marks the place `W(1) B` is done in the linearized history. The server runs until t11 to get the response for `W(1) B` on the wire.
 
-At time t6 `R(1) A` completed its full read race condition free of the same shared memory. Even though `R(1) A` overlaps and runs concurrently with `W(1) B` the server insures the operations deal with the memory sequentially. The fact that some requests run far past its linearizability point flushing response data is not material. What's material is that the server chooses *linearizability points* satisfying the linearizability definition.
+At time t6 `R(1) A` completed its full read race condition free of the same shared memory. Even though `R(1) A` overlaps and runs concurrently with `W(1) B` the server insures the operations deal with the shared memory sequentially. The fact that some requests run far past its linearizability point flushing response data is not material. What's material is that the server chooses *linearizability points* satisfying the linearizability definition.
 
 # Queue Processing
 
 ## Client/Server Context
-The static routing diagram shows RXQ/TXQ lcoree queue pairs for the client; the server is similarly designed. RXQ/TXQ lcores are distinct, which is one design choice. However, there are contextual differences processing packets. As described under *Packet Flow Control* (below) clients only initiate RPCs. Servers never unilaterally send data to clients. This means client RXQ processing of server responses may potentially leverage state it previosuly made for the request. Clients, unlike servers, initiate RPCs when it sent packets out. So it can anticipate responses for those same RPCs in its RXQ.
+The static routing diagram shows RXQ/TXQ lcore queue pairs for the client; the server is similarly designed. RXQ/TXQ lcores are distinct, which is one design choice. However, there are contextual differences processing packets in clients versus servers. As described under *Packet Flow Control* (below) clients only initiate RPCs. Servers never unilaterally send data to clients. This means client RXQ processing of server responses may potentially leverage state it previously made for the request. Clients, unlike servers, initiate RPCs when it sent packets out. So it can anticipate responses for those same RPCs in its RXQ.
 
-RXQ server side does not have this advantage. The server only becomes aware of RPC work when it takes a packet off the wire. The server might parlay its accumulated request state RXQ side when it later makes and sends TXQ response packets.
+RXQ server side does not neccessarily have this advantage. The server may only becomes aware of RPC work when it takes a packet off the wire. The server might parlay its accumulated request state RXQ side when it later makes and sends TXQ response packets.
 
 RXQ processors on both clients and servers are saddled with RPC identification. The next section goes into more detail. The key problem is knowing whether packet in hand is for a previously known RPC or a brand new RPC. Finding or creating this state must be fast. Removing state for completed RPCs is also a requirement. 
 
@@ -223,7 +221,7 @@ struct Responseacket: public PacketPrefix { ... };   // more data
 
 At 14-16 bytes each depending on alignment, it allows at most `0xFFFFFFFF` distinct RPCs per lease, and at most 255 packets per RPC. I assume leases are destroyed long before `0xFFFFFFFF` or that the client is forced into a new clientId on wrap.
 
-Regardless of the dispatch/worker thread set design, the first RXQ processor task is determining if `(clientId, rpcSeqId)` is known or unknown. Next steps include:
+Regardless of the dispatch/worker thread set design, the first RXQ processor task is determining if `(clientId, rpcSeqId)` is known or unknown:
 
 * create new RPC state when the first packet of a new RPC is seen
 * update RPC state if needed for request continuation packets
@@ -241,71 +239,102 @@ MTU = 1500 bytes
 C   = BDP/MTU = 13 credits per RPC
 ```
 
-A RXQ with N entries can hold N distinct RPCs in the worst case. This could happen if, improbably, servers managed to get exactly one response packet from N distinct requests into the client's RXQ at the same time. `queue.cpp` models 5 response packets. If we assume that, on average, half of a response per RPC is in queue one can revise the estimate downward to `N / (2.5)`. For a 512 entry RXQ that's 204 unique RPCs. Note that RXQ sizing has two dimensions: the total data size for all packets inqueue, and the number of packets N holding the data. This could be a few huge packets or many small packets. RPC identification depends on packet count only not data size.
+A RXQ with N entries can hold N distinct RPCs in the worst case. This could happen if, improbably, servers managed to get exactly one response packet from N distinct requests into the client's RXQ at the same time. `queue.cpp` models 5 response packets. If we assume that, on average, half of a response per RPC is in queue one can revise the estimate downward to `N / (2.5)`. For a 512 entry RXQ that's 204 unique RPCs. Note that RXQ sizing has two dimensions: the total data size for all packets in-queue, and the number of packets N holding the data. This could be a few huge packets or many small packets. RPC identification depends on packet count only not data size.
 
 The point: the search space is **very likely less than 1,000 identifiers**.
 
 ## RPCs vs. RPC Packets v. Sessions
-Reverse engineering the `rpcId = (clientId, rpcSeqId)` out of the packet is too much work. An online mutable data structure is required. eRPC eliminates this code by adding data to each packet from which a *session slot* is extracted. Now, no packets are in scope anywhere until a client creates a RPC. If that RPC can be indexed by `i`, this index can be sent with its packets to locate state for `i` efficiently in clients and servers. RPCs are associated with a eRPC session, which, unfortunately isn't well described.
-
-There cannot be an unbounded number of outstanding RPCs per client for three reasons. First, a specific client runs RPCs sequentially through a session. It usually finishes one before it starts another. Second, no client/server session manager has unbounded memory. Neither do NICs. There can only be a finite number of RPCs running regardless of the HW count. This suggests pre-allocating indexable fixed capacity memory (array, ring) in a session can help. Third, BDP and packet-level flow control bound the number of unacknowledged packets.
-
-As such it's necessary to again re-examine the design of dispatch/worker threads with sessions. In conventional kernel based socket work the connection is the session:
+Reverse engineering the `rpcId = (clientId, rpcSeqId)` out of each packet is **too much work**. An online mutable data structure is required. eRPC eliminates this code by adding data to each packet from which a *session slot* is extracted. Now, no packets are in scope anywhere until a client creates a RPC. Clients cannot create or run an RPC unless they first have a session connecting its host box to the target server box. eRPC defines a *session* in section 3.1:
 
 ```
-// Runs in either the main thread or app created thread
+A session is a one-to-one connection between two Rpc endpoints, i.e., two user threads. The client endpoint of a
+session is used to send requests to the user thread at the other end. A user thread may participate in multiple
+sessions, possibly playing different roles (i.e., client or server) in different sessions.
+```
+
+If an RPC can be directly or indirectly indexed by `i` through its session, this index can be sent with its packets to locate state efficiently in both clients and servers. In conventional kernel based work code a session is the connection object:
+
+```
+// Runs in main thread or app created thread
+
+// Create a session from this box's IP, say 4.128.10.168, to destination:
 UDP::Connection con("10.10.0.128:332");
 con.connect();
 con.send(...);
 con.receive(...);
 con.disconnect();
 
-// Do more work with another endpoint
+// Do more work with another endpoint in a new session:
 UDP::Connection con1("23.43.22.33:4140");
 con1.connect();
 . . .
 con1.disconnect();
 ```
 
-The UDP objects can be cached to avoid connect overhead, but are probably not thread safe. Therefore each thread has its own set of UDP objects created and destoryed when needed. These constraints still allow for mixing I/O over different endpoints:
+In section 4.3 eRPC explains session management in a bit more detail:
 
 ```
-// Runs in either the main thread or app created thread
-UDP::Connection con("10.10.0.128:332");
-UDP::Connection con1("23.43.22.33:4140");
-
-con.connect();
-con1.connect();
-
-con.send(...);
-con.receive(...);
-con1.send(...);
-con.receive(...);
-. . .
+Each session maintains multiple outstanding requests to keep the network pipe full. Concurrently requests on a session
+can complete out-of-order with respect to each other. This avoids blocking dispatch-mode RPCs behind a longrunning
+worker-mode RPC. We support a constant number of concurrent requests (default = 8) per session; additional requests
+are transparently queued by eRPC. This is inspired by how RDMA connections allow a constant number of operations [10].
+A session uses an array of slots to track RPC metadata for outstanding requests
 ```
 
-DPDK however cannot so easily create connections. There is no IP/port binding per se like kernel work. RXQ/TXQs require considerable setup and, in fact, are usually created once and run once at startup time.
-
-We can make a proxy object for a DPDK session, however. Assume `session` knows about valid DPDK RXQ/TXQs ready for use:
+eRPC does session management through conventional kernel based APIs. From its `hello_world` example (elided):
 
 ```
-// Runs in either the main thread or app created thread
-const std::string key1("test");
-const Dpdk::Endpoint endpoint1 = etcd.serverForKey(key1);
-const std::string key2("abc");
-const Dpdk::Endpoint endpoint2 = etcd.serverForKey(key2);
+// Create a RPC
+auto rpc = new erpc::Rpc<erpc::CTransport>(...);
 
-std::string value;
-Dpdk::Session session;
+// Make a session indexed by 'session_num'
+std::string server_uri = kServerHostname + ":" + std::to_string(kUDPPort);
+int session_num = rpc->create_session(server_uri, 0);
 
-int rc = session.get(endpoint1, key1, &value);
-assert(0==rc);
+// Send RPC request through 'session_num'
+rpc->enqueue_request(session_num, kReqType, &req, &resp, cont_func, nullptr);
+```
 
-rc = session.get(endpoint2, key2, &value);
-assert(0==rc);
-``` 
+The method `create_session()` creates a new session object ultimately calling `sm_pkt_udp_tx_st(...)` to transmit the client's session information to the server who, after reading this packet, creates *mirror state*. Identifying information from this session handshake is included in RPC packets. Each session holds 8 sessions *slots* for active RPCs. If these slots are all used, new RPCs are buffered then moved into a free slot when possible FIFO. Through the session handshake both the client and server are initialized ahead of time so that when DPDK packets for the RPC itself are generated, both ends of the RPC interaction can quickly locate and manage state.
 
-Now if session's packet handling runs in a different thread than the caller here, an interthread off is required. On the other hand, the application could make a fixed set of sessions running as lcores, and give the caller its context so thread hand off is avoided:
+Note that eRPC has other session management messages for disconnect, reconnect, plus handling duplicate session requests.
+
+Putting these pieces together we have:
+
+* eRPC requires a session to be made before RPCs are run
+* eRPC requires clients only initiate sessions
+* Sessions are created over conventional kernel based sockets requiring client's and server's run a *Session Mananger* thread
+* RPCs are assigned to a free session slot in a session. When slots are full, additional requests are queued moved into free slots later
+* Identifying information (e.g. session number and slot number) from the session handshake is included in RPC packets sent through DPDK
+* DPDK RXQ processors use the identifying session information in packets to find and manage state
+
+## Problem: Linearizability vs. Session slots
+Re-quoting eRPC "each session maintains multiple outstanding requests to keep the network pipe full. Concurrently requests on a session can complete out-of-order with respect to each other." In order for the whole system to be efficient, the server has to process requests quickly. Efficiency conflicts with linearizability:
+
+* The server can't be efficient if its RXQs are mostly empty. That's why eRPC has session slots holding *in-process requests* to get more work into the server's RXQ
+* The server can't be efficient if it can't work on a RPC in session slot #1 because it's waiting for work in slot#0 to finish. That'll put back pressure on clients and risk filling its RXQ to capacity leading to dropped packets
+* The server would like the option of finishing requests out of order so more work per unit time is done
+* The server can get more work done if it handles requests in parallel through worker threads
+* But if finding an eligible worker and handing off work to it is slow, parallelism is hampered. Work can be done in dispatch threads to avoid this overhead, but parallelism remains low
+* The server must obey linearizability, and avoid race conditions on shared memory
+
+And that's why, quoting eRPC again, "a key design decision for an RPC system is which thread runs an RPC handler." To work towards a solution note that server request processing has three distinct parts:
+
+* Waiting until the full request is received. Some requests need multi-packets. If a RPC request in slot #0 is incomplete, the server could work on other slots
+* Performing the completed request e.g. KV get/put
+* Sending response 
+
+Linearizability isn't broken by incomplete requests; the server can't do anything with those RPCs yet. On the other hand if running requests satisfies linearizability, it can send responses out of order because, by that point, linearizability points are established. The question of whether the server delegates requests to a worker thread or handles it within a dispatch thread (RXQ or TXQ side) in turn depends on four things:
+
+* Does the server support delegation through workers? Who determines if hand-off is needed? Does the client ask or the server decide?
+* Is the data structure accessed by the requests serialized? Does it need to be?
+* Is system performance better for a given use-case with workers?
+* If the primary use case (e.g. KV get/put) is fast so workers are counter-indicated, should the RPC API still allow for delegating if new use-cases are slow? Specific RPC or general?
+
+eRPC provides concrete answers: its RPC API allows client-requested delegation. **eRPC, however, never addresses linearizability** so its design is fundamentally incomplete.
+
+## Problem: Linearizability vs. Session slots vs. New Sessions
+Session life cycle maintenance runs concurrent with session slot processing. At any time the server may get new RPCs from existing clients or new sessions from new clients. Pinning this down requires that we stop deferring the worker thread design problem. Let's start here. DPDK RXQ/TXQ setup, unlike the pseudo kernel UDP code above, is complex. Most DPDK programs create and run RXQ/TXQ queue handlers pinned to CPU cores at startup. This is done once. DPDK praxis is application queue event processing is handled by those same lcores through a function *entry point*:
 
 ```
 int main(int argc, char **argv) {
@@ -329,7 +358,7 @@ int main(int argc, char **argv) {
 
   // 
   // Create and run all configured sessions each starting in function pointer
-  // 'entryPoint'
+  // 'entryPoint'. Entrypoint is chosen so it is correct for the client or server
   //
   {
     Reinvent::Dpdk::Worker worker(prefix, env, config);
@@ -343,60 +372,162 @@ int main(int argc, char **argv) {
   }
 ```
 
-In this way all configured sessions are launched, and the application code now looks more like:
+In this way all configured sessions are pre-launched, and client application code now looks more like:
 
 ```
-// Running thread explicitly created by Reinvent library for exactly 1 session
-int entryPoint(Reinvent::Dpdk::Session *session, ....) {
+// Client thread explicitly created by Reinvent library for exactly 1 session
+int entryPoint(Reinvent::Dpdk::SessionManager *mgr, ....) {
   const std::string key1("test");
   const Dpdk::Endpoint endpoint1 = etcd.serverForKey(key1);
   const std::string key2("abc");
   const Dpdk::Endpoint endpoint2 = etcd.serverForKey(key2);
 
-  int rc = session->get(endpoint1, key1, &value);
+  int sessionid = mgr->createSession(endpoint);
+  int rc = mgr->get(sessionId, key1, &value);
   assert(0==rc);
+  mgr->disconnectSession(sessionid);
 
-  rc = session->get(endpoint2, key2, &value);
+  sessionid = mgr->createSession(endpoint1);
+  int rc = mgr->put(sessionId, key2, &value);
   assert(0==rc);
+  mgr->disconnectSession(sessionid);
 ```
 
-If the entry point function doesn't know what operations to run, the application programmer will have to add code to get it from somewhere else, for example, over a SPSC. See below.
+whereas on the server side we have one of several variations:
 
-Returning the problem at hand `session` will come preconfigured with a bounded number of RPC slots
+```
+// Server thread explicitly created by Reinvent library for exactly 1 session doing work in RXQ dispatch:
+int entryPoint(Reinvent::Dpdk::Session *session, ....) {
+  while(1) {
+   read RXQ 
+   do work
+   send response on its own TXQ
+} 
 
+// Alternative server thread explicitly created by Reinvent library for exactly 1 session doing work in TXQ dispatch:
+int entryPoint(Reinvent::Dpdk::Session *session, ....) {
+  while(1) {
+   read RXQ 
+   delegate work to TXQ which does request and sends response on its own TXQ
+} 
 
+// Alternative server thread explicitly created by Reinvent library for exactly 1 session delegating requests to worker threads:
+int entryPoint(Reinvent::Dpdk::Session *session, ....) {
+  while(1) {
+   read RXQ 
+   find eligible worker, W
+   delegate request to W
+} 
+```
 
+This approach has merits and demerits:
 
+* Good: Initialization of NIC resources: each RXQ/TXQ is created, assigned, pinned to a HW core either doing RXQ, TXQ alone or both
+* Good: Through configuration the entry point can be tailored for clients or servers
+* Maybe bad: The number of clients typically far exceeds the number of servers. One time setup of client lcores is possibly too restrictive
+* Bad: The client thread doesn't know what RPCs to run; hard-coded KV code isn't realistic. The client will likely have to get real RPCs from a queue or other point of injection. The Reinvent library can't know what that is
+* Bad: Neither the client or server loops as shown have session management, and the issue of mutating session state while sessions slots are concurrently mutated is unclear  
+* Bad: The server loops as shown chose whether or not delegating happens and how it happens. We might prefer to the client request to specify this behavior
+* Bad: Delegating to a worker thread leaves open how the response is sent back. Which TXQ? Which lcore? Where is the hand off?
+* There's no reference to sessions slots; there's no indication how server RXQ handlers know requests are complete
+
+To fix these problems let's start server side. While the number of clients is unknown, server clusters are pre-configured. There is a fixed amount of hardware that can participate in a session. By static routing we've already established how clients choose sessions to participate in, and eRPC session management helps clarify how session/RPC state can be pre-coordinated before RPC packets are in-flight. To eliminate pointless copying of possibly large responses, the server can delegate request work in a distinguished TXQ lcore through inter-thread hand-off, or through a worker. A worker, again if we're not copying responses or risking data races, must have its own TXQ. Copying the response from the worker to a TXQ lcore through a second inter-thread hand-off undoes the work we set out to eliminate.
+
+Our options are:
+
+1. Server RXQ lcore, after request complete, and if client **does not** request worker help, delegates to a distinguished TXQ through a SPSC (single producer single consumer) queue. This TXQ lcore does request work and sends response
+2. Server RXQ lcore, after request complete, and if client **does not** request worker help, does request work writing response to a TXQ it owns .e.g. one lcore managing a single RXQ/TXQ set
+3. Server RXQ lcore, after request complete, and client **does request** worker help, delegates to eligible worker which owns a TXQ through a MPSC (multi producer single consumer) queue. The worker does the request and sends the response on its own TXQ
+4. If workers are ever used, the KV data structure **must be MT safe**
+5. If option (1) is used the KV structure **must be MT safe**
+6. If option (2) is exclusively used the KV structure **need not be MT safe**
+
+Note that this design implicitly constrains the server, in the static routing sense, to one RXQ holding any number of client requests while allowing for multiple TXQs for server responses. Picking our poison is done at build time with `#ifdef/#endif`:
+
+* If clients can defer to workers a delegate request bit must exist in request packet or session creation message
+* If clients can defer to workers a delegate request may need an *enumerated field* so the server can pick the right kind of worker. In this scenario, this enumeration will subsume the request bit in the packet or session creation message 
+* If workers are possible, the KV structure must be protected by lock
+* If option (1) is used, the KV structure must be protected by lock
+* Server side configuration chooses between options 1, 2, or 3 consistent with client configuration. That is, the Reinvent library must supply entry points **for all options** at runtime depending on the client and server config
+
+The next issue is server hand-off for workers and/or option (1). The server RXQ lcore has two options: hand-off DPDK's `rte_mbuf` holding the request or extract the request state from packets and hand off a copy. Packet hand-off has its own set of problems with `rte_mbuf` life-cycle. In DPDK RXQ work looks like this:
+
+```
+std::vector<rte_mbuf*> mbuf(RX_BURST_CAPACITY);
   
+while(!terminate) {
+  //
+  // Receive up to RX_BURST_CAPACITY packets
+  //
+  uint16_t rxCount = rte_eth_rx_burst(deviceId, rxqIndex, mbuf.data(), RX_BURST_CAPACITY);
 
+  // do something with mbuf[0..rxCount)
+  if (rxCount>0) {
+    doSomething(mbuf)
+  } else {
+    continue;
+  }
 
+  // mark mbufs free
+  for (unsigned i=0; i<rxCount; ++i) {
+    rte_pktmbuf_free(mbuf[i]);
+  }
+}
+```
+
+The `rte_mbuf` pointers placed into `mbuf` come from the mempool associated with `rxq` in the `rte_eth_rx_burst` call. Something has to mark them free or the RXQ will eventually be full. 
+
+Now, for single packet requests, an optimization might include hand-off of the single `rte_mbuf*` to be freed in the TXQ thread once the response is ready presumably on the same HW core. Note, the TXQ thread almost certainly cannot mutate this `rte_mbuf*` to hold the response. Each `rte_mbuf` only holds a fixed amount of data. Since the response payload is almost typically larger, it can't physically work. 
+
+The possibility of multi-packet requests is more complicated. Because of congestion plus the interleaving of packets from multiple clients, the request would not generally be held in a contiguous set of `rte_mbufs` inside the `mbuf` vector. There's no guarantee that any one call to `rte_eth_rx_burst` holds one complete RPC request either. So handing off the request over mbufs would mean handing over a variable set of pointers. And that's more data to track through more code. It may be better to hand off the request by extracting and copying it out of the packets.
+
+This suggests Reinvent has a more robust set of entry points including:
+
+* Single packet requests handlers for delegation
+* Multi-packet request handlers through copy-and-delegate
+
+Then there's the issue of session management. While it's straightforward to equip each server (again in the sense of static routing) with a thread to deal with session connect/disconnect, changing session state could involve data races with response processors:
 
 
 ```
+// Session management thread #1 for server N
+int sessionManagement(Reinvent::Dpdk::SessionManager *mgr, ...) {
+  while (!terminate) {
+     try w/ timeout to read from UDP port
+     if data {
+       switch (data.request) {
+         case: CONNECT: mgr->makeNewSession(); break;
+         case: DISCONNECT: mgr->closeSession(...); break;
+         default: ...
+       }
+     }
+   }
+}
 
+// DPDK lcore thread #2 for server N doing RXQ
+int entryPoint(Reinvent::Dpdk::SessionManager *mgr,...) {
+  std::vector<rte_mbuf*> mbuf(RX_BURST_CAPACITY);
+  while(!terminate) {
+    // Receive up to RX_BURST_CAPACITY packets
+    uint16_t rxCount = rte_eth_rx_burst(deviceId, rxqIndex, mbuf.data(), RX_BURST_CAPACITY);
 
- While the above code does not create different UDP objects to the same endpoint because concurrent data on the same server usually goes to different ports, DPDK server RXQ/TXQs will hold packets from multiple requesters. So will the client.
+    if (unlikely(rxCount==0) {
+      continue;
+    }
 
+    // do something with mbuf[0..rxCount). each mbuf holds state pre-setup through session manager
+    for (unsigned i=0; i<rxCount; ++i) {
+      updateRpcState(mbuf[i]);
+    }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    // do something with complete requests
+    
+     
+  // mark mbufs free
+  for (unsigned i=0; i<rxCount; ++i) {
+    rte_pktmbuf_free(mbuf[i]);
+  }
+}
 
 ## Exactly-Once-Processing
 Whether due to client error or due to congestion error recovery, the server side of RXQ processing must not re-run old RPCs. Errorenously re-running a mutation twice corrupts data:
@@ -551,7 +682,7 @@ TBD
 
 
 
-Appendix B. Handling node failures
+rpc Appendix B. Handling node failures
 
 
 
