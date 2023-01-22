@@ -8,7 +8,7 @@ Evolving from [a trivial DPDK UDP example](https://github.com/gshanemiller/reinv
 * durable writes 
 * exactly-once message processing
 
-Composing each feature into a well engineered whole is complex. This document describes each technical challenge with periodic pauses to summarize and integrate. In the second half of the document, a practical design is given.
+Composing each feature into a well engineered whole is hard. This document describes each technical challenge with periodic pauses to summarize and integrate. In the second half of the document, a practical design is given.
 
 To motivate this work consider the [static routing scenario discussed in the packet design doc.](https://github.com/gshanemiller/reinvent/blob/main/doc/packet_design.md#flow-control) Here a client `C` wants to obtain the value `V` for a key `K`. To do this, the client first determines the IP address and destination port `S` of the server which handles `K`. `C` send sends a request to `S`. `S` responds to `C` with the value `V` for `K` or nil if not found. This is static routing in the sense `C` chooses `S`. Determining `S` is not discussed here but, for example, `C` could consult `etcd` or some other service which knows which `S` handles which keys `K`.  
 
@@ -334,7 +334,268 @@ Linearizability isn't broken by incomplete requests; the server can't do anythin
 eRPC provides concrete answers: its RPC API allows client-requested delegation. **eRPC, however, never addresses linearizability** so its design is fundamentally incomplete.
 
 ## Problem: Linearizability vs. Session slots vs. New Sessions
-Session life cycle maintenance runs concurrent with session slot processing. At any time the server may get new RPCs from existing clients or new sessions from new clients. Pinning this down requires that we stop deferring the worker thread design problem. Let's start here. DPDK RXQ/TXQ setup, unlike the pseudo kernel UDP code above, is complex. Most DPDK programs create and run RXQ/TXQ queue handlers pinned to CPU cores at startup. This is done once. DPDK praxis is application queue event processing is handled by those same lcores through a function *entry point*:
+Session life cycle maintenance runs concurrent with session slot processing. At any time the server may get new RPCs from existing clients or new sessions from new clients. Clients and servers participating in a session will in general have different session counts e.g. a client runs 10 sessions, but for one of those sessions terminating in server `N`, `N` might participate in 50 sessions because other clients are hitting it too. eRPC comes with these types:
+
+```
++--------------+   1:N    +---------------+   2:1 session index   +-----------------------+
+| class SSlot  |----------| class Session |-----------------------| class SessionEndpoint |
+| +----------+ |          | +-----------+ |                       +-----------------------+
+| | client   | |          | | client    | |
+| +----------+ |          | +-----------+ |                       +-------------+  N:1    +------------+
+| | server   | |          +---------------+                       | class Nexus |---------| class Hook |
+| +----------+ |         /                 \ 1:N session idx.     +-------------+         +-----+------+
++--------------+        / 1:1               +--------+               +--------------------------|  
+                       /                             |               |         see below
++----------------+    /  dst session index           |   +-----------+
+| class pkthdr_t |---+                               +-- | class RPC | (confusing name)
++----------------+                                       +-----------+
+```
+
+SSlot, sessions, pkthdr_t objects *are used in the client and server.* Usage needs context: Am I dealing with it client side or server side? Accordingly, SSlot has a bit identifying a SSlot object for client or server. Once this bit is known, SSlot has private subtypes holding client state and server state. Session is similar holding a sub-type for client side sessions only. It has one set of SSlots for the server, and a second set for the client in its client subtype.
+
+A session by definition is a connection between two server endpoints. A session has session slots running the active sub-RPCs. Client RPCs go into active SSlots if one is free, or buffered in a queue if full. Servers don't buffer RPCs. If clients can run a RPC in a SSlot it's implied the server has capacity to handle it.
+
+Session creation in the server is caught up in eRPC's Nexus and Hook classes where linearizability and KV design is broken. Each box client or server runs one Nexus object. In the server, and before any traffic starts, server response handlers register themselves with its Nexus by type e.g. a `get` or a `put` handler. Nexus, through its Hook private state runs a set background ground threads per type. These threads will ultimately run the request.
+
+The Nexus also runs one thread for session management (SM) transceiving SM packets. When the server SM thread sees a connect request from a client (`Nexus::sm_thread_func()`) it inspects the SM packet request type. This is mutex protected. If there's no registered handler, an error is returned. Othewise, Nexus equeues the connect request in the Hook object for that type:
+
+```
+if (target_hook != nullptr) {
+  target_hook->sm_rx_queue_.unlocked_push(SmWorkItem(target_rpc_id, sm_pkt));
+}
+```
+
+
+
+, it finds the RPC type in the packet. And from there is locates the Hook state for it. It then enqueues    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Zooming out to client/server boxes we have:
+
+```
++----Client-Box-A------+         +----Server-Box-B------+        
+| +------------------+ |         | +------------------+ |
+| | Logical client 1 | |         | | Logical server 1 | |
+| | in thread 1      | |         | | in thread 1 with | |
+| +------------------+ |         | | logical addr1    | |
+| | Logical client 2 | |         | +------------------+ |
+| | in thread 2      | |         | | Logical server 2 | |
+| +------------------+ |         | | in thread 2 with | |
+|           .          |         | | logical addr2    | |
+|           .          |         | +------------------+ |
++----------------------+---+     |          .           |
+   Box A IP address        |     |          .           |
+                           |     | +------------------+ |
+                           +-----+-| Session Manager  | |   eRPC runs per server mgmnt threads
+                    kernel UDP   | | thread N for     | |   managed by a single Nexus object
+                                 | | server 1         | |   in the background
+                                 | +------------------+ |
+                                 | | Server Manager   | |
+                                 | | thread N+1 for   | |
+                                 | | sever 2          | |
+                                 | +------------------+ |
+                                 |          .           |
+                                 |          .           |
+                                 +----------------------+
+                                      Box B IP address
+
+ Sessions are between A's IP address to a server's logical address
+ through DPDK flow control 
+```
+
+When `client A.1` (client box1 logical client 1) wants run `get('test')` with `B.2` per eRPC we have:
+
+```
+etcd                         A.1                          B Session Mgr
+--+--                       --+--                        -------+-------
+  |                           |                                 |
+  <---serverEndPoint('test')--+                                 |
+  |                           |                                 |
+  +---B.2--------------------->                                 |
+  |                           |                                 |
+  <---makeLeaseId('A.2')------+                                 |
+  |                           |                                 |
+  +----0x3938483-------------->                                 |
+                              |                                 |
+                              +----makeSession(A.2,0x3938483)--->
+```
+
+```
+struct pkthdr_t {
+  uint32_t req_type_ : 8;              /// RPC request type
+  uint32_t msg_size_ : kMsgSizeBits;   /// Req/resp msg size, excluding headers
+  uint16_t dest_session_num_;          /// Session number of the destination endpoint
+  uint64_t pkt_type_ : 2;              /// The eRPC packet type
+  uint64_t pkt_num_ : kPktNumBits;     /// Monotonically increasing packet number
+
+  /// Request number, carried by all data and control packets for a request.
+  uint64_t req_num_ : kReqNumBits;
+  uint64_t magic_ : k_pkt_hdr_magic_bits;  ///< Magic from alloc_msg_buffer()
+};
+
+class SSlot {
+  // Members that are valid for both server and client
+  Session *session_;  ///< Pointer to this sslot's session
+
+  /// True iff this sslot is a client sslot. sslot class does not have complete
+  /// access to \p session, so we need this info separately.
+  bool is_client_;
+
+  size_t index_;  ///< Index of this sslot in the session's sslot_arr
+
+  /// The request (client) or response (server) buffer. For client sslots, a
+  /// non-null value indicates that the request is active/incomplete.
+  MsgBuffer *tx_msgbuf_;
+
+  /// Info about the current request
+  size_t cur_req_num_;
+
+  union {
+    struct {
+      MsgBuffer *resp_msgbuf_;      ///< User-supplied response buffer
+      erpc_cont_func_t cont_func_;  ///< Continuation function for the request
+      void *tag_;                   ///< Tag of the request
+
+      /// Number of packets sent. Packets up to (num_tx - 1) have been sent.
+      size_t num_tx_;
+
+      /// Number of pkts received. Pkts up to (num_tx - 1) have been received.
+      size_t num_rx_;
+
+      /// TSC at which we last sent or retransmitted a packet, or received an
+      /// in-order packet for this request
+      size_t progress_tsc_;
+
+      size_t cont_etid_;  ///< eRPC thread ID to run the continuation on
+
+      /// Pointers for the intrusive doubly-linked list of active RPCs
+      SSlot *prev_, *next_;
+
+      // Fields for congestion control, cold if CC is disabled.
+
+      /// Packet number n is in the wheel (including its ready queue) iff
+      /// in_wheel[n % kSessionCredits] is true
+      std::array<bool, kSessionCredits> in_wheel_;
+      size_t wheel_count_;  ///< Number of packets in the wheel (or ready queue)
+
+      /// Per-packet TX timestamp. Indexed by pkt_num % kSessionCredits.
+      std::array<size_t, kSessionCredits> tx_ts_;
+    } client_info_;
+
+    struct {
+      /// The fake or dynamic request buffer
+      MsgBuffer req_msgbuf_;
+
+      // Request metadata saved by the server before calling the request
+      // handler. These fields are needed in enqueue_response(), and the request
+      // MsgBuffer, which contains these fields, may not be valid at that point.
+
+      /// The request type. This is set to a valid value only while we are
+      /// waiting for an enqueue_response(), from a foreground or a background
+      /// thread. This property is needed to safely reset sessions, and it is
+      /// difficult to establish with other members (e.g., the MsgBuffers).
+      uint8_t req_type_;
+      ReqFuncType req_func_type_;  ///< The req handler type (e.g., background)
+
+      /// Number of pkts received. Pkts up to (num_rx - 1) have been received.
+      size_t num_rx_;
+
+      /// The server remembers the number of packets in the request after
+      /// burying the request in enqueue_response().
+      size_t sav_num_req_pkts_;
+    } server_info_;
+  };
+};
+
+class SessionEndpoint {
+  TransportType transport_type_;
+  char hostname_[kMaxHostnameLen];  ///< DNS-resolvable hostname
+  uint16_t sm_udp_port_;            ///< Management UDP port
+  uint8_t rpc_id_;                  ///< ID of the owner
+  uint16_t session_num_;            ///< The session number of this endpoint in its Rpc
+  Transport::routing_info_t routing_info_;  ///< Endpoint's routing info
+};
+
+class Session {
+  const Role role_;                          ///< The role (server/client) of this session endpoint
+  const conn_req_uniq_token_t uniq_token_;   ///< A cluster-wide unique token
+  SessionState state_;                       ///< The management state of this session endpoint
+  SessionEndpoint client_, server_;          ///< Read-only endpoint metadata
+
+  std::array<SSlot, kSessionReqWindow> sslot_arr_;  ///< The session slots
+
+  ///@{ Info saved for faster unconditional access
+  Transport::routing_info_t *remote_routing_info_;
+  uint16_t local_session_num_;
+  uint16_t remote_session_num_;
+  ///@}
+
+  /// Information that is required only at the client endpoint
+  struct {
+    size_t credits_ = kSessionCredits;  ///< Currently available credits
+
+    /// Free session slots. We could use sslot pointers, but indices are useful
+    /// in request number calculation.
+    FixedVector<size_t, kSessionReqWindow> sslot_free_vec_;
+
+    /// Requests that spill over kSessionReqWindow are queued here
+    std::queue<enq_req_args_t> enq_req_backlog_;
+
+    size_t num_re_tx_ = 0;  ///< Number of retransmissions for this session
+
+    // Congestion control
+    struct {
+      Timely timely_;
+      size_t prev_desired_tx_tsc_;  ///< Desired TX timestamp of the last packet
+    } cc_;
+
+    size_t sm_req_ts_;  ///< Timestamp of the last session management request
+  } client_info_;
+};
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Pinning this down requires that we stop deferring the worker thread design problem. Let's start here. DPDK RXQ/TXQ setup, unlike the pseudo kernel UDP code above, is complex. Most DPDK programs create and run RXQ/TXQ queue handlers pinned to CPU cores at startup. This is done once. DPDK praxis is application queue event processing is handled by those same lcores through a function *entry point*:
 
 ```
 int main(int argc, char **argv) {
@@ -382,11 +643,15 @@ int entryPoint(Reinvent::Dpdk::SessionManager *mgr, ....) {
   const std::string key2("abc");
   const Dpdk::Endpoint endpoint2 = etcd.serverForKey(key2);
 
+  // Create a session for endpoint using this box's IP/MAC address as source
   int sessionid = mgr->createSession(endpoint);
-  int rc = mgr->get(sessionId, key1, &value);
+
+  // This RPC goes into a free session slot or is queued
+  auto rpc = mgr->get(sessionId, key1, &value);
   assert(0==rc);
   mgr->disconnectSession(sessionid);
 
+  // This RPC goes into a free session slot or is queued
   sessionid = mgr->createSession(endpoint1);
   int rc = mgr->put(sessionId, key2, &value);
   assert(0==rc);
@@ -424,14 +689,16 @@ This approach has merits and demerits:
 
 * Good: Initialization of NIC resources: each RXQ/TXQ is created, assigned, pinned to a HW core either doing RXQ, TXQ alone or both
 * Good: Through configuration the entry point can be tailored for clients or servers
+* Mixed: The client thread doesn't know what RPCs to run; example hard-coded KV code isn't realistic. The client will likely have to get real RPCs from a queue or other point of IPC injection. The Reinvent library can't know what that is. On the hand, that application code is free to read from conventional kernel sockets if desired so specialty DPDK RPC protocol is not forced onto clients at the point RPCs ultimately start 
+* Mixed: As written the client code is *blocking*. The client TXQ thread can't talk to `endpoint1` until `endpoint` is done 
 * Maybe bad: The number of clients typically far exceeds the number of servers. One time setup of client lcores is possibly too restrictive
-* Bad: The client thread doesn't know what RPCs to run; hard-coded KV code isn't realistic. The client will likely have to get real RPCs from a queue or other point of injection. The Reinvent library can't know what that is
-* Bad: Neither the client or server loops as shown have session management, and the issue of mutating session state while sessions slots are concurrently mutated is unclear  
-* Bad: The server loops as shown chose whether or not delegating happens and how it happens. We might prefer to the client request to specify this behavior
+* Bad: The issue of mutating session state while its sessions slots are concurrently mutated is unclear
+* Bad: The server loops as shown chose whether or not delegation happens and how it happens. We might prefer to the client request to specify this behavior
 * Bad: Delegating to a worker thread leaves open how the response is sent back. Which TXQ? Which lcore? Where is the hand off?
-* There's no reference to sessions slots; there's no indication how server RXQ handlers know requests are complete
+* Bad: There's no reference to sessions slots; there's no indication how server RXQ handlers know requests are complete so request processing can start
+* Bad: If RXQ/TXQ handling in the client or server is in separate threads, it will complicate packet drop/loss. Resent packets will have to flow from the RXQ only to be handed off to the TXQ 
 
-To fix these problems let's start server side. While the number of clients is unknown, server clusters are pre-configured. There is a fixed amount of hardware that can participate in a session. By static routing we've already established how clients choose sessions to participate in, and eRPC session management helps clarify how session/RPC state can be pre-coordinated before RPC packets are in-flight. To eliminate pointless copying of possibly large responses, the server can delegate request work in a distinguished TXQ lcore through inter-thread hand-off, or through a worker. A worker, again if we're not copying responses or risking data races, must have its own TXQ. Copying the response from the worker to a TXQ lcore through a second inter-thread hand-off undoes the work we set out to eliminate.
+To fix these problems let's start server side. While the number of clients is unknown, server clusters are pre-configured. There is a fixed amount of hardware that can participate in a session when the server is started. By static routing we've already established how clients choose sessions to participate in, and eRPC session management clarifies how session/RPC state can be pre-coordinated before RPC packets are in-flight. To eliminate pointless copying of possibly large responses, the server can delegate request work in a distinguished TXQ lcore through inter-thread hand-off, or through a worker. A worker, again if we're not copying responses or risking data races, must have its own TXQ. Copying the response from the worker to a TXQ lcore through a second inter-thread hand-off undoes the work we set out to eliminate.
 
 Our options are:
 
@@ -442,7 +709,7 @@ Our options are:
 5. If option (1) is used the KV structure **must be MT safe**
 6. If option (2) is exclusively used the KV structure **need not be MT safe**
 
-Note that this design implicitly constrains the server, in the static routing sense, to one RXQ holding any number of client requests while allowing for multiple TXQs for server responses. Picking our poison is done at build time with `#ifdef/#endif`:
+Note that this design implicitly constrains the server, in the static routing sense of the destination part of the endpoint, to one RXQ holding any number of client requests from the source endpoint while allowing for multiple TXQs for server responses. Picking our poison is done at build time with `#ifdef/#endif`:
 
 * If clients can defer to workers a delegate request bit must exist in request packet or session creation message
 * If clients can defer to workers a delegate request may need an *enumerated field* so the server can pick the right kind of worker. In this scenario, this enumeration will subsume the request bit in the packet or session creation message 
@@ -477,7 +744,7 @@ while(!terminate) {
 
 The `rte_mbuf` pointers placed into `mbuf` come from the mempool associated with `rxq` in the `rte_eth_rx_burst` call. Something has to mark them free or the RXQ will eventually be full. 
 
-Now, for single packet requests, an optimization might include hand-off of the single `rte_mbuf*` to be freed in the TXQ thread once the response is ready presumably on the same HW core. Note, the TXQ thread almost certainly cannot mutate this `rte_mbuf*` to hold the response. Each `rte_mbuf` only holds a fixed amount of data. Since the response payload is almost typically larger, it can't physically work. 
+Now, for single packet requests, an optimization might include hand-off of the single `rte_mbuf*` to be freed in the TXQ thread once the response is ready presumably on the same HW core. Note, the TXQ thread almost certainly cannot mutate this `rte_mbuf*` to hold the response. Each `rte_mbuf` only holds a fixed amount of data. Since the response payload is typically larger, it can't physically work. 
 
 The possibility of multi-packet requests is more complicated. Because of congestion plus the interleaving of packets from multiple clients, the request would not generally be held in a contiguous set of `rte_mbufs` inside the `mbuf` vector. There's no guarantee that any one call to `rte_eth_rx_burst` holds one complete RPC request either. So handing off the request over mbufs would mean handing over a variable set of pointers. And that's more data to track through more code. It may be better to hand off the request by extracting and copying it out of the packets.
 
@@ -490,7 +757,7 @@ Then there's the issue of session management. While it's straightforward to equi
 
 
 ```
-// Session management thread #1 for server N
+// Session management thread #1 for logical server N
 int sessionManagement(Reinvent::Dpdk::SessionManager *mgr, ...) {
   while (!terminate) {
      try w/ timeout to read from UDP port
@@ -504,7 +771,7 @@ int sessionManagement(Reinvent::Dpdk::SessionManager *mgr, ...) {
    }
 }
 
-// DPDK lcore thread #2 for server N doing RXQ
+// DPDK lcore thread #2 for logical server N doing RXQ
 int entryPoint(Reinvent::Dpdk::SessionManager *mgr,...) {
   std::vector<rte_mbuf*> mbuf(RX_BURST_CAPACITY);
   while(!terminate) {
@@ -528,6 +795,7 @@ int entryPoint(Reinvent::Dpdk::SessionManager *mgr,...) {
     rte_pktmbuf_free(mbuf[i]);
   }
 }
+```
 
 ## Exactly-Once-Processing
 Whether due to client error or due to congestion error recovery, the server side of RXQ processing must not re-run old RPCs. Errorenously re-running a mutation twice corrupts data:
