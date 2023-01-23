@@ -1,12 +1,18 @@
 # Status
-This document is currently under heavy, daily revision
+This document is currently under heavy, daily revision. The tail end of the hold abandoned or in-progress sections
 
 # Key Value RPCs
 Evolving from [a trivial DPDK UDP example](https://github.com/gshanemiller/reinvent/blob/main/doc/equinix_mellanox_setup.md) to practical RPC (Remote Procedure Call) for scalable KV (Key Value) processing is difficult. Real world RPC under DPDK must meet and exceed all the excellent features of [eRPC](https://www.usenix.org/system/files/nsdi19-kalia.pdf) adding:
 
 * linearizability
-* durable writes 
 * exactly-once message processing
+
+Then add what RAMCloud does:
+
+* KV data structure
+* crash recovery
+* durable writes 
+* add/remove nodes at will
 
 Composing each feature into a well engineered whole is hard. This document describes each technical challenge with periodic pauses to summarize and integrate. In the second half of the document, a practical design is given.
 
@@ -465,7 +471,7 @@ The client SM's packet provides its own session number (lines 7, 9) for the serv
 
 We need two more things. The DPDK packets must be processed by a RXQ owned by the right RPC since the packet's `dest_session_num_` is a per RPC. DPDK flow-control does this. Finally, the RPC object's session array access must be MT safe with other processing. Either RPC uses locks or RPC objects do one thing at a time e.g. handle Session create/destroy or make progress on an existing RPC or read RXQ or transmit on some TXQ.
 
-## Problem: Linearizability vs. Session slots
+## Problem Encore: Linearizability vs. Session slots
 
 eRPC has *one set of SSlots per session*. Recall SSlots hold active RPCs in some state of completion. The number of slots depends on BDP and a desire to keep the server's RXQ processor from being idle because its RXQ is starved for work. Session count is akin to incast count discussed in BDP below. To emphasize here's the code again:
 
@@ -627,7 +633,7 @@ while i<len(index):
 
 It's a glorified way to pick a slot index. kSessionReqWindow doesn't seem to used for congestion, transport, or nexus. Specifically:
 
-* Q: What happens if the server's Session SSlots are full? A: This can't happen. Sessions have the same number of SSlots client and server. Clients choose a free slot in its session because it initiates work, and the server uses the same slot. If client slots are full, its queued. Provided slots used and disused together the client could send its SSlot index and be done
+* Q: What happens if the server's Session SSlots are full? A: This can't happen. Sessions have the same number of SSlots client and server. Clients choose a free slot in its session because it initiates work, and the server uses the same slot. If client slots are full, its queued. Provided slots used and disused together the client could send its SSlot index without reference to kSessionReqWindow anywhere
 * Q: How does the server keep track of different RPC requests from different sessions? A: DPDK packets are sent per session per slot. Each packet per session per slot has a monotonically increasing sequence number (edited):
 
 ```
@@ -641,7 +647,28 @@ struct pkthdr_t {
 };
 ```
 
-Let's turn to the issue of how does the server makes progress completing requests.
+Last two questions ... TBD
+
+## Summary
+TBD
+
+# Congestion, Timely, Packet Drop/Loss
+eRPC uses Timely packet RTT (Round Trip Time) measurements to control congestion. Applicable papers:
+
+* [TIMELY: RTT-based Congestion Control for the Datacenter](https://conferences.sigcomm.org/sigcomm/2015/pdf/papers/p537.pdf)
+* [TIMELY Power Point Slides](http://radhikam.web.illinois.edu/TIMELY-sigcomm-talk.pdf)
+* [TIMELY Source Code from Author](http://people.eecs.berkeley.edu/~radhika/timely-code-snippet.cc) referenced and used in eRPC
+* [ECN or Delay: Lessons Learnt from Analysis of DCQCN and TIMELY](http://yibozhu.com/doc/ecndelay-conext16.pdf). Contains Timely bug-fix 
+* [Receiver-Driven RDMA Congestion Control by Differentiating Congestion Types in Datacenter Networks](https://icnp21.cs.ucr.edu/papers/icnp21camera-paper45.pdf)
+* [eRPC Slides ](https://www.usenix.org/sites/default/files/conference/protected-files/nsdi19_slides_kalia.pdf) discuss Timely p15-16
+
+*Receiver-Driven RDMA Congestion* significantly out performs Timely but requires boxes to br time-synced: "The deployment of RCC relies on high precision clock synchronization throughout the datacenter network. Some recent research efforts can reduce the upper bound of clock synchronization within a datacenter to a few hundred nanoseconds, which is sufficient for our work." eRPC/Timely does not require something like Google's TrueTime.
+
+
+![Diagram1](timely_rtt.png?raw=true "DD1")
+![Diagram2](timely_algo.png?raw=true "DD2")
+
+
 
 
 
