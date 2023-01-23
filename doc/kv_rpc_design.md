@@ -664,8 +664,12 @@ eRPC uses Timely packet RTT (Round Trip Time) measurements to control congestion
 
 *Receiver-Driven RDMA Congestion* significantly out performs Timely but requires boxes to br time-synced: "The deployment of RCC relies on high precision clock synchronization throughout the datacenter network. Some recent research efforts can reduce the upper bound of clock synchronization within a datacenter to a few hundred nanoseconds, which is sufficient for our work." eRPC/Timely does not require something like Google's TrueTime.
 
-
+From the Timely PPS RTT looks like. Now, eRPC does not have large serializtion delays because (see packet flow control) client TXs are always matched against server TXs to replentish credits:
 ![Diagram1](timely_rtt.png?raw=true "DD1")
+
+
+
+
 ![Diagram2](timely_algo.png?raw=true "DD2")
 
 
