@@ -334,53 +334,321 @@ Linearizability isn't broken by incomplete requests; the server can't do anythin
 eRPC provides concrete answers: its RPC API allows client-requested delegation. **eRPC, however, never addresses linearizability** so its design is fundamentally incomplete.
 
 ## Problem: Linearizability vs. Session slots vs. New Sessions
-Session life cycle maintenance runs concurrent with session slot processing. At any time the server may get new RPCs from existing clients or new sessions from new clients. Clients and servers participating in a session will in general have different session counts e.g. a client runs 10 sessions, but for one of those sessions terminating in server `N`, `N` might participate in 50 sessions because other clients are hitting it too. eRPC comes with these types:
+Session life cycle maintenance runs concurrent with session slot processing. At any time the server may get new RPCs from existing clients or new sessions from new clients. Clients and servers participating in a session will in general have different session counts e.g. a client runs 10 sessions, but for one of those sessions terminating in server `N`, `N` might participate in 50 sessions because other clients are hitting it too. Something has to deal with connection managment while it processings existing RPCs without stepping on each other. eRPC comes with these types:
 
 ```
 +--------------+   1:N    +---------------+   2:1 session index   +-----------------------+
 | class SSlot  |----------| class Session |-----------------------| class SessionEndpoint |
 | +----------+ |          | +-----------+ |                       +-----------------------+
 | | client   | |          | | client    | |
-| +----------+ |          | +-----------+ |                       +-------------+  N:1    +------------+
-| | server   | |          +---------------+                       | class Nexus |---------| class Hook |
-| +----------+ |         /                 \ 1:N session idx.     +-------------+         +-----+------+
-+--------------+        / 1:1               +--------+               +--------------------------|  
-                       /                             |               |         see below
-+----------------+    /  dst session index           |   +-----------+
-| class pkthdr_t |---+                               +-- | class RPC | (confusing name)
+| +----------+ |          | +-----------+ |                       +-------------+
+| | server   | |          +---------------+                       | class Nexus |
+| +----------+ |         /                 \ 1:N session idx.     +-------------+
++--------------+        +                   +                     | +---------+ |
+                        |                   |                     | |  Hook*  | |
+                        |                   |                     | +---------+ |
+                        +                   +--------+            +-------------+   
+                        | 1:1                        |            |
+                       /                             |            |
++----------------+    /  dst session index           |   +--------+--+
+| class pkthdr_t |---+                               +---| class RPC | (confusing name)
 +----------------+                                       +-----------+
+                                                         | +-------+ |
+                                                         | | Hook  | |
+                                                         | +-------+ |
+                                                         +-----------+
+
 ```
 
-SSlot, sessions, pkthdr_t objects *are used in the client and server.* Usage needs context: Am I dealing with it client side or server side? Accordingly, SSlot has a bit identifying a SSlot object for client or server. Once this bit is known, SSlot has private subtypes holding client state and server state. Session is similar holding a sub-type for client side sessions only. It has one set of SSlots for the server, and a second set for the client in its client subtype.
+All types *are used in clients and servers.* Usage needs context: Am I dealing with it client side or server side? SSlot has a bit identifying a SSlot object for client or server. Once this bit is known, SSlot has private objects holding client/server state. Session is similar holding a nested object for client side sessions only. It holds one set of SSlots for the server, and a second set for the client within its private client state.
 
 A session by definition is a connection between two server endpoints. A session has session slots running the active sub-RPCs. Client RPCs go into active SSlots if one is free, or buffered in a queue if full. Servers don't buffer RPCs. If clients can run a RPC in a SSlot it's implied the server has capacity to handle it.
 
-Session creation in the server is caught up in eRPC's Nexus and Hook classes where linearizability and KV design is broken. Each box client or server runs one Nexus object. In the server, and before any traffic starts, server response handlers register themselves with its Nexus by type e.g. a `get` or a `put` handler. Nexus, through its Hook private state runs a set background ground threads per type. These threads will ultimately run the request.
-
-The Nexus also runs one thread for session management (SM) transceiving SM packets. When the server SM thread sees a connect request from a client (`Nexus::sm_thread_func()`) it inspects the SM packet request type. This is mutex protected. If there's no registered handler, an error is returned. Othewise, Nexus equeues the connect request in the Hook object for that type:
-
+Session creation is a complex orchestration centered on Nexus, RPC. Each box *client or server runs one Nexus* object. On the server, it can optionally pre-register a class of background threads the client can request later in its RPC invocation. The Nexus is passed by pointer into `erpc::Rpc` together with `0` uniquely describing what the RPC does ex. `0==get`, `1==put`:
 ```
-if (target_hook != nullptr) {
-  target_hook->sm_rx_queue_.unlocked_push(SmWorkItem(target_rpc_id, sm_pkt));
+// eRPC server hello_world
+1 void req_handler(erpc::ReqHandle *req_handle, void *) { ... }             <--- BG function pointer impl
+2 int main() {
+3  erpc::Nexus nexus(server_uri);
+4  nexus.register_req_func(kReqType, req_handler);                         <--- register BG threads of kReqType==2
+5  rpc = new erpc::Rpc<erpc::CTransport>(&nexus, nullptr, 0, nullptr);     <--- Nexus-Hook-RPC orchestration for RPC type 0
+6  rpc->run_event_loop(100000);                                            <--- server now running
+}
+
+// eRPC client hello_world
+7 void cont_func(void *, void *) { printf("%s\n", resp.buf_); }
+8 void sm_handler(int, erpc::SmEventType, erpc::SmErrType, void *) {}
+
+int main() {
+9  erpc::Nexus nexus(client_uri);
+10 rpc = new erpc::Rpc<erpc::CTransport>(&nexus, nullptr, 0, sm_handler);  <--- Nexus-Hook-RPC orchestration for RPC type 0
+11 int session_num = rpc->create_session(server_uri, 0);                   <--- creation session
+12 rpc->enqueue_request(session_num, kReqType, &req, &resp, ...);          <--- queue RPC type 0 delegating to BG thread kReqType
+13 rpc->run_event_loop(100);                                               <--- run event loop 
 }
 ```
 
+Additional RPC types 1, 2, 3, ... require new `Rpc` objects each sharing the same Nexus. The Nexus object creates and runs one background session management (SM) thread (lines 3, 9). Clients send SM packets (line 11) over conventional kernel based UDP to the server's Nexus who responds. Clients can only successfully run RPCs (ex. type 0) known to the server. The creation and registration an RPC type 0 for the server (line 5) is what ultimately ties RPC, Session, Hook together.
+
+By line 3 server Nexus is running a server SM lister thread. Line 5 makes RPC type 0 taking a pointer to the Nexus. In the constructor for RPC we have (edited):
+
+```
+Rpc<TTr>::Rpc(...) {
+  . . .
+   // Register this->nexus_hook_ w/ Nexus. Nexus keeps a pointer
+   // to this hook and initializes it running SM and BG queues.
+   // These queues are used to hand off from Nexus' SM handler to
+   // a specific RPC via its Hook object
+1  nexus_hook_.rpc_id_ = rpc_id;                                           <--- e.g. 0
+2  nexus->register_hook(&nexus_hook_);                                     <--- Nexus keeps a copy of &nexus_hook_
+   . . .
+}
+```
+
+Then later when the client runs line 11 to create a session, a client SM packet at the *server's SM handler* (edited):
+```
+void Nexus::sm_thread_func(SmThreadCtx ctx) {
+   . . .
+   // ctx is a Nexus::SmThreadCtx which has an array of Hooks by rpc type
+   // these hooks pre-registered see above. So find Hook for type 0
+1  Hook *target_hook = const_cast<Hook *>(ctx.reg_hooks_arr_[target_rpc_id]);
+2  if (target_hook != nullptr) {
+     // push connect SM packet onto Hook* ptr for target_rpc_id e.g. 0
+3    target_hook->sm_rx_queue_.unlocked_push(SmWorkItem(target_rpc_id, sm_pkt));
+  }
+  . . .
+```
+
+Line 3 passes the connect SM packet to a queue inside the Hook inside the RPC object correct for it's type here 0. That packet is dequeued (edited):
+
+```
+void Rpc<TTr>::handle_sm_rx_st() {
+
+1  while (queue.size_ > 0) {
+2    const SmWorkItem wi = queue.unlocked_pop();
+
+3    switch (wi.sm_pkt_.pkt_type_) {
+4      case SmPktType::kConnectReq: handle_connect_req_st(sm_pkt); break;
+}
+```
+
+and passed a RPC connect handler (edited):
+
+```
+void Rpc<TTr>::handle_connect_req_st(const SmPkt &sm_pkt) {
+   // Handle duplicate session connect requests. sm_pkt.uniq_token_
+   // is basically RIFL's leaseId
+1  if (conn_req_token_map_.count(sm_pkt.uniq_token_) > 0) { ... }
+
+   // If we are here, create a new session and fill preallocated MsgBuffers
+2  auto *session = new Session(Session::Role::kServer, sm_pkt.uniq_token_,...);
+
+   // init SSlots for this session
+3  for (size_t i = 0; i < kSessionReqWindow; i++) {
+     . . .
+   }
+
+   // Fill-in the server endpoint
+4  session->server_ = sm_pkt.server_;
+5  session->server_.session_num_ = session_vec_.size();
+6  conn_req_token_map_[session->uniq_token_] = session->server_.session_num_;
+
+   // Fill-in the client endpoint
+7  session->client_ = sm_pkt.client_;
+
+8  session->local_session_num_ = session->server_.session_num_;
+9  session->remote_session_num_ = session->client_.session_num_;
+10 session_vec_.push_back(session);  // Add to list of all sessions
+```
+
+The client SM's packet provides its own session number (lines 7, 9) for the server. The server makes its own session number (lines 2, 5, 9). The response SM packet sent to client has the server's session number. Sessions are held in an array per RPC until a SM packet asks for disconnect. And, finally, when packets are sent client-to-server or server-to-client over DPDK each pkthdr_t contains `dest_session_num_`. This is the target client session number (by RPC) when the server sends it, and the server's session number (by RPC) when the client sends it. All this is pre-orchestrated before DPDK packets are in-flight. 
+
+We need two more things. The DPDK packets must be processed by a RXQ owned by the right RPC since the packet's `dest_session_num_` is a per RPC. DPDK flow-control does this. Finally, the RPC object's session array access must be MT safe with other processing. Either RPC uses locks or RPC objects do one thing at a time e.g. handle Session create/destroy or make progress on an existing RPC or read RXQ or transmit on some TXQ.
+
+## Problem: Linearizability vs. Session slots
+
+eRPC has *one set of SSlots per session*. Recall SSlots hold active RPCs in some state of completion. The number of slots depends on BDP and a desire to keep the server's RXQ processor from being idle because its RXQ is starved for work. Session count is akin to incast count discussed in BDP below. To emphasize here's the code again:
+
+```
+void Rpc<TTr>::handle_connect_req_st(const SmPkt &sm_pkt) {
+   // Handle duplicate session connect requests. sm_pkt.uniq_token_
+   // is basically RIFL's leaseId
+1  if (conn_req_token_map_.count(sm_pkt.uniq_token_) > 0) { ... }
+
+   // If we are here, create a new session and fill preallocated MsgBuffers
+2  auto *session = new Session(Session::Role::kServer, sm_pkt.uniq_token_,...);
+
+   // Now make the SSlots for this session. kSessionReqWindow default 8
+3  for (size_t i = 0; i < kSessionReqWindow; i++) {
+    MsgBuffer &msgbuf_i = session->sslot_arr_[i].pre_resp_msgbuf_;
+    msgbuf_i = alloc_msg_buffer(pre_resp_msgbuf_size_);
+     . . .
+   }
+   . . .
+```
+
+Understanding RPC request processing in the server requires a few more pieces:
+
+* What happens if the server's Session SSlots are full? 
+* How does the server keep track of different RPC requests from different sessions?
+* How does the server make progress completing requests?
+* How does SSlot processing deal with linearizability?
+
+From the eRPC server hello world code extract above, eRPC's API requires we run `rpc->run_event_loop(100000)` where `100000` is the maximum time (ms) it blocks. `run_event_loop` delegates to `run_event_loop_do_one_st`. Here's that code focusing on RX first (edited). Note source code marked "key":
+
+```
+// Server
+void Rpc<TTr>::run_event_loop_do_one_st() {
+  // Handle any new session management packets
+  if (unlikely(nexus_hook_.sm_rx_queue_.size_ > 0)) handle_sm_rx_st();
+
+  // The packet RX code uses ev_loop_tsc as the RX timestamp, so it must be
+  // next to ev_loop_tsc stamping.
+  ev_loop_tsc_ = dpath_rdtsc();
+  process_comps_st();  // RX
+  . . .
+}
+
+// Server
+void Rpc<TTr>::process_comps_st() {
+  // Read some packets
+  const size_t num_pkts = transport_->rx_burst();
+  if (num_pkts == 0) return;
+
+  for (size_t i = 0; i < num_pkts; i++) {
+    . . .
+    // Find session for packet  w.r.t to this RPC object
+    Session *session = session_vec_[pkthdr->dest_session_num_];
+
+    // If we are here, we have a valid packet for a connected session
+    const size_t sslot_i = pkthdr->req_num_ % kSessionReqWindow;     <--- key line!
+    SSlot *sslot = &session->sslot_arr_[sslot_i];
+
+    switch (pkthdr->pkt_type_) {
+      case PktType::kReq:
+        . . .
+        break;
+      case PktType::kResp: {
+        . . .
+        break;
+      }
+      case PktType::kRFR: {
+        . . .
+        break;
+      }
+      case PktType::kExplCR: {
+        . . .
+        break;
+      }
+    }
+  }
+  . . .
+}
+```
+
+To understand how the server chooses its SSlot in the packet's session, look at how the client sends data. Recall `enqeue_request` in client hello world example above (edited). Note line marked key:
+
+```
+// Client
+void Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,...) {
+  // If a free sslot is unavailable, save to session backlog
+  if (unlikely(session->client_info_.sslot_free_vec_.size() == 0)) {
+    session->client_info_.enq_req_backlog_.emplace(...) return;
+  }
+
+  // Fill in the sslot info
+  size_t sslot_i = session->client_info_.sslot_free_vec_.pop_back();
+  SSlot &sslot = session->sslot_arr_[sslot_i];
+  sslot.cur_req_num_ += kSessionReqWindow;                           <--- key line
+  . . .
+
+  // Fill in packet 0's header
+  pkthdr_t *pkthdr_0 = req_msgbuf->get_pkthdr_0();
+  pkthdr_0->req_type_ = req_type;
+  pkthdr_0->msg_size_ = req_msgbuf->data_size_;
+  pkthdr_0->dest_session_num_ = session->remote_session_num_;
+  pkthdr_0->pkt_type_ = PktType::kReq;
+  pkthdr_0->pkt_num_ = 0;
+  pkthdr_0->req_num_ = sslot.cur_req_num_;
+  . . .
+}
+```
+
+And to understand the client's line we need this Session code which initializes the SSlots when new Sessions are made:
+
+```
+Session(Role role, ...) {
+    . . .
+    // Arrange the free slot vector so that slots are popped in order
+    for (size_t i = 0; i < kSessionReqWindow; i++) {
+      // Initialize session slot with index = sslot_i
+      const size_t sslot_i = (kSessionReqWindow - 1 - i);
+      SSlot &sslot = sslot_arr_[sslot_i];
+
+      sslot.session_ = this;
+      sslot.is_client_ = is_client();
+      sslot.index_ = sslot_i;
+      sslot.cur_req_num_ = sslot_i;  // 1st req num = (+kSessionReqWindow)
+    }
+    . . .
+}
+```
+
+Based on what I can see this mod kSessionReqWindow does nothing:
+
+```
+#!/usr/local/bin/python3.9
+max=8
+i=0
+index=[]
+
+while i<max:
+  sslotIndex = (max - 1 - i)
+  index.append(sslotIndex)
+  i=i+1
+
+for item in index:
+  print(item)
+print
+
+i=0
+while i<len(index):
+  j=1
+  k=index[i]
+  print("starting at slot {0} value {1}".format(i, k))
+  while j<=10:
+    k += max
+    print("request {0} request%{1}={2} request&{3}={4}".format(k, max, k%max, max-1, k&(max-1)))
+    j=j+1
+  print
+  i=i+1
+
+```
+
+It's a glorified way to pick a slot index. kSessionReqWindow doesn't seem to used for congestion, transport, or nexus. Specifically:
+
+* Q: What happens if the server's Session SSlots are full? A: This can't happen. Sessions have the same number of SSlots client and server. Clients choose a free slot in its session because it initiates work, and the server uses the same slot. If client slots are full, its queued. Provided slots used and disused together the client could send its SSlot index and be done
+* Q: How does the server keep track of different RPC requests from different sessions? A: DPDK packets are sent per session per slot. Each packet per session per slot has a monotonically increasing sequence number (edited):
+
+```
+struct pkthdr_t {
+  uint32_t req_type_ : 8;                  // RPC request type
+  uint16_t dest_session_num_;              // Session number at receiver
+  uint64_t pkt_type_ : 2;                  // The eRPC packet type (request, CR, etc.)
+  uint64_t pkt_num_ : kPktNumBits;         // Monotonically increasing packet number
+  uint64_t req_num_ : kReqNumBits;
+  uint64_t magic_ : k_pkt_hdr_magic_bits;  // So eRPC knows its packets from broadcast/ARP packets
+};
+```
+
+Let's turn to the issue of how does the server makes progress completing requests.
 
 
-, it finds the RPC type in the packet. And from there is locates the Hook state for it. It then enqueues    
 
 
 
 
-
-
-
-
-
-
-
-
-
+Since slots are per Session and Sessions are 1:1 between client and server, 
 
 
 
@@ -438,20 +706,7 @@ etcd                         A.1                          B Session Mgr
   +----0x3938483-------------->                                 |
                               |                                 |
                               +----makeSession(A.2,0x3938483)--->
-```
 
-```
-struct pkthdr_t {
-  uint32_t req_type_ : 8;              /// RPC request type
-  uint32_t msg_size_ : kMsgSizeBits;   /// Req/resp msg size, excluding headers
-  uint16_t dest_session_num_;          /// Session number of the destination endpoint
-  uint64_t pkt_type_ : 2;              /// The eRPC packet type
-  uint64_t pkt_num_ : kPktNumBits;     /// Monotonically increasing packet number
-
-  /// Request number, carried by all data and control packets for a request.
-  uint64_t req_num_ : kReqNumBits;
-  uint64_t magic_ : k_pkt_hdr_magic_bits;  ///< Magic from alloc_msg_buffer()
-};
 
 class SSlot {
   // Members that are valid for both server and client
