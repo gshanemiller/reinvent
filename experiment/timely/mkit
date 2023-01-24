@@ -1,1 +1,3 @@
-CC -I. 	-std=c++17 -march=native main.cpp -o main
+#!/bin/bash -x
+CC -I.          -std=c++17 -g  -march=native main.cpp -o main.debug   -l stdc++
+CC -I. -DNDEBUG -std=c++17 -O2 -march=native main.cpp -o main.release -l stdc++

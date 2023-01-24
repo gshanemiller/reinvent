@@ -98,6 +98,7 @@ class Timely {
       if (kLatencyStats) {
         printf("histogram code excluded\n");
       }
+      printf("early return\n");
       return;
     }
 
