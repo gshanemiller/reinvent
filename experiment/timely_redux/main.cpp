@@ -16,40 +16,34 @@ int pinToHWCore(int coreId) {
 }
 
 int main(int argc, char **argv) {
-  // rdtsc pointless unless pinned
   pinToHWCore(sched_getcpu());
 
-  unsigned iters = 10;
   const double ghz = Reinvent::measure_rdtsc_freq();
-  const double bps = 1342177280; // 10Gbps as bps
+  const double bps = 1250000000.0; // NIC line rate 10Gbps as bps
 
-  printf("sizeof(size_t)=%lu\n", sizeof(size_t));
   printf("estimated CPU frequency: %lf\n", ghz);
-  printf("initial linkRate: %lf bps\n", bps);
+  printf("maximum linkRate: %lf bps\n", bps);
 
-  size_t sleep = 1000 * ghz;
+  double rttUs = 10.0;
+
+  // The Timely TX rate estimator
   Reinvent::Timely timely(ghz, bps, 0);
 
-  auto lastTs = Reinvent::rdtsc();
-
+  unsigned iters = 50;
   while(--iters) {
-      Reinvent::nano_sleep(sleep);
-      auto nowTs = Reinvent::rdtsc();
-      const double newRate = timely.newRate(nowTs-lastTs);
-      printf("delayRdtsc: %lu cycles (%lu ns) new rate (bps): %lf\n", nowTs-lastTs, sleep, newRate);
-      sleep <<= 1;
-      lastTs = nowTs;
+      timely.newRate(rttUs);
+      printf("rttUs: %lf us, new rate (Gbps): %lf\n", rttUs, timely.lastRateAsGbps());
+      rttUs += 25.0;
   }
 
-  iters = 11;
+  iters = 50;
   while(--iters) {
-      Reinvent::nano_sleep(sleep);
-      auto nowTs = Reinvent::rdtsc();
-      const double newRate = timely.newRate(nowTs-lastTs);
-      printf("delayRdtsc: %lu cycles (%lu ns) new rate (bps): %lf\n", nowTs-lastTs, sleep, newRate);
-      sleep >>= 1;
-      lastTs = nowTs;
+      rttUs -= 25.0;
+      timely.newRate(rttUs);
+      printf("rttUs: %lf us, new rate (Gbps): %lf\n", rttUs, timely.lastRateAsGbps());
   }
+
+  std::cout << timely;
 
   return 0;
 }
