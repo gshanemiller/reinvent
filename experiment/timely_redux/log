@@ -1,0 +1,2 @@
++ gcc -I. -std=c++17 -g -march=native main.cpp -o main.debug -l stdc++
++ gcc -I. -DNDEBUG -std=c++17 -O2 -march=native main.cpp -o main.release -l stdc++

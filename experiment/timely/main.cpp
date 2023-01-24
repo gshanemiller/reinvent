@@ -1,7 +1,6 @@
 #include <timely.h>
 #include <sched.h>
 
-// rdtsc pointless unless pinned
 int pinToHWCore(int coreId) {
   assert(coreId>=0);
 
@@ -14,11 +13,15 @@ int pinToHWCore(int coreId) {
   }
 
   return 0;
+}
 
 int main(int argc, char **argv) {
   unsigned iters = 10;
   const double ghz = erpc::measure_rdtsc_freq();
   const double bps = 1342177280; // 10Gbps as bps
+
+  // rdtsc pointless unless pinned
+  pinToHWCore(sched_getcpu());
 
   printf("sizeof(size_t)=%lu\n", sizeof(size_t));
   printf("estimated CPU frequency: %lf\n", ghz);
@@ -33,17 +36,17 @@ int main(int argc, char **argv) {
       erpc::nano_sleep(sleep, ghz);
       auto nowTs = erpc::rdtsc();
       timely.update_rate(nowTs, nowTs-lastTs);
-      printf("delayRdtsc: %lu new rate (gbps): %lf\n", nowTs-lastTs, timely.get_rate_gbps());
+      printf("delayRdtsc: %lu cycles (%lu ns) new rate (gbps): %lf\n", nowTs-lastTs, sleep, timely.get_rate_gbps());
       sleep <<= 1;
       lastTs = nowTs;
   }
 
-  iters = 1000;
+  iters = 11;
   while(--iters) {
       erpc::nano_sleep(sleep, ghz);
       auto nowTs = erpc::rdtsc();
       timely.update_rate(nowTs, nowTs-lastTs);
-      printf("delayRdtsc: %lu new rate (gbps): %lf\n", nowTs-lastTs, timely.get_rate_gbps());
+      printf("delayRdtsc: %lu cycles (%lu ns) new rate (gbps): %lf\n", nowTs-lastTs, sleep, timely.get_rate_gbps());
       sleep >>= 1;
       lastTs = nowTs;
   }
