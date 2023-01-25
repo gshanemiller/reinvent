@@ -69,23 +69,28 @@
 namespace Reinvent {
 
 class Timely {
+public:
   // CONSTANTS
-  const double d_alpha = 0.50;                  // EWMA smoothing factor (need research)
+  const double d_alpha = 0.46;                      // EWMA smoothing factor (needs research)
   const double d_alphaResidue = (1.0 - d_alpha);
-  const double d_beta = 0.80;                   // multiplicative decrease factor
+  const double d_beta = 0.26;                       // multiplicative decrease factor
 
-  const double d_delta = 1250000.0;             // how much rate is additively increased 10Mbps expressed as bps
-  const double d_minRttUs = 50.0;               // minimum RTT limit (us)
-  const double d_maxRttUs = 500.0;              // maximum RTT limit (us)
+  const double d_delta = 1250000.0;                 // additive rate increase 10 Mbit/sec expressed as byte-per-sec)
+  const double d_minRttUs = 50.0;                   // minimum RTT limit (us)
+  const double d_maxRttUs = 500.0;                  // maximum RTT limit (us)
 
-  const double d_cpuFreqGhz;                    // Caller's CPU clock rate (Ghz)
-  const double d_maxLinkBandwidthBps;           // Maximum NIC bandwidth (bps)
+  const double d_cpuFreqGhz;                        // Caller's CPU clock rate (Ghz)
+  const double d_maxLinkBandwidthBps;               // Maximum NIC bandwidth (bps bytes-per-sec)
 
-  const double bpsToGbps= 8.0/(1000*1000*1000); // factor to convert from bps (bytes-per-sec) to Gbps (Giga bits/sec)
+  const double d_minRateBps = 500000.0;             // minimum transmit rate bytes/sec
+  const double d_maxRateBps=d_maxLinkBandwidthBps;  // minimum transmit rate bytes/sec
 
-  double d_newLineRateBps;                      // New, calculated TX rate (bps)
-  double d_prevRttUs;                           // Last RTT (us)
-  double d_weightedRttDiffUs;                   // Weighted RTT difference
+  const double bpsToGbps= (1000*1000*1000);         // divide to convert from bps (bytes-per-sec) to Gbps (Giga bytes/sec)
+
+private:
+  double d_newLineRateBps;                          // New, calculated TX rate (bytes-per-second)
+  double d_prevRttUs;                               // Last RTT (us)
+  double d_weightedRttDiffUs;                       // Weighted RTT difference (us)
 
 public:
   // CREATORS
@@ -110,7 +115,7 @@ public:
     // returns the initial estimated rate
 
   double lastRateAsGbps() const;
-    // Exactly like 'lastRate' but expressed as Gbps
+    // 'lastRate' but expressed as Gbps (Giga bytes per second)
 
   // MANIPULATORS
   double newRate(double newRttUs);
@@ -152,7 +157,7 @@ double Timely::lastRate() const {
 
 inline
 double Timely::lastRateAsGbps() const {
-  return d_newLineRateBps * bpsToGbps;
+  return d_newLineRateBps / bpsToGbps;
 }
 
 // MANIPULATORS

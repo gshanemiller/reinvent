@@ -24,26 +24,15 @@ int main(int argc, char **argv) {
   printf("estimated CPU frequency: %lf\n", ghz);
   printf("maximum linkRate: %lf bps\n", bps);
 
-  double rttUs = 10.0;
 
-  // The Timely TX rate estimator
-  Reinvent::Timely timely(ghz, bps, 0);
-
-  unsigned iters = 50;
-  while(--iters) {
-      timely.newRate(rttUs);
-      printf("rttUs: %lf us, new rate (Gbps): %lf\n", rttUs, timely.lastRateAsGbps());
-      rttUs += 25.0;
+  // rttUs under Timele::d_minRttUs
+  {
+    // The Timely TX rate estimator
+    Reinvent::Timely timely(ghz, bps, 0);
+    const rttUs = 10;
+    const auto newRate = timely.newRate(rttUs);
+    assert(
   }
-
-  iters = 50;
-  while(--iters) {
-      rttUs -= 25.0;
-      timely.newRate(rttUs);
-      printf("rttUs: %lf us, new rate (Gbps): %lf\n", rttUs, timely.lastRateAsGbps());
-  }
-
-  std::cout << timely;
 
   return 0;
 }
