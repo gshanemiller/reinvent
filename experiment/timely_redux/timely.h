@@ -50,7 +50,7 @@
 //
 // The subtracted amount accounts for serialization e.g. the amount of time it takes to put the packet's contents
 // onto the wire. That's always done at the NIC's line rate, and clearly should not be included in the RTT. eRPC uses
-// per CPU core 'rdtsc()' for timestamps and, I believe, does not deal with seralization. Timely uses NIC  provided
+// per CPU core 'rdtsc()' for timestamps and, I believe, does not deal with seralization. Timely uses NIC provided
 // timestamps. Fast NICs will require resolution sub-microsecond. Continuing from p540:
 // 
 //      For context, in a 10 Gbps network, serialization of 64 KB takes 51 µs, propagation may range from 10-100 µs,
@@ -58,9 +58,9 @@
 //
 // The 64KB calculation is computed like this:
 //
-//      1/(10*1000^3) sec/bits * (64*1024*8) bits = .000052428sec ~= 52us
+//      1/(10*1000*1000*1000) sec/bits * (64*1024*8) bits = .000052428sec ~= 52us
 //
-// Since Timely is assuming Tlow=50µs, Thigh=500µs it's important to account for this last term.
+// Since Timely is assuming Tlow=10µs, Thigh=500µs it's important to account for this last term.
 
 #include "timer.h"
 #include <stdio.h>
@@ -71,16 +71,16 @@ namespace Reinvent {
 class Timely {
 public:
   // CONSTANTS
-  const double d_alpha = 0.46;                      // EWMA smoothing factor (needs research)
+  const double d_alpha = 0.2;                       // EWMA smoothing factor (needs research)
   const double d_alphaResidue = (1.0 - d_alpha);
-  const double d_beta = 0.26;                       // multiplicative decrease factor
+  const double d_beta = 0.80;                       // multiplicative decrease factor
 
-  const double d_delta = 1250000.0;                 // additive rate increase 10 Mbit/sec expressed as byte-per-sec)
-  const double d_minRttUs = 50.0;                   // minimum RTT limit (us)
-  const double d_maxRttUs = 500.0;                  // maximum RTT limit (us)
+  const double d_delta = 1250000.0;                 // additive rate increase 10 Mbit/sec expressed as byte-per-sec
+  const double d_minRttUs = 10.0;                   // minimum RTT limit (us)
+  const double d_maxRttUs = 1000.0;                 // maximum RTT limit (us)
 
   const double d_cpuFreqGhz;                        // Caller's CPU clock rate (Ghz)
-  const double d_maxLinkBandwidthBps;               // Maximum NIC bandwidth (bps bytes-per-sec)
+  const double d_maxLinkBandwidthBps;               // Maximum NIC bandwidth (bytes-per-sec)
 
   const double d_minRateBps = 500000.0;             // minimum transmit rate bytes/sec
   const double d_maxRateBps=d_maxLinkBandwidthBps;  // minimum transmit rate bytes/sec
@@ -88,8 +88,8 @@ public:
   const double bpsToGbps= (1000*1000*1000);         // divide to convert from bps (bytes-per-sec) to Gbps (Giga bytes/sec)
 
 private:
-  double d_newLineRateBps;                          // New, calculated TX rate (bytes-per-second)
-  double d_prevRttUs;                               // Last RTT (us)
+  double d_lineRateBps;                             // New, calculated TX rate (bytes-per-second)
+  double d_prevRttUs;                               // Last reported RTT (us)
   double d_weightedRttDiffUs;                       // Weighted RTT difference (us)
 
 public:
@@ -110,16 +110,16 @@ public:
     // Destroy this object
 
   // ACCESSORS
-  double lastRate() const;
-    // Return the last estimated TX rate in bps. Note that, if called immediately following construction, this
-    // returns the initial estimated rate
+  double rate() const;
+    // Return the last estimated TX rate in bps (bytes/sec). Note that, if called immediately following construction,
+    // this returns the initial estimated rate
 
-  double lastRateAsGbps() const;
-    // 'lastRate' but expressed as Gbps (Giga bytes per second)
+  double rateAsGbps() const;
+    // Exactly like 'rate' but expressed as Gbps (Giga bytes per second)
 
   // MANIPULATORS
-  double newRate(double newRttUs);
-    // Estimate the new TX rate in bps based on the specified current 'newRttUs' in us. This function is based on
+  double update(double newRttUs);
+    // Estimate the new TX rate in bytes/sec based on the specified current 'newRttUs' in us. This function is based on
     // Zhu et al. http://yibozhu.com/doc/ecndelay-conext16.pdf correction to the Timely algorithm in section 4.3
 
   // ASPECTS
@@ -136,7 +136,7 @@ inline
 Timely::Timely(double cpuFreqGhz, double maxLinkBandwidthBps, unsigned sessionCount)
 : d_cpuFreqGhz(cpuFreqGhz)
 , d_maxLinkBandwidthBps(maxLinkBandwidthBps)
-, d_newLineRateBps(d_maxLinkBandwidthBps/(sessionCount+1.0))
+, d_lineRateBps(d_maxLinkBandwidthBps/(sessionCount+1.0))
 , d_prevRttUs(d_minRttUs)
 , d_weightedRttDiffUs(0.0)
 {
@@ -151,28 +151,28 @@ Timely::Timely(double cpuFreqGhz, double maxLinkBandwidthBps, unsigned sessionCo
 
 // ACCESSORS
 inline
-double Timely::lastRate() const {
-  return d_newLineRateBps;
+double Timely::rate() const {
+  return d_lineRateBps;
 }
 
 inline
-double Timely::lastRateAsGbps() const {
-  return d_newLineRateBps / bpsToGbps;
+double Timely::rateAsGbps() const {
+  return d_lineRateBps / bpsToGbps;
 }
 
 // MANIPULATORS
 inline
-double Timely::newRate(double newRttUs) {
+double Timely::update(double newRttUs) {
   const double newRttDiff = newRttUs - d_prevRttUs;
   d_prevRttUs = newRttUs;
   d_weightedRttDiffUs = (d_alphaResidue*d_weightedRttDiffUs) + (d_alpha*newRttDiff);
-  double rttGradient = d_weightedRttDiffUs / d_minRttUs;
 
   if (newRttUs < d_minRttUs) {
-    d_newLineRateBps += d_delta;
+    d_lineRateBps += d_delta;
   } else if (newRttUs > d_maxRttUs) {
-    d_newLineRateBps = d_newLineRateBps * (1 - d_beta*(1.0-(d_maxRttUs/newRttUs)));
+    d_lineRateBps = d_lineRateBps * (1 - d_beta*(1.0-(d_maxRttUs/newRttUs)));
   } else {
+    double rttGradient = d_weightedRttDiffUs / d_minRttUs;
     double weight(-1.0);
     if (rttGradient <= -0.25) {
       weight = 0.0;
@@ -182,21 +182,21 @@ double Timely::newRate(double newRttUs) {
       weight = 2*rttGradient + 0.5;
     }
     double error = (newRttUs-d_minRttUs) / d_minRttUs;
-    d_newLineRateBps = d_delta*(1-weight) + d_newLineRateBps*(1.0 - (d_beta*weight*error));
+    d_lineRateBps = d_delta*(1-weight) + d_lineRateBps*(1.0 - (d_beta*weight*error));
   }
 
-  return d_newLineRateBps;
+  return d_lineRateBps = std::min(d_lineRateBps, d_maxLinkBandwidthBps);
 }
 
 // ASPECTS
 inline
 std::ostream& Timely::print(std::ostream& stream) const {
   stream << "[" << std::endl;
-  stream << "    newLineRateGbps (last est rate Gbps) : " << lastRateAsGbps()        << std::endl;
-  stream << "    newLineRateBps (last est rate bps)   : " << d_newLineRateBps        << std::endl;
+  stream << "    rateGbps (last estimated rate)       : " << rateAsGbps()            << std::endl;
+  stream << "    rateBps (last estimated rate)        : " << d_lineRateBps           << std::endl;
   stream << "    prevRttUs (last reported RTT us)     : " << d_prevRttUs             << std::endl;
-  stream << "    beta (multiplicative decrease factor): " << d_beta                  << std::endl;
   stream << "    alpha (EWMA smoothing factor)        : " << d_alpha                 << std::endl;
+  stream << "    beta (multiplicative decrease factor): " << d_beta                  << std::endl;
   stream << "    delta (additive increase factor)     : " << d_delta                 << std::endl;
   stream << "    minRttUs (smallest RTT expected us)  : " << d_minRttUs              << std::endl;
   stream << "    maxRttUs (largest  RTT expected us)  : " << d_maxRttUs              << std::endl;

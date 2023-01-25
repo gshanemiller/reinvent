@@ -31,16 +31,16 @@ int main(int argc, char **argv) {
 
   unsigned iters = 50;
   while(--iters) {
-      timely.newRate(rttUs);
-      printf("rttUs: %lf us, new rate (Gbps): %lf\n", rttUs, timely.lastRateAsGbps());
+      timely.update(rttUs);
+      printf("rttUs: %lf us, new rate (Gbps): %lf\n", rttUs, timely.rateAsGbps());
       rttUs += 25.0;
   }
 
   iters = 50;
   while(--iters) {
       rttUs -= 25.0;
-      timely.newRate(rttUs);
-      printf("rttUs: %lf us, new rate (Gbps): %lf\n", rttUs, timely.lastRateAsGbps());
+      timely.update(rttUs);
+      printf("rttUs: %lf us, new rate (Gbps): %lf\n", rttUs, timely.rateAsGbps());
   }
 
   std::cout << timely;
