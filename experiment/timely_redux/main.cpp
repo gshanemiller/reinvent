@@ -24,14 +24,16 @@ int main(int argc, char **argv) {
   printf("estimated CPU frequency: %lf\n", ghz);
   printf("maximum linkRate: %lf bps\n", bps);
 
-  double rttUs = 10.0;
-
   // The Timely TX rate estimator
   Reinvent::Timely timely(ghz, bps, 0);
 
+  double rttUs = 10.0;
   unsigned iters = 50;
+  u_int64_t now = Reinvent::rdtsc();
+
   while(--iters) {
-      timely.update(rttUs);
+      now += static_cast<u_int64_t>(rttUs*1000.0*ghz);
+      timely.update(now, rttUs);
       printf("rttUs: %lf us, new rate (Gbps): %lf\n", rttUs, timely.rateAsGbps());
       rttUs += 25.0;
   }
@@ -39,7 +41,8 @@ int main(int argc, char **argv) {
   iters = 50;
   while(--iters) {
       rttUs -= 25.0;
-      timely.update(rttUs);
+      now += static_cast<u_int64_t>(rttUs*1000.0*ghz);
+      timely.update(now, rttUs);
       printf("rttUs: %lf us, new rate (Gbps): %lf\n", rttUs, timely.rateAsGbps());
   }
 

@@ -1,6 +1,6 @@
 #pragma once
 
-// Purpose: Estimate TX rate in bps for next transmission based on last RTT using the Timely algorithm
+// Purpose: Estimate TX rate in bytes/sec for next transmission based on last RTT using the Timely algorithm
 // 
 // Classes:
 //   Reinvent::Timely: Implements Timely 
@@ -74,31 +74,36 @@ public:
   const double d_alpha = 0.2;                       // EWMA smoothing factor (needs research)
   const double d_alphaResidue = (1.0 - d_alpha);
   const double d_beta = 0.80;                       // multiplicative decrease factor
-
   const double d_delta = 1250000.0;                 // additive rate increase 10 Mbit/sec expressed as byte-per-sec
+
   const double d_minRttUs = 10.0;                   // minimum RTT limit (us)
   const double d_maxRttUs = 1000.0;                 // maximum RTT limit (us)
+  const double d_minRttClockCycles;                 // minimum RTT limit expressed in rdtsc() cycles
 
   const double d_cpuFreqGhz;                        // Caller's CPU clock rate (Ghz)
   const double d_maxLinkBandwidthBps;               // Maximum NIC bandwidth (bytes-per-sec)
 
   const double d_minRateBps = 500000.0;             // minimum transmit rate bytes/sec
-  const double d_maxRateBps=d_maxLinkBandwidthBps;  // minimum transmit rate bytes/sec
+  const double d_maxRateBps=d_maxLinkBandwidthBps;  // maximum transmit rate bytes/sec
 
-  const double bpsToGbps= (1000*1000*1000);         // divide to convert from bps (bytes-per-sec) to Gbps (Giga bytes/sec)
+  const double d_byteToGbits=8.0/(1000*1000*1000);  // convert from bytes to Gbits (Giga bits)
+
+  const uint64_t d_minSampleUs = 1;                 // minimum elasped time (us) before state updated
+  const uint64_t d_minSampleCpuCycles;              // d_minSampleCpuCycles is d_minSampleUs as cycles
 
 private:
-  double d_lineRateBps;                             // New, calculated TX rate (bytes-per-second)
-  double d_prevRttUs;                               // Last reported RTT (us)
-  double d_weightedRttDiffUs;                       // Weighted RTT difference (us)
+  double d_lineRateBps;                             // calculated TX rate (bytes-per-second)
+  double d_prevRttUs;                               // last reported RTT (us)
+  double d_weightedRttDiffUs;                       // weighted RTT difference (us)
+  uint64_t d_prevCpuCycles;                         // Last time rdtsc() state was updated
 
 public:
   // CREATORS
   Timely(double cpuFreqGhz, double maxLinkBandwidthBps, unsigned sessionCount);
-    // Create a Timely object to estimate TX rate in bps with specified 'cpuFreqGhz', the frequency of caller's
+    // Create a Timely object to estimate TX rate in bytes/sec with specified 'cpuFreqGhz', the frequency of caller's
     // CPU in Ghz, 'maxLinkBandwidthBps', and 'sessionCount' which is the number of running sessions not including
     // the session to be created and co-managed by this object. Behavior is defined provided the caller is pinned
-    // to a HW core, 'maxLinkBandwidthBps' is at least 1 million bps, and '0.5<=cpuFreqGhz<=5.0'. 
+    // to a HW core, 'maxLinkBandwidthBps' is at least 1 million bytes/sec, and '0.5<=cpuFreqGhz<=5.0'. 
 
   Timely() = delete;
     // Default constructor not provided
@@ -111,16 +116,21 @@ public:
 
   // ACCESSORS
   double rate() const;
-    // Return the last estimated TX rate in bps (bytes/sec). Note that, if called immediately following construction,
-    // this returns the initial estimated rate
+    // Return the last estimated TX rate in bytes/sec. Note that, if called immediately following construction,
+    // this returns the initial, estimated rate
 
   double rateAsGbps() const;
-    // Exactly like 'rate' but expressed as Gbps (Giga bytes per second)
+    // Exactly like 'rate' but expressed as Gbps (Giga bits per second)
 
   // MANIPULATORS
-  double update(double newRttUs);
-    // Estimate the new TX rate in bytes/sec based on the specified current 'newRttUs' in us. This function is based on
-    // Zhu et al. http://yibozhu.com/doc/ecndelay-conext16.pdf correction to the Timely algorithm in section 4.3
+  double update(uint64_t nowClockCycles, double newRttUs);
+    // Return new, estimated TX rate in bytes/sec where specified 'nowClockCycles' is the current or a very recent
+    // 'rdtsc()' value and 'newRttUs' (units microseconds) is the most current RTT time. Behavior is defined provided
+    // 'newRttUs>0' and 'nowClockCycles>d_prevCpuCycles'. This function is based on the correction in section 4.3 in
+    // http://yibozhu.com/doc/ecndelay-conext16.pdf, and Timely author's code located her old UC Berkeley homepage
+    // http://people.eecs.berkeley.edu/~radhika/timely-code-snippet.cc. Note both papers both elide details seen
+    // in code snippet re: delta_factor (not to be confused with 'delta') and md_factor not to be confused by 'beta'.
+    // Finally note eRPC code seems follow radhika's code too.
 
   // ASPECTS
   std::ostream& print(std::ostream& stream) const;
@@ -134,11 +144,14 @@ std::ostream& operator<<(std::ostream& stream, const Timely& object);
 // INLINE DEFINITIONS
 inline
 Timely::Timely(double cpuFreqGhz, double maxLinkBandwidthBps, unsigned sessionCount)
-: d_cpuFreqGhz(cpuFreqGhz)
+: d_minRttClockCycles(d_minRttUs*1000.0*cpuFreqGhz)
+, d_cpuFreqGhz(cpuFreqGhz)
 , d_maxLinkBandwidthBps(maxLinkBandwidthBps)
+, d_minSampleCpuCycles(static_cast<uint64_t>(d_minSampleUs*1000.0*cpuFreqGhz))
 , d_lineRateBps(d_maxLinkBandwidthBps/(sessionCount+1.0))
-, d_prevRttUs(d_minRttUs)
+, d_prevRttUs(d_minSampleUs)
 , d_weightedRttDiffUs(0.0)
+, d_prevCpuCycles(rdtsc())
 {
   assert(d_alpha>0.0 && d_alpha<=1.0);
   assert(d_beta>0.0  && d_beta<=1.0);
@@ -147,6 +160,7 @@ Timely::Timely(double cpuFreqGhz, double maxLinkBandwidthBps, unsigned sessionCo
   assert(d_maxRttUs>0.0 && d_maxRttUs>d_minRttUs);
   assert(cpuFreqGhz>=0.5 && cpuFreqGhz<=5.0);
   assert(maxLinkBandwidthBps>=1000000.0);
+  assert(d_prevCpuCycles>0);
 }
 
 // ACCESSORS
@@ -157,22 +171,42 @@ double Timely::rate() const {
 
 inline
 double Timely::rateAsGbps() const {
-  return d_lineRateBps / bpsToGbps;
+  return d_lineRateBps * d_byteToGbits;
 }
 
 // MANIPULATORS
 inline
-double Timely::update(double newRttUs) {
+double Timely::update(uint64_t nowClockCycles, double newRttUs) {
+  assert(nowClockCycles>d_prevCpuCycles);
+  assert(newRttUs>0);
+
+  // Measure absolute elapsed time from last update. These values come from rdtsc()
+  const uint64_t absTimeDiff = nowClockCycles-d_prevCpuCycles;
+  if (absTimeDiff<=d_minSampleCpuCycles) {
+    return d_lineRateBps;
+  }
+  d_prevCpuCycles = nowClockCycles;
+
+  // Calculate difference in current and previous RTT
   const double newRttDiff = newRttUs - d_prevRttUs;
   d_prevRttUs = newRttUs;
+
+  // Calculate radhika's 'delta_factor'. This is a unitless number requiring
+  // all terms use the same units
+  double deltaFactor = static_cast<double>(absTimeDiff)/d_minRttClockCycles;
+  deltaFactor = std::min(deltaFactor, 1.0);
+
+  // Update weighted diff aka radhika's 'avg_rtt_diff_'
   d_weightedRttDiffUs = (d_alphaResidue*d_weightedRttDiffUs) + (d_alpha*newRttDiff);
 
   if (newRttUs < d_minRttUs) {
-    d_lineRateBps += d_delta;
+    d_lineRateBps += (deltaFactor*d_delta);
   } else if (newRttUs > d_maxRttUs) {
-    d_lineRateBps = d_lineRateBps * (1 - d_beta*(1.0-(d_maxRttUs/newRttUs)));
+    const double multDecreaseFactor = deltaFactor * d_beta;
+    d_lineRateBps = d_lineRateBps * (1 - multDecreaseFactor*(1.0-(d_maxRttUs/newRttUs)));
   } else {
-    double rttGradient = d_weightedRttDiffUs / d_minRttUs;
+    const double multDecreaseFactor = deltaFactor * d_beta;
+    const double rttGradient = d_weightedRttDiffUs / d_minSampleUs;
     double weight(-1.0);
     if (rttGradient <= -0.25) {
       weight = 0.0;
@@ -182,10 +216,14 @@ double Timely::update(double newRttUs) {
       weight = 2*rttGradient + 0.5;
     }
     double error = (newRttUs-d_minRttUs) / d_minRttUs;
-    d_lineRateBps = d_delta*(1-weight) + d_lineRateBps*(1.0 - (d_beta*weight*error));
+    d_lineRateBps = d_lineRateBps*(1.0 - (multDecreaseFactor*weight*error)) + deltaFactor*d_delta*(1-weight);
   }
 
-  return d_lineRateBps = std::min(d_lineRateBps, d_maxLinkBandwidthBps);
+  printf("raw new rate: %lf\n", d_lineRateBps);
+
+  // Bound estimated rate above and below
+  d_lineRateBps = std::min(d_lineRateBps, d_maxLinkBandwidthBps);
+  return d_lineRateBps = std::max(d_lineRateBps, d_maxRateBps);
 }
 
 // ASPECTS
@@ -199,11 +237,15 @@ std::ostream& Timely::print(std::ostream& stream) const {
   stream << "    beta (multiplicative decrease factor): " << d_beta                  << std::endl;
   stream << "    delta (additive increase factor)     : " << d_delta                 << std::endl;
   stream << "    minRttUs (smallest RTT expected us)  : " << d_minRttUs              << std::endl;
+  stream << "    minRttClockCycles (minRttUs as cycls): " << d_minRttClockCycles     << std::endl;
   stream << "    maxRttUs (largest  RTT expected us)  : " << d_maxRttUs              << std::endl;
   stream << "    cpuFreqGhz (CPU frequency Ghz)       : " << d_cpuFreqGhz            << std::endl;
-  stream << "    maxLinkBandwidthBps (max NIC bw bps) : " << d_maxLinkBandwidthBps   << std::endl;
+  stream << "    NIC bandwidth (bytes/sec)            : " << d_maxLinkBandwidthBps   << std::endl;
+  stream << "    minimum est rate (bytes/sec)         : " << d_minRateBps            << std::endl;
+  stream << "    maximum est rate (bytes/sec)         : " << d_maxRateBps            << std::endl;
+  stream << "    minimum sample time (us)             : " << d_minSampleUs           << std::endl;
+  stream << "    minimum sample time (clock cycles)   : " << d_minSampleCpuCycles    << std::endl;
   stream << "]" << std::endl;
-
   return stream;
 }
 
