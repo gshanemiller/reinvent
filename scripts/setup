@@ -32,8 +32,3 @@ echo
 echo mt4117_pciconf0.1 Firmware:
 echo --------------------------------------------------------------
 flint --qq -d /dev/mst/mt4117_pciconf0.1   query
-
-# turn off Intel CPU hyper-threading
-echo
-echo disabling Intel hyper threading
-./intel_ht off
