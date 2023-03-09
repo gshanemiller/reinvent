@@ -3,10 +3,6 @@
 #include <dpdk/reinvent_dpdk_util.h>
 #include <dpdk/reinvent_dpdk_stream.h>
 
-extern "C" {
-#include </root/Dev/dpdk/drivers/net/mlx5/shane.h>
-}
-
 //                                                                                                                      
 // Tell GCC to not enforce '-Wpendantic' for DPDK headers                                                               
 //                                                                                                                      
@@ -27,10 +23,8 @@ extern "C" {
 #include <signal.h>
 
 #include <vector>
-#include <algorithm>
 
-std::vector<uint64_t> ts1;
-std::vector<uint64_t> ts2;
+std::vector<uint64_t> ts;
 
 //
 // Default burst capacities
@@ -56,7 +50,8 @@ struct TxMessage {
   int      lcoreId;   // lcoreId which sent this message
   int      txqId;     // txqId which sent this message
   uint64_t sequence;  // txqId's sequence number
-  char     pad[16];   // to fill out message to 32 bytes
+  uint64_t txRdtsc;   
+  uint64_t rxRdtsc;   
 };
 
 static void handle_sig(int sig) {
@@ -206,32 +201,6 @@ void parseCommandLine(int argc, char **argv, bool *isServer, std::string *prefix
   }
 }
 
-static
-inline 
-uint16_t timestamp(uint16_t port __rte_unused, uint16_t qidx __rte_unused,
-  struct rte_mbuf **pkts, uint16_t nb_pkts, void *_ __rte_unused) {
-  const auto now = __rdtsc();
-  for (uint16_t i=0; i<nb_pkts; ++i) {
-    TxMessage *payload = rte_pktmbuf_mtod_offset(pkts[i], TxMessage*,
-      sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr));
-    ts1[payload->sequence] = now; 
-  }
-  return nb_pkts;
-}
-
-extern "C" {
-static
-inline
-void bubba(struct rte_mbuf **__rte_restrict pkts, unsigned int pkts_n) {
-  const auto now = __rdtsc();
-  for (unsigned i=0; i<pkts_n; ++i) {
-    TxMessage *payload = rte_pktmbuf_mtod_offset(pkts[i], TxMessage*,
-      sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr));
-    ts2[payload->sequence] = now; 
-  }
-}
-}
-
 int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigned packetCount) {
   assert(config);
 
@@ -319,8 +288,6 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigne
 
   rte_mbuf * mbuf(0);
 
-  rte_eth_add_tx_callback(deviceId, txqId, timestamp, 0);
- 
   while (likely(count<packetCount)) {
     if ((mbuf = rte_pktmbuf_alloc(pool))==0) {
       printf("failed to allocate mbuf\n");
@@ -378,6 +345,7 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigne
     payload->lcoreId = lcoreId;
     payload->txqId = txqId;
     payload->sequence = ++sequence;
+    payload->txRdtsc = __rdtsc();
 
     //
     // Compute IP checksum
@@ -470,8 +438,9 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
       //                                                                                                                
       TxMessage *payload = rte_pktmbuf_mtod_offset(mbuf[i], TxMessage*,
         sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr));
-      REINVENT_UTIL_LOG_INFO_VARGS("id %d rxqIndex %d packet: sender: lcoreId: %d, txqId: %d, sequence: %lu\n",
-        id, rxqIndex, payload->lcoreId, payload->txqId, payload->sequence);
+      ts[payload->sequence] = __rdtsc() - payload->txRdtsc;
+      // REINVENT_UTIL_LOG_INFO_VARGS("id %d rxqIndex %d packet: sender: lcoreId: %d, txqId: %d, sequence: %lu\n",
+      //   id, rxqIndex, payload->lcoreId, payload->txqId, payload->sequence);
       rte_pktmbuf_free(mbuf[i]);
     }
 
@@ -569,11 +538,8 @@ int main(int argc, char **argv) {
   std::string prefix;
   std::string device("DPDK_NIC_DEVICE");
 
+  ts.resize(1000001);
   parseCommandLine(argc, argv, &isServer, &prefix);
-
-  setShaneCallback(bubba);
-  ts1.resize(1000001);
-  ts2.resize(1000001);
 
   Reinvent::Util::LogRuntime::resetEpoch();
   Reinvent::Util::LogRuntime::setSeverityLimit(REINVENT_UTIL_LOGGING_SEVERITY_TRACE);
@@ -617,13 +583,12 @@ int main(int argc, char **argv) {
 
   REINVENT_UTIL_LOG_INFO_VARGS("DPDK worker threads done\n");
 
-  printf("size txm: %lu\n", sizeof(TxMessage));
-  printf("rdtsc hz: %lu\n", rte_get_tsc_hz());
-  printf("ts1 size: %lu\n", ts1.size());
-  printf("ts2 size: %lu\n", ts2.size());
-  for (std::size_t i=0; i<ts1.size(); ++i) {
-    printf("i=%lu ts1 %lu ts2 %lu diff %lu\n",
-      i, ts1[i], ts2[i], ts2[i]-ts1[i]);
+  if (isServer) {
+    printf("size txm: %lu\n", sizeof(TxMessage));
+    printf("rdtsc hz: %lu\n", rte_get_tsc_hz());
+    for (std::size_t i=0; i<256; ++i) {
+      printf("i %lu diff %lu\n", i, ts[i]);
+    }
   }
 
   //

@@ -179,16 +179,16 @@ cd ${MFT%%.tgz}
 ./install.sh --oem
 mst start
 mst status -v
-mlxconfig -y -d /dev/mst/mt4117_pciconf0.1 s CQE_COMPRESSION=1
-flint --qq -d /dev/mst/mt4117_pciconf0   query
-flint --qq -d /dev/mst/mt4117_pciconf0.1 query
+mlxconfig -y -d /dev/mst/mt4119_pciconf0.1 s CQE_COMPRESSION=1
+flint --qq -d /dev/mst/mt4119_pciconf0   query
+flint --qq -d /dev/mst/mt4119_pciconf0.1 query
 
 #
 # Clone repos 
 # 
 cd $H
 rm -rf ./dpdk
-git clone https://github.com/gshanemiller/dpdk.git
+git clone https://github.com/DPDK/dpdk.git
 rm -rf ./reinvent
 git clone https://github.com/gshanemiller/reinvent.git
 
@@ -199,6 +199,7 @@ cd $H/dpdk
 vi app/meson.build
 meson -Db_lto=false -Dplatform=native -Dprefix=${D} build
 # Note: running too many jobs will exhaust tmp space due to LTO
+# However, I disabled LTO above for development purposes
 ninja -j 64 -C build install
 
 #
@@ -208,7 +209,7 @@ cd $H/reinvent
 rm -rf build
 mkdir build
 cd build
-cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DSTATIC_LIBS=ON ..
+cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON ..
 make -j
 
 #
