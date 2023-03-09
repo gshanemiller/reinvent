@@ -188,7 +188,7 @@ flint --qq -d /dev/mst/mt4117_pciconf0.1 query
 # 
 cd $H
 rm -rf ./dpdk
-git clone git://dpdk.org/dpdk
+git clone https://github.com/gshanemiller/dpdk.git
 rm -rf ./reinvent
 git clone https://github.com/gshanemiller/reinvent.git
 
@@ -197,9 +197,9 @@ git clone https://github.com/gshanemiller/reinvent.git
 #
 cd $H/dpdk
 vi app/meson.build
-meson -Db_lto=true -Dplatform=native -Dprefix=${D} build
+meson -Db_lto=false -Dplatform=native -Dprefix=${D} build
 # Note: running too many jobs will exhaust tmp space due to LTO
-ninja -j 16 -C build install
+ninja -j 64 -C build install
 
 #
 # Build reinvent
@@ -208,7 +208,7 @@ cd $H/reinvent
 rm -rf build
 mkdir build
 cd build
-cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON ..
+cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON -DSTATIC_LIBS=ON ..
 make -j
 
 #

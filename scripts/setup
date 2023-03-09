@@ -25,10 +25,10 @@ modprobe -a ib_uverbs mlx5_core mlx5_ib
 echo 0 > /sys/devices/pci0000:00/0000:00:01.0/0000:01:00.1/numa_node
 
 # print the FW versions in the NICs:
-echo mt4117_pciconf0 Firmware:
+echo mt4119_pciconf0 Firmware:
 echo --------------------------------------------------------------
-flint --qq -d /dev/mst/mt4117_pciconf0   query
+flint --qq -d /dev/mst/mt4119_pciconf0   query
 echo
-echo mt4117_pciconf0.1 Firmware:
+echo mt4119_pciconf0.1 Firmware:
 echo --------------------------------------------------------------
-flint --qq -d /dev/mst/mt4117_pciconf0.1   query
+flint --qq -d /dev/mst/mt4119_pciconf0.1   query
