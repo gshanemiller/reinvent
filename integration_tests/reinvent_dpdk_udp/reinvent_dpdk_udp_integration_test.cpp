@@ -23,7 +23,9 @@
 #include <signal.h>
 
 #include <vector>
+#include <CommFunc.h>
 
+std::vector<double>   hs;
 std::vector<uint64_t> ts;
 
 //
@@ -344,8 +346,8 @@ int clientMainLoop(int id, int txqIndex, Reinvent::Dpdk::Worker *worker, unsigne
       sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr));
     payload->lcoreId = lcoreId;
     payload->txqId = txqId;
+    ts[sequence] = __rdtsc();
     payload->sequence = ++sequence;
-    payload->txRdtsc = __rdtsc();
 
     //
     // Compute IP checksum
@@ -438,9 +440,8 @@ int serverMainLoop(int id, int rxqIndex, Reinvent::Dpdk::Worker *worker) {
       //                                                                                                                
       TxMessage *payload = rte_pktmbuf_mtod_offset(mbuf[i], TxMessage*,
         sizeof(rte_ether_hdr)+sizeof(rte_ipv4_hdr)+sizeof(rte_udp_hdr));
-      ts[payload->sequence] = __rdtsc() - payload->txRdtsc;
-      // REINVENT_UTIL_LOG_INFO_VARGS("id %d rxqIndex %d packet: sender: lcoreId: %d, txqId: %d, sequence: %lu\n",
-      //   id, rxqIndex, payload->lcoreId, payload->txqId, payload->sequence);
+      REINVENT_UTIL_LOG_INFO_VARGS("id %d rxqIndex %d packet: sender: lcoreId: %d, txqId: %d, sequence: %lu\n",
+        id, rxqIndex, payload->lcoreId, payload->txqId, payload->sequence);
       rte_pktmbuf_free(mbuf[i]);
     }
 
@@ -538,7 +539,7 @@ int main(int argc, char **argv) {
   std::string prefix;
   std::string device("DPDK_NIC_DEVICE");
 
-  ts.resize(1000001);
+  ts.resize(1000000, 0);
   parseCommandLine(argc, argv, &isServer, &prefix);
 
   Reinvent::Util::LogRuntime::resetEpoch();
@@ -583,12 +584,16 @@ int main(int argc, char **argv) {
 
   REINVENT_UTIL_LOG_INFO_VARGS("DPDK worker threads done\n");
 
-  if (isServer) {
+  if (!isServer) {
     printf("size txm: %lu\n", sizeof(TxMessage));
     printf("rdtsc hz: %lu\n", rte_get_tsc_hz());
-    for (std::size_t i=0; i<256; ++i) {
-      printf("i %lu diff %lu\n", i, ts[i]);
+    const double hz = static_cast<double>(rte_get_tsc_hz());
+    for (std::size_t i=1; i<ts.size(); ++i) {
+      const double mu = ((ts[i]-ts[i-1])*1.0 / hz) * 1000000000.0; 
+      printf("i=%lu tsEnd=%lu tsStart=%lu diff %lu mu %lf\n", i, ts[i], ts[i-1], ts[i]-ts[i-1], mu);
+      hs.push_back(static_cast<double>(mu));
     }
+    CommFunc::summarize(hs);
   }
 
   //
