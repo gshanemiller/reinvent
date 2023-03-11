@@ -32,151 +32,67 @@ export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig:${PKG_CONFIG_PATH}
 # Install some of the prereqs
 #
 apt update
-apt install --yes make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlib* ncat unzip zip gdb gdb-doc infiniband-diags libmnl-dev pkgconf*
+apt install --yes make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlib* ncat unzip zip gdb gdb-doc infiniband-diags libmnl-dev pkgconf* linux-tools-common linux-tools-5.15.0-58-generic
 pip3 install --user meson pyelftools ninja gdown
 # apt upgrade --yes
 # where meson/ninja are installed
 export PATH=/root/.local/bin:${PATH}
+
+# install zig
+snap install zig --classic --beta
 
 #
 # Get Mellanox deps:
 #
 # [used]     MFT toolset  comes from: https://network.nvidia.com/products/adapter-software/firmware-tools/
 # [used]     OFED dwnload comes from: https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/
-# [unused]   The firmware comes from: https://network.nvidia.com/support/firmware/connectx4lxen/
-# 
-# OFED comes as an ISO file and .tar file. However, the ISO file does not contain 'mlnxofedinstall'
-# which is mentioned all over the web. Second, the .tgz not wgettable because the page redirects to a 
-# license acceptance page where the URL for the download is not given. Therefore it'll have to scp'd into
-# this machine by hand. Wgetting this file directly is not possible.
 #
-# On firmware: this procedure DOES change the firmware as a side effect of installing OFED. This way a separate
-# FW update step is not needed. However, should one wish to do FW update seperately or later do the following:
-#
-# (*) install OFED without firmware then self update: ./mlnxofedinstall --without-fw-update --dpdk
-# (*) install OFED with    firmware then self update: ./mlnxofedinstall --dpdk
-#
-# To self update FW:
-#
-# To assess what's installed and what one can update to do the following AFTER this script is done, and the machine
-# is rebooted. Updating the FW seems to work fine. The new FW will not show as running until after the machine is
-# rebooted following update as usual.
-#
-# Run `lspci -v | less`. Search for Ethernet then look for those PCI entries corresponding to MLNX ex:
-#
-# 01:00.0 Ethernet controller: Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
-#       Subsystem: Mellanox Technologies Stand-up ConnectX-4 Lx EN, 25GbE dual-port SFP28, PCIe3.0 x8, MCX4121A-ACAT
-# . . .
-# 01:00.1 Ethernet controller: Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
-#       Subsystem: Mellanox Technologies Stand-up ConnectX-4 Lx EN, 25GbE dual-port SFP28, PCIe3.0 x8, MCX4121A-ACAT
-#
-# The identifier `MCX4121A-ACAT` identifies the PCI card also called the OPN. Next, wait until this script is done and
-# machine is rebooted. Then run the command `mst start; mst status -v`. You should see output like:
-#
-# $ mst start
-# Starting MST (Mellanox Software Tools) driver set
-# Loading MST PCI module - Success
-# Loading MST PCI configuration module - Success
-# Create devices
-# Unloading MST PCI module (unused) - Success
-#
-# $ mst status -v 
-# MST modules:
-# ------------
-#     MST PCI module is not loaded
-#     MST PCI configuration module loaded
-# PCI devices:
-# ------------
-# DEVICE_TYPE             MST                           PCI       RDMA            NET                       NUMA  
-# ConnectX4LX(rev:0)      /dev/mst/mt4117_pciconf0.1    01:00.1   mlx5_bond_0     net-bond0                 -1    
-# 
-# ConnectX4LX(rev:0)      /dev/mst/mt4117_pciconf0      01:00.0   mlx5_bond_0     net-bond0                 -1    
-#
-# which matches the PCI information. To see the current firmware version by devId, run the flint command giving each
-# of the two MST devIds:
-#
-# $ flint --qq -d /dev/mst/mt4117_pciconf0 query
-# Image type:            FS3
-# FW Version:            14.28.2006
-# FW Release Date:       15.9.2020
-# Product Version:       14.28.2006
-# Rom Info:              type=UEFI version=14.21.17 cpu=AMD64,AARCH64
-#                        type=PXE version=3.6.102 cpu=AMD64
-# Description:           UID                GuidsNumber
-# Base GUID:             043f720300d78016        4
-# Base MAC:              043f72d78016            4
-# Image VSD:             N/A
-# Device VSD:            N/A
-# PSID:                  MT_2420110034
-# Security Attributes:   N/A
-#
-# $ flint --qq -d /dev/mst/mt4117_pciconf0.1 query
-# Image type:            FS3
-# FW Version:            14.28.2006
-# FW Release Date:       15.9.2020
-# Product Version:       14.28.2006
-# Rom Info:              type=UEFI version=14.21.17 cpu=AMD64,AARCH64
-#                        type=PXE version=3.6.102 cpu=AMD64
-# Description:           UID                GuidsNumber
-# Base GUID:             043f720300d78016        4
-# Base MAC:              043f72d78016            4
-# Image VSD:             N/A
-# Device VSD:            N/A
-# PSID:                  MT_2420110034
-# Security Attributes:   N/A
-#
-# These commands show the current firmware version is version=UEFI 14.21.17 from 9/15/2020.
-#
-# Meanwhile at the URL https://network.nvidia.com/support/firmware/connectx4lxen/
-# we can drill down by current version then OPN here `MCX4121A-ACAT` and see the last PSID is `MT_2420110034` with
-# firmware version is `UEFI-14.25.17` from 05/12/2021 about 8 months later. The webpage will give a URL to download
-# the firmware:
-#
-# https://www.mellanox.com/downloads/firmware/fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin.zip
-#
-# After wgetting this file and unzipping it, the instructions to install the firmware are at the URL
-# https://network.nvidia.com/support/firmware/nic/ which instruct:
-#
-# $ flint -d /dev/mst/mt4117_pciconf0   -i fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin
-# $ flint -d /dev/mst/mt4117_pciconf0.1 -i fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin
-#
-# CURRENT AS OF NOV 2022 for ConnectX-4 Lx EN, 25GbE dual-port SFP28, PCIe3.0 x8, MCX4121A-ACAT:
-#
-# Also note per https://doc.dpdk.org/guides-19.05/nics/mlx5.html this mlx5 poll mode driver is for ConnectX-4 Lx:
-#
-# The MLX5 poll mode driver library (librte_pmd_mlx5) provides support for Mellanox ConnectX-4, Mellanox ConnectX-4 Lx
-# Mellanox ConnectX-5, Mellanox ConnectX-6 and Mellanox BlueField families of 10/25/40/50/100/200 Gb/s adapters as well
-# as their virtual functions (VF) in SR-IOV context.
-#
-MLNX="MLNX_OFED_LINUX-5.8-1.0.1.1-ubuntu22.04-x86_64.tgz"
-MFT="mft-4.22.0-96-x86_64-deb.tgz"
-# downloaded but NOT USED OR INSTALLED
-MLNX_FW="https://www.mellanox.com/downloads/firmware/fw-ConnectX4Lx-rel-14_32_1010-MCX4121A-ACA_Ax-UEFI-14.25.17-FlexBoot-3.6.502.bin.zip"
+MFT="mft-4.23.0-104-x86_64-deb.tgz"
+MFT_CHECKSUM="13335ebec8e62bc7bdfb7ce55d897765587be8461c027f9f97a868eeaf8c8f56"
+MLNX="MLNX_OFED_LINUX-5.9-0.5.6.0-ubuntu22.04-x86_64.tgz"
+MLNX_CHECKSUM="67b9fe26769c196fc9c7482d7453c75a0ffe700f17884a0173c4b8acacc04bcc"
 
-echo
-echo "Mellanox/Nvida MLNX_OFED_LINUX driver set cannot be obtained by curl/wget from Nvidia's website."
-echo "Nvidia makes you accept their EUL first so the download process cannot be automated. The original"
-echo "URL is https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed. To work around this"
-echo "limitation this install script will download a copy from a Google Drive with the same checksum:"
-echo "which is 178bb61815930dc1700c317c8bac182f4e9b24f0de93a4615048f5fcf294ccd8 per Nvidia:"
-echo
+# Mellanox/Nvida MLNX_OFED_LINUX driver set cannot be obtained by curl/wget from Nvidia's website.
+# Nvidia makes you accept their EUL first so the download process cannot be automated. The original
+# URL is https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed. To work around this
+# limitation this install script will download a copy from my Google Drive.
+
 cd /tmp
 rm -f ./${MLNX}
-gdown 1-AC5of5owm62uK16jYaxNMK5hzis1-pN
-sha256sum  ./${MLNX}
+gdown 1IxgxLkfW727yAm6QyipZfk3fndGAQcwL
+ACTUAL_CHECKSUM=`sha256sum ./${MLNX} | cut -d" " -f1`
+if [[ "$MLNX_CHECKSUM" != "$ACTUAL_CHECKSUM" ]]
+then
+  echo "fatal: file: ${MLNX}"
+  echo "fatal: actual          checksum: ${ACTUAL_CHECKSUM}"
+  echo "fatal: expected NVIDIA checksum: ${MLNX_CHECKSUM}"
+  exit 1
+fi
+
 cd ${H}/tmp
-cp /tmp/MLNX*tgz ~
 tar zxf /tmp/MLNX*tgz
 cd MLNX*
 ./mlnxofedinstall --dpdk --force
 cd ..
+
 # get MFT tool set
 wget https://www.mellanox.com/downloads/MFT/${MFT}
-# download the firmware but do nothing with it
-wget ${MLNX_FW}
+ACTUAL_CHECKSUM=`sha256sum ./${MFT} | cut -d" " -f1`
+if [[ "$MFT_CHECKSUM" != "$ACTUAL_CHECKSUM" ]]
+then
+  echo "fatal: file: ${MFT}"
+  echo "fatal: actual          checksum: ${ACTUAL_CHECKSUM}"
+  echo "fatal: expected NVIDIA checksum: ${MFT_CHECKSUM}"
+  exit 1
+fi
+
 tar zxvf ${MFT}
 cd ${MFT%%.tgz}
 ./install.sh --oem
+
+# note unfortunately these paths change depending on the NIC
+# mt4119 is Mellanox ConnectX-5; mt4117 is ConnectX-4. cross
+# check 'mst status -v' with 'lspci | grep Eth'
 mst start
 mst status -v
 mlxconfig -y -d /dev/mst/mt4119_pciconf0.1 s CQE_COMPRESSION=1
@@ -197,9 +113,9 @@ git clone https://github.com/gshanemiller/reinvent.git
 #
 cd $H/dpdk
 vi app/meson.build
+# note: LTO disabled: significantly increases build time
 meson -Db_lto=false -Dplatform=native -Dprefix=${D} build
 # Note: running too many jobs will exhaust tmp space due to LTO
-# However, I disabled LTO above for development purposes
 ninja -j 64 -C build install
 
 #
@@ -252,6 +168,10 @@ echo ":set colorcolumn=120" >> ~/.vimrc
 
 echo
 echo "Installation is done except for VLAN/network setup."
+
+# git needs this
+git config --global user.email "gshanemiller6@gmail.com"
+git config --global user.name "smiller"
 
 echo
 read -p "Press ENTER to reboot now or CTRL-C to exit: "
