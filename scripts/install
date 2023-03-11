@@ -107,6 +107,10 @@ rm -rf ./dpdk
 git clone https://github.com/DPDK/dpdk.git
 rm -rf ./reinvent
 git clone https://github.com/gshanemiller/reinvent.git
+rm -rf rdma-core
+git clone https://github.com/linux-rdma/rdma-core.git
+rm -rf libfabric
+git clone https://github.com/ofiwg/libfabric
 
 #
 # Build and install DPDK
@@ -127,6 +131,13 @@ mkdir build
 cd build
 cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON ..
 make -j
+
+#
+# Build libfabric
+#
+cd $H/libfabric
+./autogen.sh
+./configure --prefix=${HOME}/local && make -j 64 && sudo make install
 
 #
 # Enable IOMMU passthrough
