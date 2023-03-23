@@ -110,6 +110,7 @@ git clone https://github.com/gshanemiller/reinvent.git
 #
 cd $H/dpdk
 vi app/meson.build
+# note: default build is release. add -Dbuildtype=debug for debug
 # note: LTO disabled: significantly increases build time
 meson -Db_lto=false -Dplatform=native -Dprefix=${D} build
 # Note: running too many jobs will exhaust tmp space due to LTO
