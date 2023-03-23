@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH=${D}/lib/x86_64-linux-gnu/pkgconfig:${PKG_CONFIG_PATH}
 # Install some of the prereqs
 #
 apt update
-apt install --yes make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlib* ncat unzip zip gdb gdb-doc infiniband-diags libmnl-dev pkgconf* linux-tools-common linux-tools-5.15.0-58-generic
+apt install --yes make numactl libnuma-dev rdma-core git ethtool htop libgtest-dev libgcc-10-dev gcc-10-doc cmake cmake-extras python3-pip ibverbs-providers ibverbs-utils libibverbs-dev libhugetlbfs0 zlib* ncat unzip zip gdb gdb-doc infiniband-diags libmnl-dev pkgconf* linux-tools-common linux-tools-5.15.0-58-generic libibumad-dev libpci-dev autoconf libtool librdmacm-dev linux-headers-5.15.0-58-generic dkms apt-file
 pip3 install --user meson pyelftools ninja gdown
 # apt upgrade --yes
 # where meson/ninja are installed
@@ -107,10 +107,6 @@ rm -rf ./dpdk
 git clone https://github.com/DPDK/dpdk.git
 rm -rf ./reinvent
 git clone https://github.com/gshanemiller/reinvent.git
-rm -rf ./rdma-core
-git clone https://github.com/linux-rdma/rdma-core.git
-rm -rf ./libfabric
-git clone https://github.com/ofiwg/libfabric
 
 #
 # Build and install DPDK
@@ -131,23 +127,6 @@ mkdir build
 cd build
 cmake -DUNIT_TEST=ON -DINTEGRATION_TEST=ON ..
 make -j
-
-#
-# Build libfabric
-#
-cd $H/libfabric
-./autogen.sh
-./configure --prefix=${HOME}/local && make -j 64 && sudo make install
-
-#
-# Build rdma-core but do not install it
-#
-cd $H/rdma-core
-rm -rf ./build
-mkdir build
-cd build
-cmake -GNinja -DIN_PLACE=1 -DENABLE_VALGRIND=0 -DENABLE_STATIC=1 -DNO_PYVERBS=1 -DNO_MAN_PAGES=1 ..
-ninja -j 64
 
 #
 # Enable IOMMU passthrough
@@ -193,7 +172,8 @@ echo "Installation is done except for VLAN/network setup."
 # git needs this
 git config --global user.email "gshanemiller6@gmail.com"
 git config --global user.name "smiller"
-
+git config --global credential.helper store
+git config --global credential.helper cache
 echo
 read -p "Press ENTER to reboot now or CTRL-C to exit: "
 reboot
