@@ -590,7 +590,6 @@ int main(int argc, char **argv) {
     const double hz = static_cast<double>(rte_get_tsc_hz());
     for (std::size_t i=1; i<ts.size(); ++i) {
       const double mu = ((ts[i]-ts[i-1])*1.0 / hz) * 1000000000.0; 
-      printf("i=%lu tsEnd=%lu tsStart=%lu diff %lu mu %lf\n", i, ts[i], ts[i-1], ts[i]-ts[i-1], mu);
       hs.push_back(static_cast<double>(mu));
     }
     CommFunc::summarize(hs);
