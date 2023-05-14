@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 3.16)
 set(SOURCES                                                                                                             
   ../../src/reinvent/util/reinvent_util_log.cpp
   ../../src/reinvent/util/reinvent_util_errno.cpp
-  reinvent_util_errno_integration_test.cpp
+  main.cpp
 ) 
 
 #

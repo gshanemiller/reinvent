@@ -24,13 +24,13 @@ set(SOURCES
   ../../src/reinvent/util/reinvent_util_environment.cpp
 
   CommFunc.cpp
-  reinvent_dpdk_udp_integration_test.cpp
+  main.cpp
 ) 
 
 #
 # Build a test with logging ON for all severities at build time
 #
-set(TEST_TARGET reinvent_dpdk_udp_integration_test.tsk)
+set(TEST_TARGET reinvent_udp_integration_test.tsk)
 add_executable(${TEST_TARGET} ${SOURCES})
 target_compile_options(${TEST_TARGET} PUBLIC -g)
 target_include_directories(${TEST_TARGET} PUBLIC .)
@@ -45,7 +45,7 @@ target_link_libraries(${TEST_TARGET} PUBLIC ${DPDK_SELECTED_LIBRARIES})
 #
 # Build a test with logging off optimized
 #
-set(OPT_TEST_TARGET reinvent_dpdk_udp_opt_integration_test.tsk)
+set(OPT_TEST_TARGET reinvent_udp_opt_integration_test.tsk)
 add_executable(${OPT_TEST_TARGET} ${SOURCES})
 target_compile_options(${OPT_TEST_TARGET} PUBLIC -O2)
 target_compile_options(${OPT_TEST_TARGET} PUBLIC -Wno-unused-variable)                                               

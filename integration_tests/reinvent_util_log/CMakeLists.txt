@@ -8,12 +8,12 @@ cmake_minimum_required(VERSION 3.16)
 
 set(SOURCES                                                                                                             
   ../../src/reinvent/util/reinvent_util_log.cpp
-  reinvent_util_log_integration_test.cpp
+  main.cpp
 ) 
 
 set(SOURCES1                                                                                                             
   ../../src/reinvent/util/reinvent_util_log.cpp
-  reinvent_util_log_integration_mt_test.cpp
+  main_mt.cpp
 ) 
 
 #
