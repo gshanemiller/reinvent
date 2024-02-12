@@ -1,0 +1,34 @@
+#!/bin/bash
+
+cd ~
+
+apt update
+apt install --yes make git ethtool htop libgtest-dev python3-pip zlib* ncat unzip zip pkgconf* libpci-dev autoconf libtool apt-file socat cmake arping gdb wireshark tshark golang python3-scapy
+pip3 install --user meson pyelftools ninja gdown
+export PATH=/root/.local/bin:${PATH}
+
+echo                                                                            
+read -p "Enable IOMMU: 'intel_iommu=on iommu=pt': "             
+vi /etc/default/grub                                                            
+update-grub                                                                     
+                                                                                
+echo                                                                            
+read -p "Update /etc/network/interfaces: "                                      
+
+echo "set expandtab" > ~/.vimrc
+echo "set tabstop=2" >> ~/.vimrc
+echo "set shiftwidth=2" >> ~/.vimrc
+echo "set bg=dark" >> ~/.vimrc
+echo "set noautoindent" >> ~/.vimrc
+echo "set nosmartindent" >> ~/.vimrc
+echo "set nocindent" >> ~/.vimrc
+echo "set wrap" >> ~/.vimrc
+echo ":syntax off" >> ~/.vimrc
+echo ":set colorcolumn=120" >> ~/.vimrc
+echo "alias edit=vi" >> ~/.bashrc
+
+#
+# assign IP address 192.168.0.2 to enp1s0f1
+# auto enp1s0f1
+# iface enp1s0f1 inet static
+#    address 192.168.0.2/28

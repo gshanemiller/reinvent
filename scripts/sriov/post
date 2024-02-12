@@ -1,0 +1,165 @@
+#!/bin/bash -x
+
+VFS=4
+DEV="enp1s0f1"
+IPV4="192.168.0."
+LINKS1="enp1s0f1v0 enp1s0f1v1 enp1s0f1v2 enp1s0f1v3"
+LINKS2="enp1s0f1npf1vf0 enp1s0f1npf1vf1 enp1s0f1npf1vf2 enp1s0f1npf1vf3"
+
+declare -i i
+declare -i j
+
+function reset {
+  set +x
+  echo "Retarting mst..."
+  echo "==============================================================="
+  set -x
+  mst restart 
+}
+
+function status {
+  set +x
+  echo
+  echo
+  echo "$1"
+  echo "==============================================================="
+  ip link show
+  echo
+  echo
+  set -x
+}
+
+function cleantc {
+  tc filter del dev $1 root 2>/dev/null
+  tc filter del dev $1 ingress 2>/dev/null
+  tc filter del dev $1 egress 2>/dev/null
+  tc qdisc del dev $1 root 2>/dev/null
+  tc qdisc del dev $1 ingress 2>/dev/null
+}
+
+function dumptc {
+  tc filter show dev $1 ingress
+  tc filter show dev $1
+}
+
+function mirrorHelper {
+  # ingress
+  tc qdisc  add     dev $1 handle ffff: ingress
+  tc filter add     dev $1 parent ffff: protocol all matchall action mirred egress mirror dev $2
+  # egress
+  tc qdisc  add     dev $1 handle 1: root prio
+  tc filter add     dev $1 parent 1:    protocol all matchall action mirred egress mirror dev $2
+}
+
+function tcmirror {
+  cleantc $1
+  mirrorHelper $1 $2
+  dumptc $1
+}
+
+function setupvfHelper {
+  ip link set $DEV vf 0 mac 0e:8a:a3:32:d1:00
+  ip link set $DEV vf 1 mac 0e:8a:a3:32:d1:01
+  ip link set $DEV vf 2 mac 0e:8a:a3:32:d1:02
+  ip link set $DEV vf 3 mac 0e:8a:a3:32:d1:03
+
+  ip link set $DEV vf 0 state enable
+  ip link set $DEV vf 1 state enable
+  ip link set $DEV vf 2 state enable
+  ip link set $DEV vf 3 state enable
+
+# ip link set $DEV vf 0 trust on
+# ip link set $DEV vf 1 trust on
+# ip link set $DEV vf 2 trust on
+# ip link set $DEV vf 3 trust on
+
+# ip link set $DEV vf 0 spoofchk on
+# ip link set $DEV vf 1 spoofchk on
+# ip link set $DEV vf 2 spoofchk on
+# ip link set $DEV vf 3 spoofchk on
+}
+
+function setupvf {
+  # turn all SR-IOV stuff off
+  echo 0 > /sys/class/net/$DEV/device/sriov_numvfs
+  devlink dev eswitch set pci/0000:01:00.1 mode legacy
+  status "ON-BOOT"
+
+  echo $VFS > /sys/class/net/$DEV/device/sriov_numvfs
+  status "POST-CREATE-VFS"
+
+  reset
+
+  setupvfHelper
+  status "POST-CONFIGURE-VFS"
+
+  echo 0000:01:01.2 > /sys/bus/pci/drivers/mlx5_core/unbind
+  echo 0000:01:01.3 > /sys/bus/pci/drivers/mlx5_core/unbind
+  echo 0000:01:01.4 > /sys/bus/pci/drivers/mlx5_core/unbind
+  echo 0000:01:01.5 > /sys/bus/pci/drivers/mlx5_core/unbind
+
+  # the next line doesn't seem to help or hurt
+  devlink dev param   set pci/0000:01:00.1 name flow_steering_mode value "smfs" cmode runtime
+  # change to switchdev mode; required for SR-IOV
+  devlink dev eswitch set pci/0000:01:00.1 mode switchdev
+
+  echo 0000:01:01.2 > /sys/bus/pci/drivers/mlx5_core/bind
+  echo 0000:01:01.3 > /sys/bus/pci/drivers/mlx5_core/bind
+  echo 0000:01:01.4 > /sys/bus/pci/drivers/mlx5_core/bind
+  echo 0000:01:01.5 > /sys/bus/pci/drivers/mlx5_core/bind
+
+  reset
+
+  status "POST-SWITCHDEV"
+}
+
+function bringup {
+  ip link set $DEV up
+
+  for link in $LINKS1
+  do
+    ip link set $link up
+  done
+  for link in $LINKS2
+  do
+    ip link set $link up
+  done
+}
+
+function configipv4 {
+  i=5
+  for link in $LINKS1
+  do
+    ip addr add ${IPV4}$i/255.255.255.0 brd + dev $link
+    i=$i+1
+  done
+
+  i=5
+  for link in $LINKS2
+  do
+    ip addr add ${IPV4}$i/255.255.255.0 brd + dev $link
+    i=$i+1
+  done
+}
+
+function enableTcOffload {
+  ethtool -K $DEV hw-tc-offload $1
+
+  for link in $LINKS1
+  do
+    ethtool -K $link hw-tc-offload $1
+  done
+
+  for link in $LINKS2
+  do
+    ethtool -K $link hw-tc-offload $1
+  done
+}
+
+ip link set $DEV up
+setupvf
+bringup
+configipv4
+enableTcOffload off
+bringup
+tcmirror enp1s0f1npf1vf0 enp1s0f1npf1vf3
