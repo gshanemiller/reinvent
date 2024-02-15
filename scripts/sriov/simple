@@ -1,0 +1,51 @@
+#!/bin/bash
+
+PF0="enp1s0f1"
+VF0="biz1"
+VF1="sniffer"
+
+function cleantc {                                                                                                      
+  tc filter del dev $1 root 1>/dev/null 2>&1
+  tc filter del dev $1 ingress 1>/dev/null 2>&1
+  tc filter del dev $1 egress 1>/dev/null 2>&1
+  tc qdisc del dev $1 root 1>/dev/null 2>&1
+  tc qdisc del dev $1 ingress 1>/dev/null 2>&1
+}                                                                                                                       
+
+function dumptc {
+  tc filter show dev $1
+  tc qdisc  show dev $1
+  tc class  show dev $1
+}
+
+function createlinks {
+  vconfig add $PF0 100
+  vconfig add $PF0 101
+  ip link set dev $PF0 down
+  ip link add link $PF0 name $VF0 type vlan id 100
+  ip link add link $PF0 name $VF1 type vlan id 101
+  ip link set dev $VF0 up
+  ip link set dev $VF1 up
+  ip link set dev $PF0 up
+  ip addr add 192.168.0.3/24 dev $VF0
+  ip addr add 192.168.0.4/24 dev $VF1
+}
+
+function mirror {
+  set -x
+  # ingress
+  tc qdisc  add     dev $1 handle dead: ingress
+  tc filter add     dev $1 parent dead: protocol all matchall action mirred ingress mirror dev $2
+  # egress
+  tc qdisc  add     dev $1 handle feed: root prio
+  tc filter add     dev $1 parent feed: protocol all matchall action mirred ingress mirror dev $2
+  set +x
+}
+
+modprobe 8021q
+createlinks
+# cleantc $PF0
+# cleantc $VF0
+# cleantc $VF1
+# mirror $VF0 $VF1
+# dumptc $VF0
