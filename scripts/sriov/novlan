@@ -1,0 +1,57 @@
+#!/bin/bash -x
+
+PF0="enp1s0f0"
+PF1="enp1s0f1"
+
+function cleantc {                                                                                                      
+  tc filter del dev $1 root 1>/dev/null 2>&1
+  tc filter del dev $1 ingress 1>/dev/null 2>&1
+  tc qdisc del dev $1 root 1>/dev/null 2>&1
+  tc qdisc del dev $1 ingress 1>/dev/null 2>&1
+}                                                                                                                       
+
+function dumptc {
+  tc qdisc  show dev $1 ingress
+  tc qdisc  show dev $1 root
+  tc filter show dev $1 root
+}
+
+function createlinks {
+  ip link set dev $PF0 down
+  ip link add link $PF0 name $VF0 type vlan id 100
+  ip link add link $PF0 name $VF1 type vlan id 101
+  ip link set dev $VF0 up
+  ip link set dev $VF1 up
+  ip link set dev $PF0 up
+  ip addr add 192.168.0.3/24 dev $VF0
+  ip addr add 192.168.0.4/24 dev $VF1
+}
+
+function mirror {
+  # ingress
+  tc qdisc  add     dev $1 handle dead: ingress
+  tc filter add     dev $1 parent dead: protocol all matchall action mirred ingress mirror dev $2
+  # egress
+  tc qdisc  add     dev $1 handle feed: root prio
+  tc filter add     dev $1 parent feed: protocol all matchall action mirred ingress mirror dev $2
+}
+
+function mirror1 {
+  # ingress
+  tc qdisc  add     dev $1 ingress
+  tc filter add     dev $1 ingress flower verbose skip_sw action mirred egress mirror dev $2
+  # egress
+  tc qdisc  add     dev $1 root prio
+  tc filter add     dev $1 root    flower verbose skip_sw action mirred egress mirror dev $2
+}
+
+function offload {
+  ethtool -K $1 hw-tc-offload $2
+}
+
+offload $PF0 on
+offload $PF1 on
+cleantc $PF1
+mirror1 $PF0 $PF1
+dumptc $PF0
+dumptc $PF1
