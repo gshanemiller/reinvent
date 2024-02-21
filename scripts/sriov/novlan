@@ -29,20 +29,49 @@ function createlinks {
 
 function mirror {
   # ingress
-  tc qdisc  add     dev $1 handle dead: ingress
-  tc filter add     dev $1 parent dead: protocol all matchall action mirred ingress mirror dev $2
+  tc qdisc  add     dev $1 ingress
+  tc filter add     dev $1 ingress protocol all matchall skip_sw action mirred ingress redirect dev $2
   # egress
-  tc qdisc  add     dev $1 handle feed: root prio
-  tc filter add     dev $1 parent feed: protocol all matchall action mirred ingress mirror dev $2
+  tc qdisc  add     dev $1 root prio
+  tc filter add     dev $1 root    protocol all matchall skip_sw action mirred egress redirect dev $2
 }
 
+# works with redirect not 'mirror'
 function mirror1 {
   # ingress
   tc qdisc  add     dev $1 ingress
-  tc filter add     dev $1 ingress flower verbose skip_sw action mirred egress mirror dev $2
+  tc filter add     dev $1 ingress flower verbose skip_sw action mirred egress redirect dev $2
   # egress
   tc qdisc  add     dev $1 root prio
-  tc filter add     dev $1 root    flower verbose skip_sw action mirred egress mirror dev $2
+  tc filter add     dev $1 root    flower verbose skip_sw action mirred egress redirect dev $2
+}
+
+function mirror1a {
+  # ingress
+  tc qdisc  add     dev $1 handle 10: ingress
+  tc filter add     dev $1 parent 10: flower verbose skip_sw action mirred egress mirror dev $2
+  # egress
+  tc qdisc  add     dev $1 handle 20: root prio
+  tc filter add     dev $1 parent 20: flower verbose skip_sw action mirred egress mirror dev $2
+}
+
+# doesn't give error for skip_sw, and doesn't go into hw either
+function mirror2 {
+  # ingress
+  tc qdisc  add     dev $1 ingress
+  tc filter add     dev $1 ingress protocol ip u32 match ip src 192.168.8.0/24 skip_sw action mirred egress mirror dev $2
+  # egress
+  tc qdisc  add     dev $1 root prio
+  tc filter add     dev $1 root    protocol ip u32 match ip src 192.168.8.0/24 skip_sw action mirred egress mirror dev $2
+}
+
+function mirror3 {
+  # ingress
+  tc qdisc  add     dev $1 ingress
+  tc filter add     dev $1 ingress u32 match u32 0 0 skip_sw action mirred egress mirror dev $2
+  # egress
+  tc qdisc  add     dev $1 root prio
+  tc filter add     dev $1 root    u32 match u32 0 0 skip_sw action mirred egress mirror dev $2
 }
 
 function offload {
@@ -51,7 +80,6 @@ function offload {
 
 offload $PF0 on
 offload $PF1 on
-cleantc $PF1
-mirror1 $PF0 $PF1
-dumptc $PF0
+# cleantc $PF1
+mirror3 $PF1 $PF0
 dumptc $PF1
