@@ -1,0 +1,34 @@
+#!/bin/bash -x
+
+PF0="enp1s0f0"
+PF1="enp1s0f1"
+
+function cleantc {                                                                                                      
+  tc filter del dev $1 root 1>/dev/null 2>&1
+  tc filter del dev $1 ingress 1>/dev/null 2>&1
+  tc qdisc del dev $1 root 1>/dev/null 2>&1
+  tc qdisc del dev $1 ingress 1>/dev/null 2>&1
+}                                                                                                                       
+
+function dumptc {
+  tc qdisc  show dev $1 ingress
+  tc qdisc  show dev $1 root
+  tc filter show dev $1 root
+}
+
+function mytest {
+  tc qdisc  add dev enp1s0f0 lo
+  tc qdisc  add dev enp1s0f0 ingress
+  tc qdisc  add dev enp1s0f1 ingress
+  tc filter add dev enp1s0f1 ingress protocol ip flower verbose skip_sw action mirred egress redirect dev enp1s0f0 pipe action mirred egress redirect dev lo
+  # tc filter add dev enp1s0f1 ingress protocol ip flower verbose skip_sw action mirred egress redirect dev enp1s0f0
+  # tc filter add dev enp1s0f1 ingress protocol ip flower verbose skip_sw action mirred egress mirror   dev enp1s0f0
+}
+
+cleantc $PF0
+cleantc $PF1
+cleantc lo
+
+mytest
+
+dumptc $PF1

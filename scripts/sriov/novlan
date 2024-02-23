@@ -30,20 +30,20 @@ function createlinks {
 function mirror {
   # ingress
   tc qdisc  add     dev $1 ingress
-  tc filter add     dev $1 ingress protocol all matchall skip_sw action mirred ingress redirect dev $2
+  tc filter add     dev $1 ingress protocol ip matchall skip_sw action mirred ingress mirror dev $2
   # egress
   tc qdisc  add     dev $1 root prio
-  tc filter add     dev $1 root    protocol all matchall skip_sw action mirred egress redirect dev $2
+  tc filter add     dev $1 root    protocol ip matchall skip_sw action mirred egress mirror dev $2
 }
 
 # works with redirect not 'mirror'
 function mirror1 {
   # ingress
   tc qdisc  add     dev $1 ingress
-  tc filter add     dev $1 ingress flower verbose skip_sw action mirred egress redirect dev $2
+  tc filter add     dev $1 ingress flower verbose skip_sw action mirred egress mirror dev $2
   # egress
   tc qdisc  add     dev $1 root prio
-  tc filter add     dev $1 root    flower verbose skip_sw action mirred egress redirect dev $2
+  tc filter add     dev $1 root    flower verbose skip_sw action mirred egress mirror dev $2
 }
 
 function mirror1a {
@@ -80,6 +80,6 @@ function offload {
 
 offload $PF0 on
 offload $PF1 on
-# cleantc $PF1
-mirror3 $PF1 $PF0
+cleantc $PF1
+mirror1 $PF1 $PF0
 dumptc $PF1
