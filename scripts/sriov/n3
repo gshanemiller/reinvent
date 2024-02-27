@@ -1,9 +1,7 @@
 #!/bin/bash
 
-DEV1="eno1"
-DEV1_PCI="0000:51:00.0"
-DEV2="eno2"
-DEV2_PCI="0000:51:00.1"
+DEV1="ens6f3"
+DEV1_PCI="0000:8a:00.3"
 
 VFS=4
 VFS_MAC="80:37:57:17:44:01 80:37:57:17:44:02 80:37:57:17:44:03 80:37:57:17:44:04"
@@ -52,6 +50,7 @@ function enable_sriov {
   DEV=$1
   PCI=$2
   MAX=$3
+  MAC="$4"
    
   devlink dev eswitch set pci/$PCI mode switchdev
   echo $MAX > /sys/class/net/$DEV/device/sriov_numvfs
