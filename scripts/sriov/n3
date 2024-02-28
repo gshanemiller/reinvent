@@ -4,6 +4,7 @@ DEV1="ens6f3"
 DEV1_PCI="0000:8a:00.3"
 
 VFS=4
+VFS_PRS="ens6f3v0 ens6f3v1 ens6f3v2 ens6f3v3"
 VFS_IPS="192.168.0.10 192.168.0.13 192.168.0.17 192.168.0.19"
 VFS_LNK="ens6f3npf3vf0 ens6f3npf3vf1 ens6f3npf3vf2 ens6f3npf3vf3"
 VFS_MAC="80:37:57:17:44:01 80:37:57:17:44:02 80:37:57:17:44:03 80:37:57:17:44:04"
@@ -43,7 +44,6 @@ function tcmirror {
 function disable_sriov {
   DEV=$1
   PCI=$2
-
   echo 0 > /sys/class/net/$DEV/device/sriov_numvfs
   devlink dev eswitch set pci/$PCI mode legacy
 }
@@ -55,6 +55,9 @@ function enable_sriov {
   MAC="$4"
   IPS="$5"
   LNK="$6"
+  PRS="$7"
+
+  set -x
    
   devlink dev eswitch set pci/$PCI mode switchdev
   echo $MAX > /sys/class/net/$DEV/device/sriov_numvfs
@@ -68,6 +71,12 @@ function enable_sriov {
     ip link set $DEV vf $i mac $mac
     i=i+1
   done
+
+  for pr in $PRS
+  do
+    ip link set $pr up
+  done
+  ip link set $DEV up
 
   i=0
   for ip in $IPS
@@ -84,19 +93,8 @@ function enable_sriov {
     done
     i=i+1
   done
-}
 
-function enableTcOffload {
-  ethtool -K $DEV hw-tc-offload $1
-  for link in $LINKS1
-  do
-    ethtool -K $link hw-tc-offload $1
-  done
-
-  for link in $LINKS2
-  do
-    ethtool -K $link hw-tc-offload $1
-  done
+  set +x
 }
 
 status "SCRIPT START"
@@ -105,6 +103,6 @@ disable_sriov $DEV1 $DEV1_PCI
 
 status "POST SR-IOV-DISABLE"
 
-enable_sriov $DEV1 $DEV1_PCI $VFS "${VFS_MAC}" "${VFS_IPS}" "${VFS_LNK}"
+enable_sriov $DEV1 $DEV1_PCI $VFS "${VFS_MAC}" "${VFS_IPS}" "${VFS_LNK}" "${VFS_PRS}"
 
 status "POST SR-IOV-ENABLE"
