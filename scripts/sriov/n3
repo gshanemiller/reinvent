@@ -173,5 +173,5 @@ disable_sriov $DEV1 $DEV1_PCI
 enable_sriov $DEV1 $DEV1_PCI $VFS "${VFS_MAC}" "${VFS_IPS}" "${VFS_LNK}" "${VFS_PRS}"
 enable_tc_offload $DEV1 "${VFS_LNK}" "${VFS_PRS}"
 tc_mirror_ingress $DEV1 $VFS "${VFS_PRS}" "${VFS_MAC}"
-tc_mirror_ingress $DEV1 $VFS "${VFS_LNK}" "${VFS_MAC}"
+# tc_mirror_ingress $DEV1 $VFS "${VFS_LNK}" "${VFS_MAC}"
 # status "POST SR-IOV-ENABLE"
