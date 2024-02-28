@@ -1,0 +1,77 @@
+#!/bin/bash
+set -x
+set -e
+
+TC=tc
+DEVLINK=devlink
+
+$BR=br0
+PF1=ens6f3
+PF1_PCI="pci/0000:8a:00.3"
+PF1_IP=192.168.0.17
+VF1=ens6f3npf3vf0
+VF2=ens6f3npf3vf1
+VF1_PCI=0000:8a:19.0
+VF2_PCI=0000:8a:19.1
+VF1_MAC=80:37:57:17:44:01
+VF2_MAC=80:37:57:17:44:02
+VF1_IP=192.168.0.23
+VF2_IP=192.168.0.27
+VF1_PR=ens6f3v0
+VF2_PR=ens6f3v1
+
+rmmod ice
+modprobe ice
+sleep 2
+
+#1. Make sure that there are no VFs
+echo 0 > /sys/class/net/$PF1/device/sriov_numvfs
+
+#2. Create a bridge
+ip link add $BR type bridge 2> /dev/null
+
+# To allow PF to be added to bridge as uplink
+# PF needs to be added to bridge prior to entering switchdev and creating VFs
+#3. Add PF as UpLink port to the bridge
+ip link set $PF1 master $BR
+
+#4. Change eSwitch mode to switchdev
+$DEVLINK dev eswitch set $PF1_PCI mode switchdev
+$DEVLINK dev eswitch show $PF1_PCI
+
+#5. Create 2 SR-IOV VFs
+echo 2 > /sys/class/net/$PF1/device/sriov_numvfs
+
+#6. Configure VF MAC Addresses
+ip link set $PF1 vf 0 mac $VF1_MAC ip link set $PF1 vf 1 mac $VF2_MAC
+
+#7. Add VF Port Representors to the bridge and bring all of them up
+ip link set $VF1_PR master $BR ip link set $VF2_PR master $BR ip link set $VF1_PR up
+ip link set $VF2_PR up
+ip link set $PF1 up ip link set $BR up
+
+#8. Delete IP address on PF and assign IP address to bridge
+ip addr del $PF1_IP/24 dev $PF1 ip addr add $PF1_IP/24 dev $BR
+
+#9. Create 2 network namespaces: ns1, ns2
+ip netns add ns1 2> /dev/null
+ip netns add ns2 2> /dev/null
+sleep 2
+
+#10. Move VF1 and VF2 to ns
+ip link set $VF1 netns ns1 ip link set $VF2 netns ns2
+
+#11. Add IP Addresses and bring up VF interfaces moved to namespaces
+ip netns exec ns1 ip link set $VF1 up
+ip netns exec ns2 ip link set $VF2 up
+ip netns exec ns1 ip addr add $VF1_IP/$MASK dev $VF1 ip netns exec ns2 ip addr add $VF2_IP/$MASK dev $VF2
+
+# Enable hw-tc-offload on PF (Uplink port) and VF Port Representors
+#12. To offload tc filters to the hardware hw-tc-offload must be enabled on the VFs Port Representor (VF_PR)
+ethtool -K $PF1 hw-tc-offload on
+ethtool -K $VF1_PR hw-tc-offload on
+ethtool -K $VF2_PR hw-tc-offload on
+# Verify settings:
+ethtool -k $PF1 | grep "hw-tc"
+ethtool -k $VF1_PR | grep "hw-tc"
+ethtool -k $VF2_PR | grep "hw-tc"
