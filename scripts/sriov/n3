@@ -132,39 +132,16 @@ function tc_mirror_ingress {
 
   declare -i i
   declare -i j
-
-  i=1
-  for src in $PRS
-  do
-    if [[ "$i" == "$MAX" ]]
-    then
-      DST="${src}"
-    fi
-    i=i+1
-  done
-
-  tc qdisc add dev $DST ingress
-  tc qdisc add dev $DEV ingress
-
   i=1
   j=1
-  for src in $PRS
-  do
-    j=1
-    for mac in $MAC
-    do
-      if [[ "$i" == "$j" ]]
-      then
-        srcmac=$mac
-      fi
-      if [[ "$i" != "$MAX" ]]
-      then
-        tc qdisc add dev $src ingress
-        tc filter add dev $src ingress protocol ip flower src_mac $srcmac dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress redirect dev $DST
-      fi
-    done
-    i=i+1
-  done
+
+  tc qdisc add dev $DEV ingress
+  tc qdisc add dev ens6f3v0 ingress
+  tc qdisc add dev ens6f3v1 ingress
+  tc qdisc add dev ens6f3v2 ingress
+  tc filter add dev ens6f3v0 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:01 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress redirect dev ens6f3v3
+  tc filter add dev ens6f3v1 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:02 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress redirect dev ens6f3v3
+  tc filter add dev ens6f3v2 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:03 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress redirect dev ens6f3v3
 
   set +x
 }
