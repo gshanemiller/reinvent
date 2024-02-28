@@ -105,7 +105,7 @@ function enable_tc_offload {
   LNK="$2"
   PRS="$3"
 
-  # theoretically $DEV must first be enabled
+  # theoretically $DEV must first be enabled (but I'm not sure)
   ethtool -K $DEV hw-tc-offload on
 
   # theoretically this should work (but ethtool reports error)
@@ -114,11 +114,46 @@ function enable_tc_offload {
     ethtool -K $pr hw-tc-offload on
   done
 
-  # theoretically this should not work (but ethtool OK)
+  # theoretically this should not work (but ethtool reports OK)
   for ln in $LNK
   do
     ethtool -K $ln hw-tc-offload on
   done
+}
+
+function tc_mirror_ingress {
+  DEV=$1
+  MAX=$2
+  PRS="$3"
+  DST=""
+
+  set -x
+
+  declare -i i
+  i=1
+  for src in $PRS
+  do
+    if [[ "$i" == "$MAX" ]]
+    then
+      DST=${src}"
+    fi
+    i=i+1
+  done
+
+  tc qdisc add dev $DEV ingress
+
+  i=1
+  for src in $PRS
+  do
+    if [[ "$i" != "$MAX" ]]
+    then
+      tc qdisc add dev $src ingress
+      tc filter add dev $src ingress flower verbose skip_sw action mirred egress mirror dev $DST
+    fi
+    i=i+1
+  done
+
+  set +x
 }
 
 status "SCRIPT START"
@@ -132,3 +167,5 @@ enable_sriov $DEV1 $DEV1_PCI $VFS "${VFS_MAC}" "${VFS_IPS}" "${VFS_LNK}" "${VFS_
 status "POST SR-IOV-ENABLE"
 
 enable_tc_offload $DEV1 "${VFS_LNK}" "${VFS_PRS}"
+
+tc_mirror_ingress $DEV1 $VFS "${VFS_PRS}"
