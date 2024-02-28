@@ -61,6 +61,8 @@ function enable_sriov {
    
   devlink dev eswitch set pci/$PCI mode switchdev
   echo $MAX > /sys/class/net/$DEV/device/sriov_numvfs
+  echo "awaiting net device creation ..."
+  sleep 20
 
   declare -i i
   declare -i j
