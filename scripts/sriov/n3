@@ -57,8 +57,6 @@ function enable_sriov {
   LNK="$6"
   PRS="$7"
 
-  set -x
-   
   devlink dev eswitch set pci/$PCI mode switchdev
   echo $MAX > /sys/class/net/$DEV/device/sriov_numvfs
   echo "awaiting net device creation ..."
@@ -96,10 +94,16 @@ function enable_sriov {
     i=i+1
   done
 
+  set -x
+   
   ethtool -K $DEV hw-tc-offload on
   for pr in $PRS
   do
     ethtool -K $pr hw-tc-offload on
+  done
+  for ln in $LNK
+  do
+    ethtool -K $ln hw-tc-offload on
   done
 
   set +x
