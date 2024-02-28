@@ -148,7 +148,7 @@ function tc_mirror_ingress {
     if [[ "$i" != "$MAX" ]]
     then
       tc qdisc add dev $src ingress
-      tc filter add dev $src ingress flower verbose skip_sw action mirred egress redirect dev $DST
+      tc filter add dev $src ingress flower verbose action mirred egress mirror dev $DST
     fi
     i=i+1
   done
