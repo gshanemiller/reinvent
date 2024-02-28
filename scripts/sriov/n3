@@ -46,6 +46,8 @@ function disable_sriov {
   PCI=$2
   echo 0 > /sys/class/net/$DEV/device/sriov_numvfs
   devlink dev eswitch set pci/$PCI mode legacy
+  echo "awaiting net device destruction ..."
+  sleepa 5 
 }
 
 function enable_sriov {
@@ -94,19 +96,27 @@ function enable_sriov {
     i=i+1
   done
 
-  set -x
-   
+}
+
+function enable_tc_offload {
+  DEV=$1
+  LNK="$2"
+  PRS="$3"
+
+  # theoretically $DEV must first be enabled
   ethtool -K $DEV hw-tc-offload on
+
+  # theoretically this should work (but ethtool reports error)
   for pr in $PRS
   do
     ethtool -K $pr hw-tc-offload on
   done
+
+  # theoretically this should not work (but ethtool OK)
   for ln in $LNK
   do
     ethtool -K $ln hw-tc-offload on
   done
-
-  set +x
 }
 
 status "SCRIPT START"
@@ -118,3 +128,5 @@ status "POST SR-IOV-DISABLE"
 enable_sriov $DEV1 $DEV1_PCI $VFS "${VFS_MAC}" "${VFS_IPS}" "${VFS_LNK}" "${VFS_PRS}"
 
 status "POST SR-IOV-ENABLE"
+
+enable_tc_offload $DEV1 "${VFS_LNK}" "${VFS_PRS}"
