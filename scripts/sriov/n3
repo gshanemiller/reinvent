@@ -135,7 +135,7 @@ function tc_mirror_ingress {
   do
     if [[ "$i" == "$MAX" ]]
     then
-      DST=${src}"
+      DST="${src}"
     fi
     i=i+1
   done
