@@ -44,10 +44,12 @@ function tcmirror {
 function disable_sriov {
   DEV=$1
   PCI=$2
+
+  echo "awaiting net device destruction ..."
   echo 0 > /sys/class/net/$DEV/device/sriov_numvfs
   devlink dev eswitch set pci/$PCI mode legacy
-  echo "awaiting net device destruction ..."
-  sleepa 5 
+
+  sleep 5 
 }
 
 function enable_sriov {
