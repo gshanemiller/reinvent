@@ -148,7 +148,7 @@ function tc_mirror_ingress {
     if [[ "$i" != "$MAX" ]]
     then
       tc qdisc add dev $src ingress
-      tc filter add dev $src ingress flower verbose skip_sw action mirred egress mirror dev $DST
+      tc filter add dev $src ingress flower verbose skip_sw action mirred egress redirect dev $DST
     fi
     i=i+1
   done
@@ -156,16 +156,9 @@ function tc_mirror_ingress {
   set +x
 }
 
-status "SCRIPT START"
-
 disable_sriov $DEV1 $DEV1_PCI
-
-status "POST SR-IOV-DISABLE"
-
 enable_sriov $DEV1 $DEV1_PCI $VFS "${VFS_MAC}" "${VFS_IPS}" "${VFS_LNK}" "${VFS_PRS}"
+enable_tc_offload $DEV1 "${VFS_LNK}" "${VFS_PRS}"
+tc_mirror_ingress $DEV1 $VFS "${VFS_PRS}"
 
 status "POST SR-IOV-ENABLE"
-
-enable_tc_offload $DEV1 "${VFS_LNK}" "${VFS_PRS}"
-
-tc_mirror_ingress $DEV1 $VFS "${VFS_PRS}"
