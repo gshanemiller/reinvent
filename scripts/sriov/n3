@@ -4,6 +4,8 @@ DEV1="ens6f3"
 DEV1_PCI="0000:8a:00.3"
 
 VFS=4
+VFS_IPS="192.168.0.10 192.168.0.13 192.168.0.17 192.168.0.19"
+VFS_LNK="ens6f3npf3vf0 ens6f3npf3vf1 ens6f3npf3vf2 ens6f3npf3vf3"
 VFS_MAC="80:37:57:17:44:01 80:37:57:17:44:02 80:37:57:17:44:03 80:37:57:17:44:04"
 
 function status {
@@ -51,47 +53,37 @@ function enable_sriov {
   PCI=$2
   MAX=$3
   MAC="$4"
+  IPS="$5"
+  LNK="$6"
    
   devlink dev eswitch set pci/$PCI mode switchdev
   echo $MAX > /sys/class/net/$DEV/device/sriov_numvfs
 
   declare -i i
+  declare -i j
+
   i=0
   for mac in $MAC
   do
     ip link set $DEV vf $i mac $mac
     i=i+1
   done
-}
 
-function bringup {
-  ip link set $DEV up
-  for link in $LINKS1
+  i=0
+  for ip in $IPS
   do
-    ip link set $link up
+    j=0
+    for lnk in $LNK
+    do
+      if [[ "$i" == "$j" ]]
+      then
+        ip link set $lnk up
+        ip addr add ${ip}/24 dev $lnk
+      fi
+      j=j+1
+    done
+    i=i+1
   done
-  for link in $LINKS2
-  do
-    ip link set $link up
-  done
-}
-
-function configipv4 {
-  i=13
-  for link in $LINKS1
-  do
-    ip addr add ${IPV4}$i/255.255.255.0 brd + dev $link
-    i=$i+1
-  done
-
-  i=5
-  for link in $LINKS2
-  do
-    ip addr add ${IPV4}$i/255.255.255.0 brd + dev $link
-    i=$i+1
-  done
-
-  status "POST-IP-CONFIG"
 }
 
 function enableTcOffload {
@@ -110,10 +102,9 @@ function enableTcOffload {
 status "SCRIPT START"
 
 disable_sriov $DEV1 $DEV1_PCI
-disable_sriov $DEV2 $DEV2_PCI
 
 status "POST SR-IOV-DISABLE"
 
-enable_sriov $DEV1 $DEV1_PCI $VFS "${VFS_MAC}"
+enable_sriov $DEV1 $DEV1_PCI $VFS "${VFS_MAC}" "${VFS_IPS}" "${VFS_LNK}"
 
 status "POST SR-IOV-ENABLE"
