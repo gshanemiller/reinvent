@@ -94,6 +94,12 @@ function enable_sriov {
     i=i+1
   done
 
+  for pr in $PRS
+  do
+    ethtool -K $pr hw-tc-offload on
+  done
+  ethtool -K $DEV hw-tc-offload on
+
   set +x
 }
 
