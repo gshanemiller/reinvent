@@ -4,9 +4,9 @@ DEV1="ens6f3"
 DEV1_PCI="0000:8a:00.3"
 
 VFS=4
-VFS_PRS="ens6f3v0 ens6f3v1 ens6f3v2 ens6f3v3"
-VFS_IPS="192.168.0.10 192.168.0.13 192.168.0.17 192.168.0.19"
-VFS_LNK="ens6f3npf3vf0 ens6f3npf3vf1 ens6f3npf3vf2 ens6f3npf3vf3"
+VFS_PRS="ens6f3r0 ens6f3r1 ens6f3r2 ens6f3r3"
+VFS_IPS="192.168.0.100 192.168.0.101 192.168.0.102 192.168.0.103"
+VFS_LNK="ens6f3v0 ens6f3v1 ens6f3v2 ens6f3v3"
 VFS_MAC="80:37:57:17:44:01 80:37:57:17:44:02 80:37:57:17:44:03 80:37:57:17:44:04"
 
 function status {
@@ -14,7 +14,7 @@ function status {
   echo
   echo "$1"
   echo "==============================================================="
-  ip link show
+  lshw -c network -businfo
   echo
   echo
 }
@@ -64,7 +64,7 @@ function enable_sriov {
   devlink dev eswitch set pci/$PCI mode switchdev
   echo $MAX > /sys/class/net/$DEV/device/sriov_numvfs
   echo "awaiting net device creation ..."
-  sleep 20
+  sleep 30
 
   declare -i i
   declare -i j
@@ -106,22 +106,25 @@ function enable_tc_offload {
   PRS="$3"
 
   # theoretically $DEV must first be enabled (but I'm not sure)
+  echo hw-tc-offload $DEV ...
   ethtool -K $DEV hw-tc-offload on
 
   # theoretically this should work (but ethtool reports error)
   for pr in $PRS
   do
+    echo hw-tc-offload $pr ...
     ethtool -K $pr hw-tc-offload on
   done
 
   # theoretically this should not work (but ethtool reports OK)
   for ln in $LNK
   do
+    echo hw-tc-offload $ln ...
     ethtool -K $ln hw-tc-offload on
   done
 }
 
-function tc_mirror_ingress {
+function tc_mirror_ingress_vf {
   DEV=$1
   MAX=$2
   PRS="$3"
@@ -146,9 +149,35 @@ function tc_mirror_ingress {
   set +x
 }
 
+function tc_mirror_ingress_pf {
+  DEV=$1
+  MAX=$2
+  PRS="$3"
+  MAC="$4"
+  DST=""
+
+  set -x
+
+  declare -i i
+  declare -i j
+  i=1
+  j=1
+
+  tc qdisc add dev $DEV ingress
+  tc qdisc add dev ens6f3r0 ingress
+  tc qdisc add dev ens6f3r1 ingress
+  tc qdisc add dev ens6f3r2 ingress
+  tc filter add dev ens6f3r0 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:01 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
+  tc filter add dev ens6f3r1 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:02 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
+  tc filter add dev ens6f3r2 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:03 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
+
+  set +x
+}
+
 disable_sriov $DEV1 $DEV1_PCI
 enable_sriov $DEV1 $DEV1_PCI $VFS "${VFS_MAC}" "${VFS_IPS}" "${VFS_LNK}" "${VFS_PRS}"
+status "POST SRIOV ENABLE"
 enable_tc_offload $DEV1 "${VFS_LNK}" "${VFS_PRS}"
-tc_mirror_ingress $DEV1 $VFS "${VFS_PRS}" "${VFS_MAC}"
+tc_mirror_ingress_pf $DEV1 $VFS "${VFS_PRS}" "${VFS_MAC}"
 # tc_mirror_ingress $DEV1 $VFS "${VFS_LNK}" "${VFS_MAC}"
 # status "POST SR-IOV-ENABLE"
