@@ -3,11 +3,38 @@
 DEV1="ens6f3"
 DEV1_PCI="0000:8a:00.3"
 
+# these are device names for stock as-is Ubuntu 24.02 
+VFS=4
+VFS_PRS="ens6f3npf3vf0 ens6f3npf3vf1 ens6f3npf3vf2 ens6f3npf3vf3"
+VFS_IPS="192.168.0.100 192.168.0.101 192.168.0.102 192.168.0.103"
+VFS_LNK="ens6f3v0 ens6f3v1 ens6f3v2 ens6f3v3"
+VFS_MAC="80:37:57:17:44:00 80:37:57:17:44:01 80:37:57:17:44:02 80:37:57:17:44:03"
+
+# these are device names for Ubuntu 24.02 updated to 6.8.0-11-generic
+# POST SRIOV ENABLE
+# ===============================================================
+# Bus info          Device          Class          Description
+# ============================================================
+# pci@0000:51:00.0  eno1            network        Ethernet Controller X550
+# pci@0000:51:00.1  eno2            network        Ethernet Controller X550
+# pci@0000:8a:00.0  ens6f0          network        Ethernet Controller E810-C for SFP
+# pci@0000:8a:00.1  ens6f1          network        Ethernet Controller E810-C for SFP
+# pci@0000:8a:00.2  ens6f2          network        Ethernet Controller E810-C for SFP
+# pci@0000:8a:00.3  ens6f3          network        Ethernet Controller E810-C for SFP
+# pci@0000:8a:19.0  ens6f3v0        network        Ethernet Adaptive Virtual Function
+# pci@0000:8a:19.1  ens6f3v1        network        Ethernet Adaptive Virtual Function
+# pci@0000:8a:19.2  ens6f3v2        network        Ethernet Adaptive Virtual Function
+# pci@0000:8a:19.3  ens6f3v3        network        Ethernet Adaptive Virtual Function
+# pci@0000:8a:00.3  ens6f3r0        network        Ethernet interface                     <- Port representor
+# pci@0000:8a:00.3  ens6f3r3        network        Ethernet interface                     <- Port representor
+# pci@0000:8a:00.3  ens6f3r1        network        Ethernet interface                     <- Port representor
+# pci@0000:8a:00.3  ens6f3r2        network        Ethernet interface                     <- Port representor
+#
 VFS=4
 VFS_PRS="ens6f3r0 ens6f3r1 ens6f3r2 ens6f3r3"
 VFS_IPS="192.168.0.100 192.168.0.101 192.168.0.102 192.168.0.103"
 VFS_LNK="ens6f3v0 ens6f3v1 ens6f3v2 ens6f3v3"
-VFS_MAC="80:37:57:17:44:01 80:37:57:17:44:02 80:37:57:17:44:03 80:37:57:17:44:04"
+VFS_MAC="80:37:57:17:44:00 80:37:57:17:44:01 80:37:57:17:44:02 80:37:57:17:44:03"
 
 function status {
   echo
@@ -26,10 +53,12 @@ function cleantc {
   tc qdisc  del dev $1 root
 }
 
-function dumptc {
-  tc qdisc  show dev $1
-  tc class  show dev $1
-  tc filter show dev $1
+function dump_tc_filters {
+  LNKS="$1"
+  for lnk in $LNKS
+  do
+    tc filter show dev $lnk ingress
+  done
 }
 
 function tcmirror {
@@ -124,7 +153,7 @@ function enable_tc_offload {
   done
 }
 
-function tc_mirror_ingress_vf {
+function tc_mirror_ingress_pf0 {
   DEV=$1
   MAX=$2
   PRS="$3"
@@ -132,52 +161,31 @@ function tc_mirror_ingress_vf {
   DST=""
 
   set -x
-
-  declare -i i
-  declare -i j
-  i=1
-  j=1
-
-  tc qdisc add dev $DEV ingress
-  tc qdisc add dev ens6f3v0 ingress
-  tc qdisc add dev ens6f3v1 ingress
-  tc qdisc add dev ens6f3v2 ingress
-  tc filter add dev ens6f3v0 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:01 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress redirect dev ens6f3v3
-  tc filter add dev ens6f3v1 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:02 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress redirect dev ens6f3v3
-  tc filter add dev ens6f3v2 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:03 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress redirect dev ens6f3v3
-
-  set +x
-}
-
-function tc_mirror_ingress_pf {
-  DEV=$1
-  MAX=$2
-  PRS="$3"
-  MAC="$4"
-  DST=""
-
-  set -x
-
-  declare -i i
-  declare -i j
-  i=1
-  j=1
 
   tc qdisc add dev $DEV ingress
   tc qdisc add dev ens6f3r0 ingress
   tc qdisc add dev ens6f3r1 ingress
   tc qdisc add dev ens6f3r2 ingress
-  tc filter add dev ens6f3r0 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:01 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
-  tc filter add dev ens6f3r1 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:02 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
-  tc filter add dev ens6f3r2 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:03 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
+
+  tc filter add dev ens6f3r0 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:00 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
+  tc filter add dev ens6f3r1 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:01 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
+  tc filter add dev ens6f3r2 ingress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:02 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
+
+  tc qdisc  add dev $DEV root prio
+  tc qdisc  add dev ens6f3r0 root prio
+  tc qdisc  add dev ens6f3r1 root prio
+  tc qdisc  add dev ens6f3r2 root prio
+
+  tc filter add dev ens6f3r0 egress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:00 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
+  tc filter add dev ens6f3r1 egress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:01 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
+  tc filter add dev ens6f3r2 egress protocol ip flower verbose skip_sw src_mac 80:37:57:17:44:02 dst_mac ff:ff:ff:ff:ff:ff verbose action mirred egress mirror dev ens6f3r3
 
   set +x
 }
 
 disable_sriov $DEV1 $DEV1_PCI
 enable_sriov $DEV1 $DEV1_PCI $VFS "${VFS_MAC}" "${VFS_IPS}" "${VFS_LNK}" "${VFS_PRS}"
-status "POST SRIOV ENABLE"
 enable_tc_offload $DEV1 "${VFS_LNK}" "${VFS_PRS}"
-tc_mirror_ingress_pf $DEV1 $VFS "${VFS_PRS}" "${VFS_MAC}"
-# tc_mirror_ingress $DEV1 $VFS "${VFS_LNK}" "${VFS_MAC}"
-# status "POST SR-IOV-ENABLE"
+tc_mirror_ingress_pf0 $DEV1 $VFS "${VFS_PRS}" "${VFS_MAC}"
+status "POST SRIOV ENABLE"
+dump_tc_filters "ens6f3r0 ens6f3r1 ens6f3r2"
